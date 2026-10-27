@@ -1,0 +1,26 @@
+{
+  "name": "similarclup-finance-control",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Similarclup Finance Control — bağımsız finansal kontrol, komisyon, maliyet ve kârlılık platformu",
+  "type": "module",
+  "engines": {
+    "node": ">=24"
+  },
+  "scripts": {
+    "start": "node server/main.ts",
+    "seed": "node server/seed.ts",
+    "backup": "node server/tools/backup.ts",
+    "restore": "node server/tools/restore.ts",
+    "test": "node --test --test-concurrency=1 tests/*.test.ts",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "htm": "3.1.1",
+    "preact": "10.26.9"
+  },
+  "devDependencies": {
+    "@types/node": "^24.0.0",
+    "typescript": "~5.9.2"
+  }
+}
