@@ -42,6 +42,8 @@ export const SYSTEM_ROLES: { key: string; name: string; scope: 'platform' | 'age
       'app.lucky',
       'app.settings',
       'app.reports',
+      'app.agencies',
+      'app.agency_ledger',
     ],
   },
   {

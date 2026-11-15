@@ -14,6 +14,7 @@ import { Integrations, Users, Audit, Settings, Account } from './pages/admin.js'
 import { AppGifts } from './pages/app-gifts.js';
 import { AppLucky, AppPayouts, AppRefunds, AppReports, AppSettings, AppWithdrawals } from './pages/app-finance.js';
 import { AppComplaints, AppEvents, AppNotices, AppSupport, AppUsers } from './pages/app-ops.js';
+import { AppAgencies } from './pages/app-agencies.js';
 
 const NAV = [
   ['Genel', [
@@ -57,6 +58,7 @@ const NAV = [
     ['app-support', 'Destek', 'app.support', AppSupport],
     ['app-notices', 'Duyurular', 'app.notices', AppNotices],
     ['app-events', 'Etkinlikler', 'app.events', AppEvents],
+    ['app-agencies', 'Ajans merkezi', 'app.agencies', AppAgencies],
   ]],
   ['Yönetim', [
     ['integrations', 'Entegrasyonlar', 'integrations.manage', Integrations],

@@ -235,7 +235,7 @@ function RoomPictures({ room, onClose }) {
     ${prompt}
     <${Loading} state=${pics}>${(p) => html`
       <p><strong>${p.room.title}</strong> · sahibi ${p.owner.name}</p>
-      <div class="cols2">
+      <div class="grid cols2">
         <${Card} title="Özel süsleme" actions=${can('app.complaints') && p.url && html`<${Button} kind="danger" onClick=${() => take('background')}>Kaldır</${Button}>`}>
           ${p.url ? html`<${Pic} src=${p.url} size=${220} /><p class="muted">${p.shown ? 'Odada görünüyor' : 'Yüklü, odada görünmüyor'}${p.until ? ` · ${dateTimeTr(p.until)} tarihine kadar` : ''}</p>` : html`<p class="muted">Yüklenmiş süsleme yok</p>`}
         </${Card}>
@@ -575,7 +575,7 @@ function EventReport() {
         <${Kpi} label="Katılma oranı" value=${pct(r.attendanceRate)} />
         <${Kpi} label="Katılımcı" value=${num(r.participants)} sub=${r.avgParticipants === null ? '' : `etkinlik başı ${num(r.avgParticipants, 1)}`} />
       </div>
-      <div class="cols2">
+      <div class="grid cols2">
         <${Card} title="En çok katılan türler"><${Table} dense empty="Etkinlik yok" columns=${[
           { key: 'name', label: 'Tür' },
           { key: 'events', label: 'Etkinlik', align: 'right', render: (c) => num(c.events) },

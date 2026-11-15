@@ -317,18 +317,106 @@ test('operasyon sayfaları: operasyon yöneticisi evet, finans yöneticisi ve sa
   assert.equal((await fetch(`${base}/api/app/media/f/ticket/u1/x.png`, { headers: ops })).status, 200);
 });
 
+test('Ajans merkezi: finans yöneticisi evet, operasyon yöneticisi ve salt okunur hayır; komisyon defteri ayrı yetki', async () => {
+  env.as('finance_manager', 'fin@test.local');
+  env.as('operations_manager', 'ops@test.local');
+  env.as('read_only', 'ro@test.local');
+  // A role made in this panel with the agency pages but not the ledger.
+  env.db.run("INSERT INTO roles (key, name, scope, permissions) VALUES ('ajans_ekibi', 'Ajans ekibi', 'platform', '[\"app.agencies\"]') ON CONFLICT (key) DO NOTHING");
+  env.as('ajans_ekibi', 'ajans@test.local');
+  const fin = await loginAs('fin@test.local');
+  const ops = await loginAs('ops@test.local');
+  const ro = await loginAs('ro@test.local');
+  const team = await loginAs('ajans@test.local');
+  const reads = [
+    '/api/app/agency/tree',
+    '/api/app/agency/overview',
+    '/api/app/agency/list?status=pending',
+    '/api/app/agency/performance?runId=3',
+    '/api/app/agency/transfers?status=pending',
+    '/api/app/agency/audit?type=agency&result=ok',
+    '/api/app/agency/report?from=2026-10-01T00%3A00%3A00%2B03%3A00&to=2026-11-01T00%3A00%3A00%2B03%3A00',
+    '/api/app/agency/bd-report?bd=b1',
+  ];
+  for (const p of reads) {
+    const r = await call('GET', p, undefined, fin);
+    assert.equal(r.status, 200, `${p}: ${JSON.stringify(r.json)}`);
+    assert.equal(r.json.path, `/api/admin${p.slice('/api/app'.length)}`);
+    assert.equal((await call('GET', p, undefined, team)).status, 200, `team ${p}`);
+    assert.equal((await call('GET', p, undefined, ops)).status, 403, `ops ${p}`);
+    assert.equal((await call('GET', p, undefined, ro)).status, 403, `ro ${p}`);
+  }
+  // The network's rules serve Ajans ödemeleri and Ajans merkezi: either permission opens them.
+  assert.equal((await call('GET', '/api/app/agency/settings', undefined, team)).status, 200);
+  assert.equal((await call('GET', '/api/app/agency/settings', undefined, fin)).status, 200);
+  assert.equal((await call('GET', '/api/app/agency/settings', undefined, ops)).status, 403);
+  const logged = (p: string) => env.db.value<number>('SELECT count(*) FROM audit_logs WHERE action = ?', `app${p.slice('/api/app'.length).replace(/\//g, '.')}`) ?? 0;
+  for (const [p, body] of [
+    ['/api/app/agency/create', { name: 'Yıldız Ajans', country: 'Türkiye' }],
+    ['/api/app/agency/decide', { id: 'a1', approve: false, note: 'Eksik bilgi' }],
+    ['/api/app/agency/status', { id: 'a1', status: 'suspended', reason: 'İnceleme' }],
+    ['/api/app/agency/rate', { id: 'a1', rate: 0.255, reason: 'Düzeltme', effectiveFrom: '2026-12-01T00:00:00+03:00' }],
+    ['/api/app/agency/tier', { id: 'a2', tier: 'growing', reason: 'Performans' }],
+    ['/api/app/agency/parent', { id: 'a2', parentId: null, reason: 'Bağımsız' }],
+    ['/api/app/agency/assign', { streamer: 'u1', agencyId: 'a1', reason: 'Merkez kararı' }],
+    ['/api/app/agency/transfers/decide', { transferId: 7, approve: true, note: '', mode: 'free' }],
+    ['/api/app/agency/transition', { agencyId: 'a1', oldParentId: 'a3', rate: 0.05, endsAt: '2027-03-01T00:00:00+03:00', scope: 'existing', reason: 'Geçiş' }],
+    ['/api/app/agency/performance/run', { dryRun: false, note: 'Elle' }],
+  ] as const) {
+    assert.equal((await call('POST', p, body, ops)).status, 403, `ops ${p}`);
+    const before = logged(p);
+    const r = await call('POST', p, body, team);
+    assert.equal(r.status, 200, `${p}: ${JSON.stringify(r.json)}`);
+    assert.deepEqual(JSON.parse(seen.at(-1)!.body), body);
+    assert.equal(seen.at(-1)!.user.email, 'ajans@test.local');
+    assert.equal(logged(p), before + 1, `${p} is in this panel's audit log`);
+  }
+  // Computing only: the simulator and a performance dry run go to the app but are no change here.
+  for (const [p, body] of [
+    ['/api/app/agency/simulate', { base: 100000, agencyId: 'a1' }],
+    ['/api/app/agency/performance/run', { dryRun: true }],
+  ] as const) {
+    const before = logged(p);
+    assert.equal((await call('POST', p, body, fin)).status, 200, p);
+    assert.deepEqual(JSON.parse(seen.at(-1)!.body), body);
+    assert.equal(logged(p), before, `${p} is not logged`);
+  }
+  // The ledger and the rules: the finance manager, not the agency team.
+  for (const [p, body] of [
+    ['/api/app/agency/commissions/run', {}],
+    ['/api/app/agency/income', { streamer: 'u1', type: 'bonus', diamonds: 5000, ref: 'fc-test-income-1' }],
+    ['/api/app/agency/commissions/reverse', { commissionId: 12, reason: 'Hatalı gelir' }],
+    ['/api/app/agency/adjust', { agencyId: 'a1', amount: -250.5, reason: 'Fazla ödeme', ref: 'fc-test-adjust-1' }],
+    ['/api/app/agency/periods/close', { period: '2026-10' }],
+    ['/api/app/agency/settings', { key: 'pool_cap', value: 0.4, reason: 'Aynı kalsın' }],
+  ] as const) {
+    assert.equal((await call('POST', p, body, team)).status, 403, `team ${p}`);
+    assert.equal((await call('POST', p, body, ops)).status, 403, `ops ${p}`);
+    const before = logged(p);
+    const r = await call('POST', p, body, fin);
+    assert.equal(r.status, 200, `${p}: ${JSON.stringify(r.json)}`);
+    assert.deepEqual(JSON.parse(seen.at(-1)!.body), body);
+    assert.equal(logged(p), before + 1, `${p} is in this panel's audit log`);
+  }
+  // The centre's staff roles and background jobs are not reachable from here.
+  assert.equal((await call('GET', '/api/app/agency/roles', undefined, fin)).status, 404);
+  assert.equal((await call('POST', '/api/app/agency/jobs/run', {}, fin)).status, 404);
+});
+
 test('daha önce kurulmuş rollere yeni yetki bir kez eklenir', () => {
   const { db } = setup();
   const ADDED: Record<string, string[]> = {
-    finance_manager: ['app.gifts', 'app.withdrawals', 'app.payouts', 'app.refunds', 'app.lucky', 'app.settings', 'app.reports'],
+    finance_manager: ['app.gifts', 'app.withdrawals', 'app.payouts', 'app.refunds', 'app.lucky', 'app.settings', 'app.reports', 'app.agencies', 'app.agency_ledger'],
     operations_manager: ['app.gifts', 'app.reports', 'app.users', 'app.complaints', 'app.support', 'app.notices', 'app.events'],
   };
-  // A database made before 002, 003 and 004: the roles without the app permissions.
+  // A database made before 002–005: the roles without the app permissions.
   for (const [key, list] of Object.entries(ADDED)) {
     const perms: string[] = JSON.parse(db.value<string>('SELECT permissions FROM roles WHERE key = ?', key)!);
     db.run('UPDATE roles SET permissions = ? WHERE key = ?', JSON.stringify(perms.filter((p) => !list.includes(p))), key);
   }
-  db.run("DELETE FROM schema_migrations WHERE name IN ('002_app_permissions.sql', '003_app_finance_permissions.sql', '004_app_operations_permissions.sql')");
+  db.run(
+    "DELETE FROM schema_migrations WHERE name IN ('002_app_permissions.sql', '003_app_finance_permissions.sql', '004_app_operations_permissions.sql', '005_app_agency_permissions.sql')",
+  );
   db.migrate();
   db.migrate();
   for (const [key, list] of Object.entries(ADDED)) {
@@ -340,7 +428,7 @@ test('daha önce kurulmuş rollere yeni yetki bir kez eklenir', () => {
   const ro: string[] = JSON.parse(db.value<string>("SELECT permissions FROM roles WHERE key = 'read_only'")!);
   assert.ok(!ro.some((p) => p.startsWith('app.')));
   const ops: string[] = JSON.parse(db.value<string>("SELECT permissions FROM roles WHERE key = 'operations_manager'")!);
-  assert.ok(!ops.includes('app.withdrawals') && !ops.includes('app.settings'));
+  assert.ok(!ops.includes('app.withdrawals') && !ops.includes('app.settings') && !ops.includes('app.agencies') && !ops.includes('app.agency_ledger'));
   const fin: string[] = JSON.parse(db.value<string>("SELECT permissions FROM roles WHERE key = 'finance_manager'")!);
   assert.ok(!fin.includes('app.users') && !fin.includes('app.support'));
 });
