@@ -1,7 +1,7 @@
 // Uygulama › operations pages: the Similar Club app's moderation and community work, through its admin API
 // (server/app-admin.ts passes each call on as the signed-in panel user; the app checks and records every one).
 // Kullanıcılar, Şikâyetler (with a reported room's own pictures), Destek, Duyurular, Etkinlikler. The full sanction
-// system (Yaptırımlar: evidence, approvals, appeals, staff permissions) stays in the app's Yönetim.
+// system (evidence, approvals, appeals, staff permissions) is Uygulama › Yaptırımlar (app-sanctions.js).
 import { Badge, Button, Card, Kpi, Loading, Modal, Page, Table, Tabs, act, dateTimeTr, html, num, post, showError, toast, useApi, useApp, usePrompt, useState } from '../lib.js';
 import { Chips } from './app-finance.js';
 

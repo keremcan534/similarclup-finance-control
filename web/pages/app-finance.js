@@ -298,6 +298,8 @@ function LuckyEditor({ config, version, onClose, onSaved }) {
 // ---- Canlı ayarlar --------------------------------------------------------------------------------------
 /** A setting's value as people read it. */
 function shown(s, v) {
+  // Text in effect that is empty or null: no notice, Yönetim in the app.
+  if (s.type === 'text' && (v === null || v === undefined || v === '')) return 'Boş';
   if (v === null || v === undefined) return s.type === 'campaign' ? 'Kampanya yok' : 'Varsayılan';
   if (s.type === 'set') return v.length ? v.map((x) => s.bounds.labels?.[x] ?? x).join(', ') : 'Hiçbiri';
   if (s.type === 'campaign') return `%${v.percent} · ${v.label} · ${dateTimeTr(v.startsAt)} → ${dateTimeTr(v.endsAt)}`;
@@ -308,6 +310,7 @@ function shown(s, v) {
 /** A saved value in the history: null is the default. */
 function saved(v) {
   if (v === null || v === undefined) return 'varsayılan';
+  if (v === '') return 'boş';
   if (typeof v === 'number') return num(v, Number.isInteger(v) ? 0 : 2);
   if (Array.isArray(v)) return v.length ? v.join(', ') : 'hiçbiri';
   if (typeof v === 'object') return v.percent !== undefined ? `%${v.percent} · ${v.label}` : JSON.stringify(v);
@@ -349,9 +352,10 @@ export function AppSettings() {
     ${tab === 'settings' && html`<${Loading} state=${data}>${(d) => html`
       ${d.safeMode && html`<p class="note bad">Uygulamanın sunucusu güvenli modda (LIVE_SAFE_MODE): kayıtlı ayarlar kullanılmıyor ve kaydedilemez.</p>`}
       ${groups.map((g) => html`<${Card} title=${g}><${Table} dense columns=${[
-        { key: 'label', label: 'Ayar', render: (s) => html`<strong>${s.label}</strong><br /><small class="muted">${s.help}</small>` },
+        // Long help and reasons wrap, so "Şu an" and Değiştir stay on screen.
+        { key: 'label', label: 'Ayar', render: (s) => html`<div style="white-space:normal;min-width:280px;max-width:560px"><strong>${s.label}</strong><br /><small class="muted">${s.help}</small></div>` },
         { key: 'effective', label: 'Şu an', render: (s) => html`${shown(s, s.effective)}${s.invalid ? html` <span class="badge bad">kayıt geçersiz, varsayılan kullanılıyor</span>` : ''}` },
-        { key: 'changedAt', label: 'Son değişiklik', render: (s) => (s.changedAt ? html`${dateTimeTr(s.changedAt)}<br /><small class="muted">${s.changedBy?.name ?? ''}${s.reason ? ` · ${s.reason}` : ''}</small>` : html`<span class="muted">varsayılan</span>`) },
+        { key: 'changedAt', label: 'Son değişiklik', render: (s) => (s.changedAt ? html`<div style="white-space:normal;max-width:260px">${dateTimeTr(s.changedAt)}<br /><small class="muted">${s.changedBy?.name ?? ''}${s.reason ? ` · ${s.reason}` : ''}</small></div>` : html`<span class="muted">varsayılan</span>`) },
         { key: 'a', label: '', render: (s) => can('app.settings') && !d.safeMode && html`<${Button} onClick=${() => setEdit(s)}>Değiştir</${Button}>` },
       ]} rows=${d.settings.filter((s) => s.group === g)} /></${Card}>`)}`}</${Loading}>`}
     ${tab === 'history' && html`<${Loading} state=${history}>${(h) => html`<${Table} empty="Kayıt yok" columns=${[
@@ -375,7 +379,9 @@ function SettingEditor({ s, onClose, onSave }) {
     if (s.type === 'int') return Number(String(v).replace(/[^\d-]/g, ''));
     if (s.type === 'number') return Number(String(v).replace(/\s/g, '').replace(',', '.'));
     if (s.type === 'campaign') return { percent: Number(v.percent), startsAt: v.startsAt ? new Date(v.startsAt).toISOString() : '', endsAt: v.endsAt ? new Date(v.endsAt).toISOString() : '', label: v.label };
-    if (s.type === 'text' || s.type === 'version') return String(v).trim() || null;
+    // Empty text is a value of its own (no notice; Yönetim back in the app); "Varsayılana dön" is the default.
+    if (s.type === 'text') return String(v).trim();
+    if (s.type === 'version') return String(v).trim() || null;
     return v;
   };
   let input;

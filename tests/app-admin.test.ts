@@ -67,6 +67,10 @@ const fakeApp = createServer(async (req, res) => {
     const b = JSON.parse(body.toString('utf8'));
     return json(200, { url: `${appBase}/api/media/f/gifticon/u1/linked.png`, link: b.url, kind: 'gifticon', type: 'image/png', bytes: 3000, video: null, svga: false });
   }
+  if (req.method === 'POST' && url.pathname === '/api/admin/emoji/fetch') {
+    const b = JSON.parse(body.toString('utf8'));
+    return json(200, { url: `${appBase}/api/media/f/stickerart/u1/linked.png`, link: b.url, kind: 'image', type: 'image/png', bytes: 2000 });
+  }
   if (req.method === 'POST' && url.pathname.startsWith('/api/admin/gifts')) return json(200, { gift: { id: 'a2', ...JSON.parse(body.toString('utf8') || '{}') } });
   // The other admin routes (Para çekme, Ajans ödemeleri, İadeler, Şanslı, Canlı ayarlar, raporlar): an echo.
   if (url.pathname.startsWith('/api/admin/')) return json(200, { ok: true, path: url.pathname + url.search });
@@ -257,8 +261,9 @@ test('para sayfaları: her biri kendi yetkisiyle; operasyon yöneticisi yalnız 
   assert.equal(rows(), had);
   assert.equal((await call('POST', '/api/app/live-settings', { ...preview, dryRun: false, confirm: true }, fin)).status, 200);
   assert.equal(rows(), had + 1);
-  // Only the listed routes: anything else of the app's is not reachable from here.
-  assert.equal((await call('GET', '/api/app/sanctions/pending', undefined, fin)).status, 404);
+  // Only the listed routes: anything else of the app's is not reachable from here; a listed one needs its permission.
+  assert.equal((await call('GET', '/api/app/ledger', undefined, fin)).status, 404);
+  assert.equal((await call('GET', '/api/app/sanctions/pending', undefined, fin)).status, 403);
   assert.equal((await call('POST', '/api/app/withdrawals/decide', { id: 3, approve: true }, ro)).status, 403);
 });
 
@@ -348,7 +353,8 @@ test('Ajans merkezi: finans yöneticisi evet, operasyon yöneticisi ve salt okun
     assert.equal(r.status, 200, `${p}: ${JSON.stringify(r.json)}`);
     assert.equal(r.json.path, `/api/admin${p.slice('/api/app'.length)}`);
     assert.equal((await call('GET', p, undefined, team)).status, 200, `team ${p}`);
-    assert.equal((await call('GET', p, undefined, ops)).status, 403, `ops ${p}`);
+    // The list also serves Ajans personeli's agency search, the operations manager's page; the rest is the centre's.
+    assert.equal((await call('GET', p, undefined, ops)).status, p.startsWith('/api/app/agency/list') ? 200 : 403, `ops ${p}`);
     assert.equal((await call('GET', p, undefined, ro)).status, 403, `ro ${p}`);
   }
   // The network's rules serve Ajans ödemeleri and Ajans merkezi: either permission opens them.
@@ -403,9 +409,46 @@ test('Ajans merkezi: finans yöneticisi evet, operasyon yöneticisi ve salt okun
     assert.deepEqual(JSON.parse(seen.at(-1)!.body), body);
     assert.equal(logged(p), before + 1, `${p} is in this panel's audit log`);
   }
-  // The centre's staff roles and background jobs are not reachable from here.
-  assert.equal((await call('GET', '/api/app/agency/roles', undefined, fin)).status, 404);
-  assert.equal((await call('POST', '/api/app/agency/jobs/run', {}, fin)).status, 404);
+  // The centre's staff roles and background jobs: their own permission (the operations manager's), not finance's.
+  assert.equal((await call('GET', '/api/app/agency/roles', undefined, fin)).status, 403);
+  assert.equal((await call('POST', '/api/app/agency/jobs/run', {}, fin)).status, 403);
+});
+
+test('Yönetim\'in kalanı: yaptırımlar, ajans personeli, mağaza eşyaları, Jeton Noktası; her biri kendi yetkisiyle', async () => {
+  env.as('finance_manager', 'fin@test.local');
+  env.as('operations_manager', 'ops@test.local');
+  env.as('moderator', 'mod@test.local');
+  env.as('read_only', 'ro@test.local');
+  const [fin, ops, mod, ro] = await Promise.all(['fin@test.local', 'ops@test.local', 'mod@test.local', 'ro@test.local'].map(loginAs));
+  const get = async (p: string, who: Record<string, string>) => (await call('GET', p, undefined, who)).status;
+  const post = async (p: string, body: unknown, who: Record<string, string>) => (await call('POST', p, body, who)).status;
+  // A moderator: the sanctions with a moderator's permissions and support, nothing else.
+  for (const p of ['/api/app/sanctions/meta', '/api/app/sanctions/search?q=Ayşe', '/api/app/sanctions/pending', '/api/app/appeals?status=open', '/api/app/support']) assert.equal(await get(p, mod), 200, `mod ${p}`);
+  assert.equal(await post('/api/app/sanctions', { user: 'u', type: 'mute_global_text', minutes: 60, reason: 'spam', description: 'Spam' }, mod), 200);
+  assert.deepEqual(seen.at(-1)!.user.perms, ['app.sanctions', 'app.support'], 'uygulama yaptırım yetkisini buradan çıkarır');
+  for (const [p, b] of [['/api/app/sanctions/approve', { id: 1, approve: true, note: 'Onay' }], ['/api/app/sanction-policies', { reason: 'spam', steps: [] }], ['/api/app/devices/risk', { device: 1, status: 'normal' }], ['/api/app/sanction-permissions', { user: 'u', permission: 'sanction.ban', grant: true }]] as const)
+    assert.equal(await post(p, b, mod), 403, `mod ${p}`);
+  for (const p of ['/api/app/users', '/api/app/withdrawals', '/api/app/agency/staff', '/api/app/economy/reviews']) assert.equal(await get(p, mod), 403, `mod ${p}`);
+  // The operations manager: every sanction, the agency centre's staff, a person's shop items; not Jeton Noktası.
+  for (const p of ['/api/app/sanction-permissions?user=u', '/api/app/agency/roles', '/api/app/agency/staff', '/api/app/agency/appeals?status=open', '/api/app/economy/user?id=u', '/api/app/economy/reviews'])
+    assert.equal(await get(p, ops), 200, `ops ${p}`);
+  for (const [p, b] of [
+    ['/api/app/sanctions/approve', { id: 1, approve: true, note: 'Kanıt yeterli' }],
+    ['/api/app/agency/staff/set', { user: 'u', roleId: 2 }],
+    ['/api/app/agency/ops-score', { agencyId: 'a', score: 80, reason: 'Aylık değerlendirme' }],
+    ['/api/app/economy/grant', { userId: 'u', sku: 'fr-neon', days: 7, reason: 'Telafi', ref: 'r1234567' }],
+  ] as const) {
+    assert.equal(await post(p, b, ops), 200, `ops ${p}`);
+    assert.deepEqual(JSON.parse(seen.at(-1)!.body), b);
+  }
+  assert.ok(seen.at(-1)!.user.perms.includes('app.sanctions_full'));
+  assert.equal(await post('/api/app/jeton/wholesale', { bank: 'b', coins: 1000, paymentRef: 'DEKONT-1', ref: 'r7654321' }, ops), 403);
+  // The finance manager: Jeton Noktası; no sanctions, no staff.
+  assert.equal(await post('/api/app/jeton/bank', { user: 'b', enabled: true }, fin), 200);
+  assert.equal(await post('/api/app/jeton/wholesale', { bank: 'b', coins: 1000, paymentRef: 'DEKONT-1', ref: 'r7654321' }, fin), 200);
+  for (const p of ['/api/app/sanctions/meta', '/api/app/agency/staff']) assert.equal(await get(p, fin), 403, `fin ${p}`);
+  // Read only: none of it.
+  for (const p of ['/api/app/sanctions/meta', '/api/app/agency/roles', '/api/app/economy/reviews']) assert.equal(await get(p, ro), 403, `ro ${p}`);
 });
 
 test('bağlantıdan dosya: uygulama indirir; kaydedilecek adres olduğu gibi, önizlemesi bu sunucudan; yetki, denetim, ret', async () => {
@@ -435,19 +478,75 @@ test('bağlantıdan dosya: uygulama indirir; kaydedilecek adres olduğu gibi, ö
   assert.match(no.json.error, /web sayfasını/);
 });
 
+test('Hediyeler: uygulamanın kendi hediyeleri listede istenir, orijinale dönme uygulamaya aynen gider', async () => {
+  env.as('operations_manager', 'ops@test.local');
+  const ops = await loginAs('ops@test.local');
+  assert.equal((await call('GET', '/api/app/gifts?builtin=1', undefined, ops)).status, 200);
+  assert.equal(seen.at(-1)!.path, '/api/admin/gifts?builtin=1');
+  const r = await call('POST', '/api/app/gifts/reset', { id: 'g6', fields: ['price'] }, ops);
+  assert.equal(r.status, 200, JSON.stringify(r.json));
+  assert.equal(seen.at(-1)!.path, '/api/admin/gifts/reset');
+  assert.deepEqual(JSON.parse(seen.at(-1)!.body), { id: 'g6', fields: ['price'] });
+  assert.ok(env.db.get("SELECT 1 FROM audit_logs WHERE action = 'app.gifts.reset'"));
+  env.as('read_only', 'ro@test.local');
+  assert.equal((await call('POST', '/api/app/gifts/reset', { id: 'g6' }, await loginAs('ro@test.local'))).status, 403);
+});
+
+test('Emojiler: kendi yetkisiyle; paketler, çıkartmalar, sıra, orijinale dönme, resim yükleme ve bağlantıdan resim', async () => {
+  env.as('operations_manager', 'ops@test.local');
+  env.as('finance_manager', 'fin@test.local');
+  env.as('read_only', 'ro@test.local');
+  const ops = await loginAs('ops@test.local');
+  const fin = await loginAs('fin@test.local');
+  const ro = await loginAs('ro@test.local');
+  for (const [method, path, body] of [
+    ['GET', '/api/app/emoji', undefined],
+    ['POST', '/api/app/emoji/packs', { name: 'Kedi Sarayı', price: 120 }],
+    ['POST', '/api/app/emoji/packs/update', { id: 'fun', price: 70 }],
+    ['POST', '/api/app/emoji/packs/reset', { id: 'fun' }],
+    ['POST', '/api/app/emoji/packs/order', { ids: ['penguen', 'vip'] }],
+    ['POST', '/api/app/emoji/packs/delete', { id: 'ep1' }],
+    ['POST', '/api/app/emoji/stickers', { pack: 'ep1', name: 'Mırnav', art: 'x' }],
+    ['POST', '/api/app/emoji/stickers/update', { id: 'vip-tac', name: 'Altın Taç' }],
+    ['POST', '/api/app/emoji/stickers/reset', { id: 'vip-tac' }],
+    ['POST', '/api/app/emoji/stickers/order', { pack: 'vip', ids: ['vip-elmas', 'vip-tac'] }],
+    ['POST', '/api/app/emoji/stickers/delete', { id: 'es2' }],
+  ] as const) {
+    for (const h of [ops, fin]) assert.equal((await call(method, path, body, h)).status, 200, `${path}`);
+    assert.equal(seen.at(-1)!.path, path.replace('/api/app/', '/api/admin/'));
+    if (body) assert.deepEqual(JSON.parse(seen.at(-1)!.body), body);
+    assert.equal((await call(method, path, body, ro)).status, 403, `salt okunur: ${path}`);
+  }
+  assert.ok(env.db.get("SELECT 1 FROM audit_logs WHERE action = 'app.emoji.packs.update'"));
+  // A sticker's picture streams to the storage like a gift's icon; a Lottie (JSON) too.
+  const res = await fetch(`${base}/api/app/upload?kind=stickerart`, { method: 'POST', headers: { ...ops, 'content-type': 'application/json' }, body: '{"v":"5.7.4"}' });
+  assert.equal(res.status, 200);
+  assert.deepEqual(JSON.parse(seen.at(-1)!.body), { kind: 'stickerart', contentType: 'application/json', size: 13 });
+  assert.equal((await fetch(`${base}/api/app/upload?kind=stickerart`, { method: 'POST', headers: { ...ro, 'content-type': 'image/png' }, body: ICON })).status, 403);
+  // From a link: the app downloads it; the address to save as it gave it, the preview through here.
+  const got = await call('POST', '/api/app/emoji/fetch', { url: 'https://alanadi.com/emoji/kedi.png' }, ops);
+  assert.equal(got.status, 200, JSON.stringify(got.json));
+  assert.equal(got.json.preview, '/api/app/media/f/stickerart/u1/linked.png');
+  assert.equal(seen.at(-1)!.path, '/api/admin/emoji/fetch');
+  assert.ok(env.db.get("SELECT 1 FROM audit_logs WHERE action = 'app.emoji.fetch'"));
+  assert.equal((await call('POST', '/api/app/emoji/fetch', { url: 'https://alanadi.com/x.png' }, ro)).status, 403);
+  // The stored pictures open for whoever manages the emojis.
+  assert.equal((await fetch(`${base}/api/app/media/f/stickerart/u1/x.png`, { headers: ops })).status, 200);
+});
+
 test('daha önce kurulmuş rollere yeni yetki bir kez eklenir', () => {
   const { db } = setup();
   const ADDED: Record<string, string[]> = {
-    finance_manager: ['app.gifts', 'app.withdrawals', 'app.payouts', 'app.refunds', 'app.lucky', 'app.settings', 'app.reports', 'app.agencies', 'app.agency_ledger'],
-    operations_manager: ['app.gifts', 'app.reports', 'app.users', 'app.complaints', 'app.support', 'app.notices', 'app.events'],
+    finance_manager: ['app.gifts', 'app.emojis', 'app.withdrawals', 'app.payouts', 'app.refunds', 'app.lucky', 'app.settings', 'app.reports', 'app.agencies', 'app.agency_ledger'],
+    operations_manager: ['app.gifts', 'app.emojis', 'app.reports', 'app.users', 'app.complaints', 'app.support', 'app.notices', 'app.events'],
   };
-  // A database made before 002–005: the roles without the app permissions.
+  // A database made before 002–006: the roles without the app permissions.
   for (const [key, list] of Object.entries(ADDED)) {
     const perms: string[] = JSON.parse(db.value<string>('SELECT permissions FROM roles WHERE key = ?', key)!);
     db.run('UPDATE roles SET permissions = ? WHERE key = ?', JSON.stringify(perms.filter((p) => !list.includes(p))), key);
   }
   db.run(
-    "DELETE FROM schema_migrations WHERE name IN ('002_app_permissions.sql', '003_app_finance_permissions.sql', '004_app_operations_permissions.sql', '005_app_agency_permissions.sql')",
+    "DELETE FROM schema_migrations WHERE name IN ('002_app_permissions.sql', '003_app_finance_permissions.sql', '004_app_operations_permissions.sql', '005_app_agency_permissions.sql', '006_app_emoji_permissions.sql')",
   );
   db.migrate();
   db.migrate();

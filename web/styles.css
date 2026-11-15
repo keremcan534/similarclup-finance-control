@@ -199,5 +199,14 @@ dl.kv dd { margin: 0; font-variant-numeric: tabular-nums; }
 .gift-tile small { font-size: 12px; opacity: 0.75; }
 .gift-emoji { font-size: 34px; line-height: 44px; }
 .gift-big { width: 120px; height: 120px; object-fit: contain; }
+/* Uygulama › Emojiler: a pack's stickers. */
+.sticker-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(104px, 1fr)); gap: 8px; margin-bottom: 8px; }
+.sticker-tile { display: flex; flex-direction: column; align-items: center; gap: 4px; padding: 8px 4px; border: 1px solid var(--border); border-radius: 10px; text-align: center; min-width: 0; }
+.sticker-tile.off { opacity: 0.55; }
+.sticker-tile small { font-size: 12px; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.sticker-tile .row { justify-content: center; flex-wrap: wrap; }
+.sticker-face { width: 60px; height: 60px; display: grid; place-items: center; padding: 4px; border: 0; border-radius: 8px; background: var(--surface-2); cursor: pointer; }
+.sticker-face:disabled { cursor: default; }
+.sticker-emoji { display: inline-block; }
 .alpha-stage { display: grid; justify-items: center; gap: 6px; margin-top: 10px; padding: 10px; border-radius: var(--radius); background: radial-gradient(circle at 50% 30%, #3b2147, #120c18 70%); }
 .alpha-video { width: min(270px, 100%); height: auto; aspect-ratio: 9 / 16; }

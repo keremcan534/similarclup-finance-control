@@ -58,10 +58,11 @@ npm run restore -- data/backups/finance-....db   # sunucu durdurulmuşken
 | Büyüme simülasyonu | 100, 500, 1.000, 5.000 ve 10.000 kullanıcılık senaryolar ile özel senaryo. Gelir, gider, net sonuç, nakit ihtiyacı, başa baş gelir ve oranı ile marjinal maliyet hesaplanır. Sonuçlar tahmin olarak işaretlenir. |
 | Uyarılar | 16 eşik türü vardır; önem derecesi, ilgili kayıt ve önerilen aksiyonla gösterilir. Kontroller saatte bir ve elle çalıştırılabilir. |
 | Entegrasyonlar | API anahtarı üretme ve yenileme (anahtar yalnız bir kez gösterilir), içe aktarma geçmişi ve satır bazında hatalar. |
-| Kullanıcılar ve roller | 5 hazır rol ve yeni rol tanımlama. Yetkiler tek tek seçilebilir; ajans kapsamlı roller yalnız kendi ajansını görür. |
+| Kullanıcılar ve roller | 6 hazır rol (Moderatör dahil) ve yeni rol tanımlama. Yetkiler tek tek seçilebilir; ajans kapsamlı roller yalnız kendi ajansını görür. |
 | Denetim kaydı | Tüm kritik değişiklikler önce/sonra değerleriyle tutulur. Kayıtlar hash zinciriyle bağlıdır ve zincir doğrulanabilir. |
 | Ayarlar | Raporlama para birimi, çift onay, döviz kurları, jeton/elmas değerleri, vergi parametreleri, finansal dönem kapatma ve yedek alma. |
-| Uygulama › Hediyeler | Similar Club uygulamasının hediyeleri: ekleme, düzenleme (ad, fiyat, raf, VIP, emoji), raftan kaldırma, silme, sıralama; ikon, hazır saydam video, WebM/MOV ya da SVGA yükleme (uygulamanın sunucusu çevirir) ya da her dosya için kendi sitenizdeki bağlantıyı yapıştırma (uygulamanın sunucusu bir kez indirir, aynı denetimden geçirir; "Bağlantıdan yeniden çek" ile yenilenir) ve önizleme. Uygulama güncellemesi olmadan herkesin hediye panelinde görünür. Ayrıntı: [Similar Club'ı yönetme](#similar-clubı-yönetme). |
+| Uygulama › Hediyeler | Similar Club uygulamasının hediyeleri: ekleme, düzenleme (ad, fiyat, raf, VIP, emoji), raftan kaldırma, silme, sıralama; uygulamanın kendi hediyelerinin de her alanını değiştirme ve **Orijinale dön**; ikon, hazır saydam video, WebM/MOV ya da SVGA yükleme (uygulamanın sunucusu çevirir) ya da her dosya için kendi sitenizdeki bağlantıyı yapıştırma (uygulamanın sunucusu bir kez indirir, aynı denetimden geçirir; "Bağlantıdan yeniden çek" ile yenilenir) ve önizleme. Uygulama güncellemesi olmadan herkesin hediye panelinde görünür. Ayrıntı: [Similar Club'ı yönetme](#similar-clubı-yönetme). |
+| Uygulama › Emojiler | Emoji panelinin çıkartma paketleri: uygulamanın kendi paketleri (ad, fiyat, VIP, açık/kapalı, sıra) ve çıkartmaları (ad, emoji, resim, paket, açık/kapalı, sıra) değişir ve orijinaline döner; yeni paket ve çıkartma eklenir (saydam PNG/WebP ya da Lottie animasyonu, bilgisayardan ya da bağlantıdan). Uygulama güncellemesi olmadan telefonlara gider. |
 | Uygulama › Para çekme | Yayıncıların elmas → para talepleri: hesap bilgisi, tutar; bankadan gönderildikten sonra "Ödendi" işareti ya da nedenli ret (elmaslar geri döner). Para bu panelden gönderilmez. |
 | Uygulama › Ajans ödemeleri | Ajans komisyon talepleri: onay, dekont numarasıyla "Ödendi", ret, iptal. |
 | Uygulama › İadeler ve cüzdan | Mağaza alımlarını arama ve iade etme (harcanmamış jeton ve kilitli elmas geri alınır), Google Play iadelerini okuma, bir hesabın cüzdan dökümü. |
@@ -74,6 +75,10 @@ npm run restore -- data/backups/finance-....db   # sunucu durdurulmuşken
 | Uygulama › Duyurular | Similar Ekibi duyuruları: herkese ya da tek kişiye, görsel, uygulama içi bağlantı, odalarda banner (1–30 gün); kaldırma. |
 | Uygulama › Etkinlikler | Etkinlik başvurularını onaylama ya da gerekçeyle reddetme, yayındaki etkinliği kaldırma, etkinlik türleri, dönem raporu (7/30/90 gün). |
 | Uygulama › Ajans merkezi | Uygulamanın ajans ağı, merkezin gözünden: özet, ağaç (oran, kademe, 30 günlük hacim ve kazanç, performans puanı), yeni ajans, başvuruları onaylama ya da reddetme, askıya alma, yeniden açma, kapatma, oran düzeltme, kademe, üst ajans değişikliği, yayıncıyı ajansa bağlama ya da çıkarma, geçiş komisyonu, transferlere merkez onayı, performans değerlendirmesi (deneme dahil), komisyon raporu, BD raporu, simülasyon ve merkezin denetim kaydı. Ayrı yetkiyle **komisyon defteri ve ağ kuralları**: bekleyen komisyonları hesaplama, elle gelir, ters kayıt, düzeltme, dönem kapatma, ağ kuralları (havuz sınırı, kademeler, ödeme ve transfer kuralları…). |
+| Uygulama › Yaptırımlar | Uygulamanın yaptırımları: kişiyi arama ve kaydı; susturma, süreli ve ömür boyu ban, cihaz banı, kaldırma, kanıt; cihaz riski; onay bekleyenler (ömür boyu ve cihaz banını öneren değil başka bir yetkili onaylar); itirazlar; ceza kademeleri; kimin neyi yapabileceği. `app.sanctions` uygulamadaki moderatör kadar yetki verir (ömür boyu ban yalnız öneri olur), `app.sanctions_full` tam yetki. |
+| Uygulama › Ajans personeli | Ajans merkezinin personeli ve rolleri, ajansın BD sorumlusu, operasyon puanı, ihlal kaydı, itirazlar ve arka plan işlerini elle çalıştırma. |
+| Uygulama › Mağaza eşyaları | Bir kişinin mağaza eşyaları: eşya verme ve geri alma, iadeden sonra elinde kalan eşyalar. |
+| Uygulama › Jeton Noktası | Jeton Noktası hesaplarını açma ve kapama, dekont numarasıyla toptan jeton satışı. |
 
 ## Similar Club'tan veri alma
 
@@ -133,6 +138,7 @@ Hangi panel kullanıcısının hangi sayfayı kullanacağını bu panelin roller
 | Yetki | Sayfa | Hazır rollerde |
 | --- | --- | --- |
 | `app.gifts` | Uygulama › Hediyeler | Süper yönetici, finans yöneticisi, operasyon yöneticisi |
+| `app.emojis` | Uygulama › Emojiler | Süper yönetici, finans yöneticisi, operasyon yöneticisi |
 | `app.withdrawals` | Uygulama › Para çekme | Süper yönetici, finans yöneticisi |
 | `app.payouts` | Uygulama › Ajans ödemeleri | Süper yönetici, finans yöneticisi |
 | `app.refunds` | Uygulama › İadeler ve cüzdan | Süper yönetici, finans yöneticisi |
@@ -146,6 +152,11 @@ Hangi panel kullanıcısının hangi sayfayı kullanacağını bu panelin roller
 | `app.events` | Uygulama › Etkinlikler | Süper yönetici, operasyon yöneticisi |
 | `app.agencies` | Uygulama › Ajans merkezi | Süper yönetici, finans yöneticisi |
 | `app.agency_ledger` | Uygulama › Ajans merkezi › Defter ve kurallar (kritik) | Süper yönetici, finans yöneticisi |
+| `app.sanctions` | Uygulama › Yaptırımlar (moderatör yetkisi) | Süper yönetici, operasyon yöneticisi, moderatör |
+| `app.sanctions_full` | Uygulama › Yaptırımlar (tam yetki: onay, ceza kademeleri, yaptırım yetkileri, cihaz riski) | Süper yönetici, operasyon yöneticisi |
+| `app.agency_staff` | Uygulama › Ajans personeli | Süper yönetici, operasyon yöneticisi |
+| `app.economy` | Uygulama › Mağaza eşyaları | Süper yönetici, operasyon yöneticisi |
+| `app.jeton` | Uygulama › Jeton Noktası | Süper yönetici, finans yöneticisi |
 
 Panelden yapılan her işlem uygulamada tek bir hesaptan (Finance Control) yapılmış sayılır; kimin yaptığı iki tarafın
 denetim kaydında da yazar. Bunun bir sonucu: ajans ödemelerinde **iki kişili onay** açıksa, panelden onaylanan bir

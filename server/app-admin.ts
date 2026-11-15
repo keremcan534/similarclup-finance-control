@@ -29,11 +29,25 @@ export function appLink(env: NodeJS.ProcessEnv = process.env): AppLink {
  * /api/app/<the rest after /api/admin/>.
  */
 export const APP_ROUTES: [string, string, Permission | Permission[]][] = [
+  // Hediyeler: the admins' own and the app's own (?builtin=1 lists them, reset takes one back to the app's values).
   ['GET', '/api/admin/gifts', 'app.gifts'],
   ['POST', '/api/admin/gifts', 'app.gifts'],
   ['POST', '/api/admin/gifts/update', 'app.gifts'],
+  ['POST', '/api/admin/gifts/reset', 'app.gifts'],
   ['POST', '/api/admin/gifts/delete', 'app.gifts'],
   ['POST', '/api/admin/gifts/order', 'app.gifts'],
+  // Emojiler: the emoji panel's packs and stickers, the app's and the admins' own
+  ['GET', '/api/admin/emoji', 'app.emojis'],
+  ['POST', '/api/admin/emoji/packs', 'app.emojis'],
+  ['POST', '/api/admin/emoji/packs/update', 'app.emojis'],
+  ['POST', '/api/admin/emoji/packs/reset', 'app.emojis'],
+  ['POST', '/api/admin/emoji/packs/delete', 'app.emojis'],
+  ['POST', '/api/admin/emoji/packs/order', 'app.emojis'],
+  ['POST', '/api/admin/emoji/stickers', 'app.emojis'],
+  ['POST', '/api/admin/emoji/stickers/update', 'app.emojis'],
+  ['POST', '/api/admin/emoji/stickers/reset', 'app.emojis'],
+  ['POST', '/api/admin/emoji/stickers/delete', 'app.emojis'],
+  ['POST', '/api/admin/emoji/stickers/order', 'app.emojis'],
   // Para çekme
   ['GET', '/api/admin/withdrawals', 'app.withdrawals'],
   ['POST', '/api/admin/withdrawals/decide', 'app.withdrawals'],
@@ -59,6 +73,7 @@ export const APP_ROUTES: [string, string, Permission | Permission[]][] = [
   ['GET', '/api/admin/casino/report', 'app.reports'],
   ['GET', '/api/admin/alerts', 'app.reports'],
   ['GET', '/api/admin/finance-sync', 'app.reports'],
+  ['GET', '/api/admin/money-check', 'app.reports'],
   // Kullanıcılar: search, ban (and lifting it), room level, deleting, an invite's coins back
   ['GET', '/api/admin/users', 'app.users'],
   ['POST', '/api/admin/users/delete', 'app.users'],
@@ -92,7 +107,8 @@ export const APP_ROUTES: [string, string, Permission | Permission[]][] = [
   // transition commission, performance runs, reports, the simulator, the centre's audit log
   ['GET', '/api/admin/agency/tree', 'app.agencies'],
   ['GET', '/api/admin/agency/overview', 'app.agencies'],
-  ['GET', '/api/admin/agency/list', 'app.agencies'],
+  // The list also serves Ajans personeli's agency search (BD, operations score, violations).
+  ['GET', '/api/admin/agency/list', ['app.agencies', 'app.agency_staff']],
   ['POST', '/api/admin/agency/create', 'app.agencies'],
   ['POST', '/api/admin/agency/decide', 'app.agencies'],
   ['POST', '/api/admin/agency/status', 'app.agencies'],
@@ -117,22 +133,61 @@ export const APP_ROUTES: [string, string, Permission | Permission[]][] = [
   ['POST', '/api/admin/agency/adjust', 'app.agency_ledger'],
   ['POST', '/api/admin/agency/periods/close', 'app.agency_ledger'],
   ['POST', '/api/admin/agency/settings', 'app.agency_ledger'],
+  // Ajans merkezi's staff: roles and who holds them, BD assignment, operations score, violations and appeals, the
+  // background jobs run now
+  ['GET', '/api/admin/agency/roles', 'app.agency_staff'],
+  ['POST', '/api/admin/agency/roles', 'app.agency_staff'],
+  ['GET', '/api/admin/agency/staff', 'app.agency_staff'],
+  ['POST', '/api/admin/agency/staff/set', 'app.agency_staff'],
+  ['POST', '/api/admin/agency/staff/remove', 'app.agency_staff'],
+  ['POST', '/api/admin/agency/bd', 'app.agency_staff'],
+  ['POST', '/api/admin/agency/ops-score', 'app.agency_staff'],
+  ['POST', '/api/admin/agency/violation', 'app.agency_staff'],
+  ['GET', '/api/admin/agency/appeals', 'app.agency_staff'],
+  ['POST', '/api/admin/agency/appeals/decide', 'app.agency_staff'],
+  ['POST', '/api/admin/agency/jobs/run', 'app.agency_staff'],
+  // Yaptırımlar: a moderator's permissions or all of them; the app decides which sanction each may give from the
+  // permissions sent with the request (panelHeaders perms). The policies, who may do what, a device's risk: all only.
+  ['GET', '/api/admin/sanctions/meta', ['app.sanctions', 'app.sanctions_full']],
+  ['GET', '/api/admin/sanctions/search', ['app.sanctions', 'app.sanctions_full']],
+  ['GET', '/api/admin/sanctions/user', ['app.sanctions', 'app.sanctions_full']],
+  ['GET', '/api/admin/sanctions/pending', ['app.sanctions', 'app.sanctions_full']],
+  ['POST', '/api/admin/sanctions', ['app.sanctions', 'app.sanctions_full']],
+  ['POST', '/api/admin/sanctions/lift', ['app.sanctions', 'app.sanctions_full']],
+  ['POST', '/api/admin/sanctions/approve', 'app.sanctions_full'],
+  ['POST', '/api/admin/sanctions/evidence', ['app.sanctions', 'app.sanctions_full']],
+  ['GET', '/api/admin/appeals', ['app.sanctions', 'app.sanctions_full']],
+  ['POST', '/api/admin/appeals/decide', ['app.sanctions', 'app.sanctions_full']],
+  ['POST', '/api/admin/sanction-policies', 'app.sanctions_full'],
+  ['GET', '/api/admin/sanction-permissions', 'app.sanctions_full'],
+  ['POST', '/api/admin/sanction-permissions', 'app.sanctions_full'],
+  ['POST', '/api/admin/devices/risk', 'app.sanctions_full'],
+  // A person's shop items: what they own, giving one, taking one back, the items a refund left to review
+  ['GET', '/api/admin/economy/user', 'app.economy'],
+  ['POST', '/api/admin/economy/grant', 'app.economy'],
+  ['POST', '/api/admin/economy/revoke', 'app.economy'],
+  ['GET', '/api/admin/economy/reviews', ['app.economy', 'app.refunds']],
+  // Jeton Noktası: an account made a bank or back, a bank's stock sold to it (critical)
+  ['POST', '/api/admin/jeton/bank', 'app.jeton'],
+  ['POST', '/api/admin/jeton/wholesale', 'app.jeton'],
 ];
 /** POSTs that only compute (nothing changes in the app): no row in this panel's audit log. */
 const COMPUTE_ONLY = new Set(['/api/admin/agency/simulate']);
 export const localPath = (appPath: string) => `/api/app${appPath.slice('/api/admin'.length)}`;
 /** Upload kinds and the permission each needs (the app's media.mjs kinds). */
-const UPLOADS: Record<string, Permission> = { gifticon: 'app.gifts', giftvideo: 'app.gifts', giftsource: 'app.gifts', notice: 'app.notices' };
+const UPLOADS: Record<string, Permission> = { gifticon: 'app.gifts', giftvideo: 'app.gifts', giftsource: 'app.gifts', stickerart: 'app.emojis', notice: 'app.notices' };
 /** The permissions that may open the app's stored files through here (every page that shows them). */
 // The app serves these files to anyone with the address (media.mjs GET /api/media/f/…); the panel still asks for a
 // page that shows them: gift art, a reported post's or room's picture, a ticket's photo, a notice's or event's picture.
-const FILE_PERMS: Permission[] = ['app.gifts', 'app.complaints', 'app.support', 'app.notices', 'app.events'];
+const FILE_PERMS: Permission[] = ['app.gifts', 'app.emojis', 'app.complaints', 'app.support', 'app.notices', 'app.events'];
 
 const off = () => new HttpError(503, 'Uygulama bağlantısı ayarlı değil: sunucuda FC_APP_API_URL ve FC_APP_API_KEY gerekli', 'app_off');
 
 function panelHeaders(ctx: Ctx, link: NonNullable<AppLink>) {
   const u = ctx.user!;
-  const who = Buffer.from(JSON.stringify({ id: u.id, email: u.email, name: u.name, role: u.role_key }), 'utf8').toString('base64url');
+  // perms: this user's Uygulama permissions, for the app's rules that go finer than a page (sanctions.mjs permsOf).
+  const perms = [...u.permissions].filter((p) => p.startsWith('app.')).sort();
+  const who = Buffer.from(JSON.stringify({ id: u.id, email: u.email, name: u.name, role: u.role_key, perms }), 'utf8').toString('base64url');
   return { 'x-panel-key': link.key, 'x-panel-user': who };
 }
 
@@ -184,6 +239,13 @@ export function appRoutes(r: Router<Ctx>, link: AppLink) {
     need(ctx, 'app.gifts');
     const out = await appCall(ctx, link, 'POST', '/api/admin/gifts/fetch', req.body, { raw: true, timeoutMs: 330_000 });
     audit(ctx, 'app.gifts.fetch', 'app', null, null, { method: 'POST', path: '/api/admin/gifts/fetch', body: req.body });
+    return { ...out, preview: localFiles(out.url) };
+  });
+  // A sticker's picture from a link (Emojiler): the same, for a PNG, WebP or Lottie JSON of at most 512 KB.
+  r.add('POST', '/api/app/emoji/fetch', async (req, ctx) => {
+    need(ctx, 'app.emojis');
+    const out = await appCall(ctx, link, 'POST', '/api/admin/emoji/fetch', req.body, { raw: true, timeoutMs: 90_000 });
+    audit(ctx, 'app.emoji.fetch', 'app', null, null, { method: 'POST', path: '/api/admin/emoji/fetch', body: req.body });
     return { ...out, preview: localFiles(out.url) };
   });
   r.get('/api/app/status', (_req, ctx) => {

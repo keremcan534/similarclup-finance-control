@@ -12,9 +12,13 @@ import { Simulation } from './pages/simulation.js';
 import { Alerts } from './pages/alerts.js';
 import { Integrations, Users, Audit, Settings, Account } from './pages/admin.js';
 import { AppGifts } from './pages/app-gifts.js';
+import { AppEmojis } from './pages/app-emojis.js';
 import { AppLucky, AppPayouts, AppRefunds, AppReports, AppSettings, AppWithdrawals } from './pages/app-finance.js';
 import { AppComplaints, AppEvents, AppNotices, AppSupport, AppUsers } from './pages/app-ops.js';
 import { AppAgencies } from './pages/app-agencies.js';
+import { AppAgencyStaff } from './pages/app-agency-staff.js';
+import { AppEconomy, AppJeton } from './pages/app-economy.js';
+import { AppSanctions } from './pages/app-sanctions.js';
 
 const NAV = [
   ['Genel', [
@@ -47,6 +51,7 @@ const NAV = [
   // The Similar Club app itself, through its admin API (server/app-admin.ts).
   ['Uygulama', [
     ['app-gifts', 'Hediyeler', 'app.gifts', AppGifts],
+    ['app-emojis', 'Emojiler', 'app.emojis', AppEmojis],
     ['app-withdrawals', 'Para çekme', 'app.withdrawals', AppWithdrawals],
     ['app-payouts', 'Ajans ödemeleri', 'app.payouts', AppPayouts],
     ['app-refunds', 'İadeler ve cüzdan', 'app.refunds', AppRefunds],
@@ -54,11 +59,15 @@ const NAV = [
     ['app-settings', 'Canlı ayarlar', 'app.settings', AppSettings],
     ['app-reports', 'Oyun Salonu ve durum', 'app.reports', AppReports],
     ['app-users', 'Kullanıcılar', 'app.users', AppUsers],
+    ['app-sanctions', 'Yaptırımlar', 'app.sanctions', AppSanctions],
+    ['app-economy', 'Mağaza eşyaları', 'app.economy', AppEconomy],
     ['app-complaints', 'Şikâyetler', 'app.complaints', AppComplaints],
     ['app-support', 'Destek', 'app.support', AppSupport],
     ['app-notices', 'Duyurular', 'app.notices', AppNotices],
     ['app-events', 'Etkinlikler', 'app.events', AppEvents],
     ['app-agencies', 'Ajans merkezi', 'app.agencies', AppAgencies],
+    ['app-agency-staff', 'Ajans personeli', 'app.agency_staff', AppAgencyStaff],
+    ['app-jeton', 'Jeton Noktası', 'app.jeton', AppJeton],
   ]],
   ['Yönetim', [
     ['integrations', 'Entegrasyonlar', 'integrations.manage', Integrations],
