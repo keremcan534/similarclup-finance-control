@@ -62,6 +62,11 @@ const fakeApp = createServer(async (req, res) => {
     const b = JSON.parse(body.toString('utf8'));
     return json(200, { uploadUrl: `${appBase}/bucket/${b.kind}-1?X-Amz-Signature=x`, headers: { 'content-type': b.contentType }, publicUrl: `${appBase}/api/media/f/${b.kind}/u1/new`, expiresIn: 600 });
   }
+  // A file from a link: the app answers the stored address at its own name (files out), as the real one does.
+  if (req.method === 'POST' && url.pathname === '/api/admin/gifts/fetch') {
+    const b = JSON.parse(body.toString('utf8'));
+    return json(200, { url: `${appBase}/api/media/f/gifticon/u1/linked.png`, link: b.url, kind: 'gifticon', type: 'image/png', bytes: 3000, video: null, svga: false });
+  }
   if (req.method === 'POST' && url.pathname.startsWith('/api/admin/gifts')) return json(200, { gift: { id: 'a2', ...JSON.parse(body.toString('utf8') || '{}') } });
   // The other admin routes (Para çekme, Ajans ödemeleri, İadeler, Şanslı, Canlı ayarlar, raporlar): an echo.
   if (url.pathname.startsWith('/api/admin/')) return json(200, { ok: true, path: url.pathname + url.search });
@@ -401,6 +406,33 @@ test('Ajans merkezi: finans yöneticisi evet, operasyon yöneticisi ve salt okun
   // The centre's staff roles and background jobs are not reachable from here.
   assert.equal((await call('GET', '/api/app/agency/roles', undefined, fin)).status, 404);
   assert.equal((await call('POST', '/api/app/agency/jobs/run', {}, fin)).status, 404);
+});
+
+test('bağlantıdan dosya: uygulama indirir; kaydedilecek adres olduğu gibi, önizlemesi bu sunucudan; yetki, denetim, ret', async () => {
+  env.as('operations_manager', 'ops@test.local');
+  env.as('read_only', 'ro@test.local');
+  const ops = await loginAs('ops@test.local');
+  const body = { slot: 'icon', url: 'https://alanadi.com/hediyeler/yuzuk.png' };
+  const r = await call('POST', '/api/app/gifts/fetch', body, ops);
+  assert.equal(r.status, 200, JSON.stringify(r.json));
+  // Saved as the app gave it (it reads its own address back); shown through this server.
+  assert.equal(r.json.url, `${appBase}/api/media/f/gifticon/u1/linked.png`);
+  assert.equal(r.json.preview, '/api/app/media/f/gifticon/u1/linked.png');
+  assert.equal(r.json.link, body.url);
+  assert.equal(seen.at(-1)!.path, '/api/admin/gifts/fetch');
+  assert.deepEqual(JSON.parse(seen.at(-1)!.body), body);
+  assert.equal(seen.at(-1)!.user.email, 'ops@test.local');
+  const log = env.db.get("SELECT actor, after FROM audit_logs WHERE action = 'app.gifts.fetch' ORDER BY id DESC LIMIT 1")!;
+  assert.match(log.actor, /ops@test\.local/);
+  assert.deepEqual(JSON.parse(log.after).body, body);
+  assert.equal((await call('POST', '/api/app/gifts/fetch', body, await loginAs('ro@test.local'))).status, 403);
+  assert.equal((await call('POST', '/api/app/gifts/fetch', body)).status, 401);
+  // The app's refusal (a share page instead of the file) comes back in its words.
+  refuse = { status: 400, error: 'Bu bağlantı dosyanın kendisini değil bir web sayfasını açıyor' };
+  const no = await call('POST', '/api/app/gifts/fetch', { slot: 'video', url: 'https://drive.google.com/file/d/1/view' }, ops);
+  refuse = null;
+  assert.equal(no.status, 400);
+  assert.match(no.json.error, /web sayfasını/);
 });
 
 test('daha önce kurulmuş rollere yeni yetki bir kez eklenir', () => {

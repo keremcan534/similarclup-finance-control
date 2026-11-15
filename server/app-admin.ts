@@ -150,7 +150,7 @@ export function localFiles(v: unknown): unknown {
 }
 
 /** One call to the app's API as the signed-in panel user; its refusals come back with the app's own sentence. */
-export async function appCall(ctx: Ctx, link: AppLink, method: string, path: string, body?: unknown, { raw = false } = {}): Promise<any> {
+export async function appCall(ctx: Ctx, link: AppLink, method: string, path: string, body?: unknown, { raw = false, timeoutMs = 30_000 } = {}): Promise<any> {
   if (!link) throw off();
   let res: Response;
   try {
@@ -158,7 +158,7 @@ export async function appCall(ctx: Ctx, link: AppLink, method: string, path: str
       method,
       headers: { ...panelHeaders(ctx, link), ...(body !== undefined ? { 'content-type': 'application/json' } : {}) },
       body: body === undefined ? undefined : JSON.stringify(body),
-      signal: AbortSignal.timeout(30_000),
+      signal: AbortSignal.timeout(timeoutMs),
     });
   } catch {
     throw new HttpError(502, 'Uygulama sunucusuna ulaşılamıyor', 'app_unreachable');
@@ -177,6 +177,15 @@ export async function appCall(ctx: Ctx, link: AppLink, method: string, path: str
 
 /** The /api/app/… routes of APP_ROUTES; a change is also a row in this panel's own audit log. */
 export function appRoutes(r: Router<Ctx>, link: AppLink) {
+  // A gift's file from a link (Hediyeler, "ya da bağlantı yapıştır"): the app downloads it once (up to 5 minutes for
+  // a big source) and stores it as if uploaded. Answers the address to save as the app gave it, and `preview`, the
+  // same file through this server.
+  r.add('POST', '/api/app/gifts/fetch', async (req, ctx) => {
+    need(ctx, 'app.gifts');
+    const out = await appCall(ctx, link, 'POST', '/api/admin/gifts/fetch', req.body, { raw: true, timeoutMs: 330_000 });
+    audit(ctx, 'app.gifts.fetch', 'app', null, null, { method: 'POST', path: '/api/admin/gifts/fetch', body: req.body });
+    return { ...out, preview: localFiles(out.url) };
+  });
   r.get('/api/app/status', (_req, ctx) => {
     if (!ctx.user) throw new HttpError(401, 'Oturum açmanız gerekiyor', 'unauthenticated');
     return { connected: !!link };
