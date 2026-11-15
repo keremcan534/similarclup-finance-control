@@ -422,7 +422,7 @@ function Editor({ gift, admin, onClose, onSaved }) {
     </div></div>
 
     <h3>İkon</h3>
-    <p class="muted">Saydam (arka planı silinmiş) PNG ya da WebP, kare, ${L.iconMinPx}–${L.iconMaxPx} piksel (önerilen 512 × 512), en çok ${mb(L.iconBytes)} MB.${app ? ' Seçmezseniz uygulamanın resmi kalır.' : ''}</p>
+    <p class="muted">Saydam (arka planı silinmiş) PNG ya da WebP, kare, ${L.iconMinPx}–${L.iconMaxPx} piksel (önerilen 512 × 512), en çok ${mb(L.iconBytes)} MB.${L.iconServePx ? ` Daha büyüğü telefonlar için kendiliğinden ${L.iconServePx} piksele ve ${mb(L.iconServeBytes)} MB'a küçültülür.` : ''}${app ? ' Seçmezseniz uygulamanın resmi kalır.' : ''}</p>
     <div class="row gap wrap">
       <input type="file" accept="image/png,image/webp" aria-label="İkon dosyası" onChange=${pickIcon} />
       ${app && (gift.changed?.includes('icon') || (icon && !icon.reset)) && !icon?.reset && html`<${Button} kind="ghost" onClick=${() => setIcon({ reset: true })}>Uygulamanın resmine dön</${Button}>`}
