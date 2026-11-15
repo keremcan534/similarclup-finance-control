@@ -12,7 +12,7 @@ import type { IncomingMessage, ServerResponse } from 'node:http';
 import { Readable } from 'node:stream';
 import { pipeline } from 'node:stream/promises';
 
-import { audit, need, type Ctx, type Permission } from './context.ts';
+import { audit, can, need, type Ctx, type Permission } from './context.ts';
 import { HttpError, bad, type Router } from './lib/http.ts';
 
 export type AppLink = { url: string; key: string } | null;
@@ -24,8 +24,11 @@ export function appLink(env: NodeJS.ProcessEnv = process.env): AppLink {
   return /^https?:\/\/[^\s/]+$/.test(url) && key.length >= 32 ? { url, key } : null;
 }
 
-/** [method, the app's path, the permission it needs here]. Served here at /api/app/<the rest after /api/admin/>. */
-export const APP_ROUTES: [string, string, Permission][] = [
+/**
+ * [method, the app's path, the permission it needs here (or a list: any one of them)]. Served here at
+ * /api/app/<the rest after /api/admin/>.
+ */
+export const APP_ROUTES: [string, string, Permission | Permission[]][] = [
   ['GET', '/api/admin/gifts', 'app.gifts'],
   ['POST', '/api/admin/gifts', 'app.gifts'],
   ['POST', '/api/admin/gifts/update', 'app.gifts'],
@@ -37,7 +40,8 @@ export const APP_ROUTES: [string, string, Permission][] = [
   // Ajans ödemeleri and the payout policy
   ['GET', '/api/admin/agency/payouts', 'app.payouts'],
   ['POST', '/api/admin/agency/payouts/decide', 'app.payouts'],
-  ['GET', '/api/admin/agency/settings', 'app.payouts'],
+  // The agency network's rules: the payout policy for Ajans ödemeleri, the tiers and rates for Ajans merkezi.
+  ['GET', '/api/admin/agency/settings', ['app.payouts', 'app.agencies', 'app.agency_ledger']],
   // İadeler and the wallet audit
   ['GET', '/api/admin/purchases', 'app.refunds'],
   ['POST', '/api/admin/purchases/refund', 'app.refunds'],
@@ -84,7 +88,38 @@ export const APP_ROUTES: [string, string, Permission][] = [
   ['POST', '/api/admin/events/categories', 'app.events'],
   ['POST', '/api/admin/events/categories/remove', 'app.events'],
   ['GET', '/api/admin/events/report', 'app.events'],
+  // Ajans merkezi: the tree and list, applications, status, rate, tier, parent, a streamer's agency, transfers and
+  // transition commission, performance runs, reports, the simulator, the centre's audit log
+  ['GET', '/api/admin/agency/tree', 'app.agencies'],
+  ['GET', '/api/admin/agency/overview', 'app.agencies'],
+  ['GET', '/api/admin/agency/list', 'app.agencies'],
+  ['POST', '/api/admin/agency/create', 'app.agencies'],
+  ['POST', '/api/admin/agency/decide', 'app.agencies'],
+  ['POST', '/api/admin/agency/status', 'app.agencies'],
+  ['POST', '/api/admin/agency/rate', 'app.agencies'],
+  ['POST', '/api/admin/agency/tier', 'app.agencies'],
+  ['POST', '/api/admin/agency/parent', 'app.agencies'],
+  ['POST', '/api/admin/agency/assign', 'app.agencies'],
+  ['GET', '/api/admin/agency/performance', 'app.agencies'],
+  ['POST', '/api/admin/agency/performance/run', 'app.agencies'],
+  ['GET', '/api/admin/agency/transfers', 'app.agencies'],
+  ['POST', '/api/admin/agency/transfers/decide', 'app.agencies'],
+  ['POST', '/api/admin/agency/transition', 'app.agencies'],
+  ['GET', '/api/admin/agency/audit', 'app.agencies'],
+  ['POST', '/api/admin/agency/simulate', 'app.agencies'],
+  ['GET', '/api/admin/agency/report', 'app.agencies'],
+  ['GET', '/api/admin/agency/bd-report', 'app.agencies'],
+  // The agency commission ledger and the network's rules (critical): a recalculation, a manual income, a reversal,
+  // an adjustment, closing a period, a setting
+  ['POST', '/api/admin/agency/commissions/run', 'app.agency_ledger'],
+  ['POST', '/api/admin/agency/income', 'app.agency_ledger'],
+  ['POST', '/api/admin/agency/commissions/reverse', 'app.agency_ledger'],
+  ['POST', '/api/admin/agency/adjust', 'app.agency_ledger'],
+  ['POST', '/api/admin/agency/periods/close', 'app.agency_ledger'],
+  ['POST', '/api/admin/agency/settings', 'app.agency_ledger'],
 ];
+/** POSTs that only compute (nothing changes in the app): no row in this panel's audit log. */
+const COMPUTE_ONLY = new Set(['/api/admin/agency/simulate']);
 export const localPath = (appPath: string) => `/api/app${appPath.slice('/api/admin'.length)}`;
 /** Upload kinds and the permission each needs (the app's media.mjs kinds). */
 const UPLOADS: Record<string, Permission> = { gifticon: 'app.gifts', giftvideo: 'app.gifts', giftsource: 'app.gifts', notice: 'app.notices' };
@@ -147,12 +182,13 @@ export function appRoutes(r: Router<Ctx>, link: AppLink) {
     return { connected: !!link };
   });
   for (const [method, path, perm] of APP_ROUTES) {
+    const perms = Array.isArray(perm) ? perm : [perm];
     r.add(method, localPath(path), async (req, ctx) => {
-      need(ctx, perm);
+      if (!perms.some((p) => can(ctx, p))) need(ctx, perms[0]);
       const query = method === 'GET' ? req.query.toString() : '';
       const out = await appCall(ctx, link, method, `${path}${query ? `?${query}` : ''}`, method === 'GET' ? undefined : req.body);
-      // A preview (Canlı ayarlar, dryRun) changes nothing: no row for it.
-      if (method !== 'GET' && (req.body as { dryRun?: unknown } | null)?.dryRun !== true) {
+      // A preview (Canlı ayarlar, a performance dry run: dryRun) or a calculation changes nothing: no row for it.
+      if (method !== 'GET' && !COMPUTE_ONLY.has(path) && (req.body as { dryRun?: unknown } | null)?.dryRun !== true) {
         audit(ctx, `app${path.slice('/api/admin'.length).replace(/\//g, '.')}`, 'app', null, null, { method, path, body: req.body });
       }
       return out;

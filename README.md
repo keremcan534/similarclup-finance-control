@@ -73,6 +73,7 @@ npm run restore -- data/backups/finance-....db   # sunucu durdurulmuşken
 | Uygulama › Destek | Destek talepleri (bekleyen, yanıtlanan, kapalı): yazışma, fotoğraflar, yanıt (kişiye "Destek" adıyla), kapatma, yeniden açma. |
 | Uygulama › Duyurular | Similar Ekibi duyuruları: herkese ya da tek kişiye, görsel, uygulama içi bağlantı, odalarda banner (1–30 gün); kaldırma. |
 | Uygulama › Etkinlikler | Etkinlik başvurularını onaylama ya da gerekçeyle reddetme, yayındaki etkinliği kaldırma, etkinlik türleri, dönem raporu (7/30/90 gün). |
+| Uygulama › Ajans merkezi | Uygulamanın ajans ağı, merkezin gözünden: özet, ağaç (oran, kademe, 30 günlük hacim ve kazanç, performans puanı), yeni ajans, başvuruları onaylama ya da reddetme, askıya alma, yeniden açma, kapatma, oran düzeltme, kademe, üst ajans değişikliği, yayıncıyı ajansa bağlama ya da çıkarma, geçiş komisyonu, transferlere merkez onayı, performans değerlendirmesi (deneme dahil), komisyon raporu, BD raporu, simülasyon ve merkezin denetim kaydı. Ayrı yetkiyle **komisyon defteri ve ağ kuralları**: bekleyen komisyonları hesaplama, elle gelir, ters kayıt, düzeltme, dönem kapatma, ağ kuralları (havuz sınırı, kademeler, ödeme ve transfer kuralları…). |
 
 ## Similar Club'tan veri alma
 
@@ -143,14 +144,17 @@ Hangi panel kullanıcısının hangi sayfayı kullanacağını bu panelin roller
 | `app.support` | Uygulama › Destek | Süper yönetici, operasyon yöneticisi |
 | `app.notices` | Uygulama › Duyurular | Süper yönetici, operasyon yöneticisi |
 | `app.events` | Uygulama › Etkinlikler | Süper yönetici, operasyon yöneticisi |
+| `app.agencies` | Uygulama › Ajans merkezi | Süper yönetici, finans yöneticisi |
+| `app.agency_ledger` | Uygulama › Ajans merkezi › Defter ve kurallar (kritik) | Süper yönetici, finans yöneticisi |
 
 Panelden yapılan her işlem uygulamada tek bir hesaptan (Finance Control) yapılmış sayılır; kimin yaptığı iki tarafın
 denetim kaydında da yazar. Bunun bir sonucu: ajans ödemelerinde **iki kişili onay** açıksa, panelden onaylanan bir
 ödemenin "Ödendi" işaretini uygulamadaki Yönetim'den başka bir yönetici koymalıdır (uygulama onaylayanla ödeyeni
 aynı hesap sayar). Kendi talebine karar verememe gibi kurallar uygulamanın kendisinde kalır.
 
-Uygulamada kalanlar: **Yaptırımlar** (kanıt, onay, itiraz, cihaz engeli, personelin yaptırım yetkileri), **Ajans
-merkezi** (ajans kurma, oran, kademe, transfer), Yönetim'in **Özet** sekmesi ve odanın içinden yapılan işler.
+Uygulamada kalanlar: **Yaptırımlar** (kanıt, onay, itiraz, cihaz engeli, personelin yaptırım yetkileri), ajans
+merkezinin **personel rolleri ve yetkileri**, BD atama, operasyon puanı, ihlal ve itirazlar, arka plan işleri,
+Yönetim'in **Özet** sekmesi ve odanın içinden yapılan işler.
 
 Dosyalar (ikon, video, SVGA) tarayıcıdan bu sunucu üzerinden uygulamanın deposuna akar (en çok 100 MB). Depodaki
 dosyalar da önizleme için bu sunucudan okunur (`/api/app/media/f/…`, `/api/app/fx/…`).

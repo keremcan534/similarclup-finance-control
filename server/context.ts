@@ -47,6 +47,8 @@ export const PERMISSIONS = {
   'app.support': 'Uygulama: destek talepleri, yanıt ve durum',
   'app.notices': 'Uygulama: Similar Ekibi duyuruları ve bannerları',
   'app.events': 'Uygulama: etkinlik başvuruları, türleri ve raporu',
+  'app.agencies': 'Uygulama: Ajans merkezi (ajanslar, başvurular, oran, kademe, transfer, performans, rapor)',
+  'app.agency_ledger': 'Uygulama: ajans komisyon defteri ve ağ kuralları (kritik)',
 } as const;
 export type Permission = keyof typeof PERMISSIONS;
 export const ALL_PERMISSIONS = Object.keys(PERMISSIONS) as Permission[];
