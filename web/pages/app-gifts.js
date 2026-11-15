@@ -17,6 +17,8 @@ const CAT = Object.fromEntries(CATS);
 const FILLS = { 0.45: 'Küçük', 0.6: 'Orta', 0.8: 'Büyük', 1: 'Tam ekran' };
 const mb = (n) => (n / 1024 / 1024).toLocaleString('tr-TR', { maximumFractionDigits: 1 });
 const sec = (ms) => (ms / 1000).toLocaleString('tr-TR', { maximumFractionDigits: 1 });
+/** A file's size as people read it: KB under a megabyte. */
+const size = (n) => (n < 1024 * 1024 ? `${Math.max(1, Math.round(n / 1024))} KB` : `${mb(n)} MB`);
 const ending = (name) => (/\.([A-Za-z0-9]{1,8})$/.exec(name ?? '')?.[1] ?? '').toLowerCase();
 /** What "Değiştirildi" names, as the app answers it (`changed`). */
 const FIELD_TR = { name: 'ad', emoji: 'emoji', price: 'fiyat', cat: 'raf / VIP', enabled: 'rafta / kapalı', icon: 'ikon', video: 'video' };
@@ -76,7 +78,7 @@ function videoLine(g) {
     return html`<div style="white-space:normal;min-width:240px;max-width:420px"><${Badge} s="error" label="Çevrilemedi" /> <small class="muted">${g.job.error}</small>${g.job.preview ? html`<br /><small>Nasıl göründüğü: <strong>Önizle</strong></small>` : ''}</div>`;
   // The app's own clip, as long as nobody replaced or stopped it.
   const own = g.builtin && !g.changed?.includes('video');
-  if (g.video) return html`<${Badge} s="active" label=${`${own ? 'Uygulamanın videosu' : 'Hazır'} · ${sec(g.video.ms)} sn · ${mb(g.video.bytes)} MB`} />`;
+  if (g.video) return html`<${Badge} s="active" label=${`${own ? 'Uygulamanın videosu' : 'Hazır'} · ${sec(g.video.ms)} sn · ${size(g.video.bytes)}`} />`;
   if (g.videoOff) return html`<span class="muted">Kapatıldı (ikon uçar)</span>`;
   return html`<span class="muted">Yok (ikon uçar)</span>`;
 }
@@ -255,7 +257,6 @@ function Stage({ src, onEnd }) {
 }
 
 /** A file's size in words: KB under a megabyte. */
-const size = (n) => (n < 1024 * 1024 ? `${Math.max(1, Math.round(n / 1024))} KB` : `${mb(n)} MB`);
 /** The file name at the end of a link, for the line under the field. */
 const linkName = (link) => {
   try {
