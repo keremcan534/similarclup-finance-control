@@ -58,6 +58,12 @@ npm run restore -- data/backups/finance-....db   # sunucu durdurulmuşken
 | Denetim kaydı | Tüm kritik değişiklikler önce/sonra değerleriyle tutulur. Kayıtlar hash zinciriyle bağlıdır ve zincir doğrulanabilir. |
 | Ayarlar | Raporlama para birimi, çift onay, döviz kurları, jeton/elmas değerleri, vergi parametreleri, finansal dönem kapatma ve yedek alma. |
 | Uygulama › Hediyeler | Similar Club uygulamasının hediyeleri: ekleme, düzenleme (ad, fiyat, raf, VIP, emoji), raftan kaldırma, silme, sıralama; ikon, hazır saydam video, WebM/MOV ya da SVGA yükleme (uygulamanın sunucusu çevirir) ve önizleme. Uygulama güncellemesi olmadan herkesin hediye panelinde görünür. Ayrıntı: [Similar Club'ı yönetme](#similar-clubı-yönetme). |
+| Uygulama › Para çekme | Yayıncıların elmas → para talepleri: hesap bilgisi, tutar; bankadan gönderildikten sonra "Ödendi" işareti ya da nedenli ret (elmaslar geri döner). Para bu panelden gönderilmez. |
+| Uygulama › Ajans ödemeleri | Ajans komisyon talepleri: onay, dekont numarasıyla "Ödendi", ret, iptal. |
+| Uygulama › İadeler ve cüzdan | Mağaza alımlarını arama ve iade etme (harcanmamış jeton ve kilitli elmas geri alınır), Google Play iadelerini okuma, bir hesabın cüzdan dökümü. |
+| Uygulama › Şanslı hediye ayarı | Uygulamadaki Şanslı paketlerin fiyatı, olasılık tablosu (%100), günlük ödül limiti, duyuru çarpanı; bugünkü ve toplam gönderim, geri ödeme, son gönderimler. |
+| Uygulama › Canlı ayarlar | Kur, jeton kampanyası, gizli hediye ve paketler, fiyatlar, sınırlar, acil durum anahtarları: önizleme, nedenle kayıt, geçmiş ve geri alma. |
+| Uygulama › Oyun Salonu ve durum | Oyun Salonu'nun kasası, jackpot'ları ve oyun başına dönem raporu; uygulama sunucusunun uyarıları ve bu panele veri gönderimi. |
 
 ## Similar Club'tan veri alma
 
@@ -117,6 +123,17 @@ Hangi panel kullanıcısının hangi sayfayı kullanacağını bu panelin roller
 | Yetki | Sayfa | Hazır rollerde |
 | --- | --- | --- |
 | `app.gifts` | Uygulama › Hediyeler | Süper yönetici, finans yöneticisi, operasyon yöneticisi |
+| `app.withdrawals` | Uygulama › Para çekme | Süper yönetici, finans yöneticisi |
+| `app.payouts` | Uygulama › Ajans ödemeleri | Süper yönetici, finans yöneticisi |
+| `app.refunds` | Uygulama › İadeler ve cüzdan | Süper yönetici, finans yöneticisi |
+| `app.lucky` | Uygulama › Şanslı hediye ayarı | Süper yönetici, finans yöneticisi |
+| `app.settings` | Uygulama › Canlı ayarlar | Süper yönetici, finans yöneticisi |
+| `app.reports` | Uygulama › Oyun Salonu ve durum | Süper yönetici, finans yöneticisi, operasyon yöneticisi |
+
+Panelden yapılan her işlem uygulamada tek bir hesaptan (Finance Control) yapılmış sayılır; kimin yaptığı iki tarafın
+denetim kaydında da yazar. Bunun bir sonucu: ajans ödemelerinde **iki kişili onay** açıksa, panelden onaylanan bir
+ödemenin "Ödendi" işaretini uygulamadaki Yönetim'den başka bir yönetici koymalıdır (uygulama onaylayanla ödeyeni
+aynı hesap sayar). Kendi talebine karar verememe gibi kurallar uygulamanın kendisinde kalır.
 
 Dosyalar (ikon, video, SVGA) tarayıcıdan bu sunucu üzerinden uygulamanın deposuna akar (en çok 100 MB). Depodaki
 dosyalar da önizleme için bu sunucudan okunur (`/api/app/media/f/…`, `/api/app/fx/…`).

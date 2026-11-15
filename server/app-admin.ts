@@ -31,6 +31,30 @@ export const APP_ROUTES: [string, string, Permission][] = [
   ['POST', '/api/admin/gifts/update', 'app.gifts'],
   ['POST', '/api/admin/gifts/delete', 'app.gifts'],
   ['POST', '/api/admin/gifts/order', 'app.gifts'],
+  // Para çekme
+  ['GET', '/api/admin/withdrawals', 'app.withdrawals'],
+  ['POST', '/api/admin/withdrawals/decide', 'app.withdrawals'],
+  // Ajans ödemeleri and the payout policy
+  ['GET', '/api/admin/agency/payouts', 'app.payouts'],
+  ['POST', '/api/admin/agency/payouts/decide', 'app.payouts'],
+  ['GET', '/api/admin/agency/settings', 'app.payouts'],
+  // İadeler and the wallet audit
+  ['GET', '/api/admin/purchases', 'app.refunds'],
+  ['POST', '/api/admin/purchases/refund', 'app.refunds'],
+  ['POST', '/api/admin/purchases/voided-sync', 'app.refunds'],
+  ['GET', '/api/admin/wallet/audit', 'app.refunds'],
+  // Şanslı hediyeler
+  ['GET', '/api/admin/lucky', 'app.lucky'],
+  ['POST', '/api/admin/lucky/config', 'app.lucky'],
+  // Canlı ayarlar
+  ['GET', '/api/admin/live-settings', 'app.settings'],
+  ['POST', '/api/admin/live-settings', 'app.settings'],
+  ['GET', '/api/admin/live-settings/history', 'app.settings'],
+  ['POST', '/api/admin/live-settings/rollback', 'app.settings'],
+  // Reports and the app server's state
+  ['GET', '/api/admin/casino/report', 'app.reports'],
+  ['GET', '/api/admin/alerts', 'app.reports'],
+  ['GET', '/api/admin/finance-sync', 'app.reports'],
 ];
 export const localPath = (appPath: string) => `/api/app${appPath.slice('/api/admin'.length)}`;
 /** Upload kinds and the permission each needs (the app's media.mjs kinds). */
@@ -96,7 +120,10 @@ export function appRoutes(r: Router<Ctx>, link: AppLink) {
       need(ctx, perm);
       const query = method === 'GET' ? req.query.toString() : '';
       const out = await appCall(ctx, link, method, `${path}${query ? `?${query}` : ''}`, method === 'GET' ? undefined : req.body);
-      if (method !== 'GET') audit(ctx, `app${path.slice('/api/admin'.length).replace(/\//g, '.')}`, 'app', null, null, { method, path, body: req.body });
+      // A preview (Canlı ayarlar, dryRun) changes nothing: no row for it.
+      if (method !== 'GET' && (req.body as { dryRun?: unknown } | null)?.dryRun !== true) {
+        audit(ctx, `app${path.slice('/api/admin'.length).replace(/\//g, '.')}`, 'app', null, null, { method, path, body: req.body });
+      }
       return out;
     });
   }

@@ -63,6 +63,8 @@ const fakeApp = createServer(async (req, res) => {
     return json(200, { uploadUrl: `${appBase}/bucket/${b.kind}-1?X-Amz-Signature=x`, headers: { 'content-type': b.contentType }, publicUrl: `${appBase}/api/media/f/${b.kind}/u1/new`, expiresIn: 600 });
   }
   if (req.method === 'POST' && url.pathname.startsWith('/api/admin/gifts')) return json(200, { gift: { id: 'a2', ...JSON.parse(body.toString('utf8') || '{}') } });
+  // The other admin routes (Para çekme, Ajans ödemeleri, İadeler, Şanslı, Canlı ayarlar, raporlar): an echo.
+  if (url.pathname.startsWith('/api/admin/')) return json(200, { ok: true, path: url.pathname + url.search });
   json(404, { error: 'Bulunamadı' });
 });
 
@@ -202,15 +204,81 @@ test('anahtar kabul edilmezse ya da bağlantı yoksa sayfa nedenini söyler', as
   assert.equal((await call('GET', '/api/meta', undefined, h, baseOff)).json.app_link, false);
 });
 
+test('para sayfaları: her biri kendi yetkisiyle; operasyon yöneticisi yalnız raporları okur; önizleme kayda geçmez', async () => {
+  env.as('finance_manager', 'fin@test.local');
+  env.as('operations_manager', 'ops@test.local');
+  env.as('read_only', 'ro@test.local');
+  const fin = await loginAs('fin@test.local');
+  const ops = await loginAs('ops@test.local');
+  const ro = await loginAs('ro@test.local');
+  const reads = ['/api/app/withdrawals?status=all', '/api/app/agency/payouts?status=ready', '/api/app/agency/settings', '/api/app/purchases?q=ab', '/api/app/wallet/audit?user=u1', '/api/app/lucky', '/api/app/live-settings', '/api/app/live-settings/history?limit=30'];
+  const reports = ['/api/app/casino/report', '/api/app/alerts', '/api/app/finance-sync'];
+  for (const p of [...reads, ...reports]) {
+    const r = await call('GET', p, undefined, fin);
+    assert.equal(r.status, 200, `${p}: ${JSON.stringify(r.json)}`);
+    // The query goes on as it came: the app reads its own filters.
+    assert.equal(r.json.path, `/api/admin${p.slice('/api/app'.length)}`);
+    assert.equal(seen.at(-1)!.user.email, 'fin@test.local');
+  }
+  for (const p of reads) assert.equal((await call('GET', p, undefined, ops)).status, 403, `ops ${p}`);
+  for (const p of reports) {
+    assert.equal((await call('GET', p, undefined, ops)).status, 200, `ops ${p}`);
+    assert.equal((await call('GET', p, undefined, ro)).status, 403, `ro ${p}`);
+  }
+  for (const [p, body] of [
+    ['/api/app/withdrawals/decide', { id: 3, approve: false, note: 'IBAN sahibinin adı tutmuyor' }],
+    ['/api/app/agency/payouts/decide', { payoutId: 4, action: 'pay', paymentRef: 'DEKONT-1' }],
+    ['/api/app/purchases/refund', { purchase: 5 }],
+    ['/api/app/purchases/voided-sync', {}],
+    ['/api/app/lucky/config', { config: { gifts: [] }, version: 2 }],
+    ['/api/app/live-settings/rollback', { batch: 'b1', reason: 'Yanlış kur', baseV: 9 }],
+  ] as const) {
+    assert.equal((await call('POST', p, body, ops)).status, 403, `ops ${p}`);
+    const r = await call('POST', p, body, fin);
+    assert.equal(r.status, 200, `${p}: ${JSON.stringify(r.json)}`);
+    assert.deepEqual(JSON.parse(seen.at(-1)!.body), body);
+    const action = `app${p.slice('/api/app'.length).replace(/\//g, '.')}`;
+    const log = env.db.get('SELECT actor, after FROM audit_logs WHERE action = ? ORDER BY id DESC LIMIT 1', action);
+    assert.ok(log, action);
+    assert.match(log.actor, /fin@test\.local/);
+    assert.deepEqual(JSON.parse(log.after).body, body);
+  }
+  // Canlı ayarlar: the preview goes to the app (it answers what would change) but is no change here.
+  const rows = () => env.db.value<number>("SELECT count(*) FROM audit_logs WHERE action = 'app.live-settings'") ?? 0;
+  const had = rows();
+  const preview = { changes: { exchange_usd_try: 42.5 }, reason: 'Kur güncellemesi', baseV: 9, dryRun: true };
+  assert.equal((await call('POST', '/api/app/live-settings', preview, fin)).status, 200);
+  assert.deepEqual(JSON.parse(seen.at(-1)!.body), preview);
+  assert.equal(rows(), had);
+  assert.equal((await call('POST', '/api/app/live-settings', { ...preview, dryRun: false, confirm: true }, fin)).status, 200);
+  assert.equal(rows(), had + 1);
+  // Only the listed routes: anything else of the app's is not reachable from here.
+  assert.equal((await call('GET', '/api/app/users', undefined, fin)).status, 404);
+  assert.equal((await call('POST', '/api/app/withdrawals/decide', { id: 3, approve: true }, ro)).status, 403);
+});
+
 test('daha önce kurulmuş rollere yeni yetki bir kez eklenir', () => {
   const { db } = setup();
-  db.run("UPDATE roles SET permissions = json_remove(permissions, (SELECT '$[' || key || ']' FROM json_each(roles.permissions) WHERE value = 'app.gifts')) WHERE key IN ('finance_manager', 'operations_manager')");
-  db.run("DELETE FROM schema_migrations WHERE name = '002_app_permissions.sql'");
-  db.migrate();
-  db.migrate();
-  for (const key of ['finance_manager', 'operations_manager']) {
+  const ADDED: Record<string, string[]> = {
+    finance_manager: ['app.gifts', 'app.withdrawals', 'app.payouts', 'app.refunds', 'app.lucky', 'app.settings', 'app.reports'],
+    operations_manager: ['app.gifts', 'app.reports'],
+  };
+  // A database made before 002 and 003: the roles without the app permissions.
+  for (const [key, list] of Object.entries(ADDED)) {
     const perms: string[] = JSON.parse(db.value<string>('SELECT permissions FROM roles WHERE key = ?', key)!);
-    assert.equal(perms.filter((p) => p === 'app.gifts').length, 1, key);
+    db.run('UPDATE roles SET permissions = ? WHERE key = ?', JSON.stringify(perms.filter((p) => !list.includes(p))), key);
   }
-  assert.ok(!JSON.parse(db.value<string>("SELECT permissions FROM roles WHERE key = 'read_only'")!).includes('app.gifts'));
+  db.run("DELETE FROM schema_migrations WHERE name IN ('002_app_permissions.sql', '003_app_finance_permissions.sql')");
+  db.migrate();
+  db.migrate();
+  for (const [key, list] of Object.entries(ADDED)) {
+    const perms: string[] = JSON.parse(db.value<string>('SELECT permissions FROM roles WHERE key = ?', key)!);
+    for (const p of list) assert.equal(perms.filter((x) => x === p).length, 1, `${key} ${p}`);
+    // What the role had stays.
+    assert.ok(perms.includes('dashboard.view'), key);
+  }
+  const ro: string[] = JSON.parse(db.value<string>("SELECT permissions FROM roles WHERE key = 'read_only'")!);
+  assert.ok(!ro.some((p) => p.startsWith('app.')));
+  const ops: string[] = JSON.parse(db.value<string>("SELECT permissions FROM roles WHERE key = 'operations_manager'")!);
+  assert.ok(!ops.includes('app.withdrawals') && !ops.includes('app.settings'));
 });
