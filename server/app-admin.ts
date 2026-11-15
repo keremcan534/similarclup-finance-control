@@ -55,12 +55,43 @@ export const APP_ROUTES: [string, string, Permission][] = [
   ['GET', '/api/admin/casino/report', 'app.reports'],
   ['GET', '/api/admin/alerts', 'app.reports'],
   ['GET', '/api/admin/finance-sync', 'app.reports'],
+  // Kullanıcılar: search, ban (and lifting it), room level, deleting, an invite's coins back
+  ['GET', '/api/admin/users', 'app.users'],
+  ['POST', '/api/admin/users/delete', 'app.users'],
+  ['POST', '/api/admin/users/room-level', 'app.users'],
+  ['POST', '/api/admin/ban', 'app.users'],
+  ['POST', '/api/admin/referrals/revoke', 'app.users'],
+  // Şikâyetler and a reported room's pictures
+  ['GET', '/api/admin/reports', 'app.complaints'],
+  ['POST', '/api/admin/reports/handle', 'app.complaints'],
+  ['GET', '/api/admin/rooms/background', 'app.complaints'],
+  ['POST', '/api/admin/rooms/background/remove', 'app.complaints'],
+  ['POST', '/api/admin/rooms/cover/remove', 'app.complaints'],
+  // Destek
+  ['GET', '/api/admin/support', 'app.support'],
+  ['GET', '/api/admin/support/ticket', 'app.support'],
+  ['POST', '/api/admin/support/reply', 'app.support'],
+  ['POST', '/api/admin/support/status', 'app.support'],
+  // Duyurular
+  ['GET', '/api/admin/team', 'app.notices'],
+  ['POST', '/api/admin/team', 'app.notices'],
+  ['POST', '/api/admin/team/remove', 'app.notices'],
+  // Etkinlikler
+  ['GET', '/api/admin/events', 'app.events'],
+  ['POST', '/api/admin/events/review', 'app.events'],
+  ['POST', '/api/admin/events/remove', 'app.events'],
+  ['GET', '/api/admin/events/categories', 'app.events'],
+  ['POST', '/api/admin/events/categories', 'app.events'],
+  ['POST', '/api/admin/events/categories/remove', 'app.events'],
+  ['GET', '/api/admin/events/report', 'app.events'],
 ];
 export const localPath = (appPath: string) => `/api/app${appPath.slice('/api/admin'.length)}`;
 /** Upload kinds and the permission each needs (the app's media.mjs kinds). */
-const UPLOADS: Record<string, Permission> = { gifticon: 'app.gifts', giftvideo: 'app.gifts', giftsource: 'app.gifts' };
+const UPLOADS: Record<string, Permission> = { gifticon: 'app.gifts', giftvideo: 'app.gifts', giftsource: 'app.gifts', notice: 'app.notices' };
 /** The permissions that may open the app's stored files through here (every page that shows them). */
-const FILE_PERMS: Permission[] = ['app.gifts'];
+// The app serves these files to anyone with the address (media.mjs GET /api/media/f/…); the panel still asks for a
+// page that shows them: gift art, a reported post's or room's picture, a ticket's photo, a notice's or event's picture.
+const FILE_PERMS: Permission[] = ['app.gifts', 'app.complaints', 'app.support', 'app.notices', 'app.events'];
 
 const off = () => new HttpError(503, 'Uygulama bağlantısı ayarlı değil: sunucuda FC_APP_API_URL ve FC_APP_API_KEY gerekli', 'app_off');
 

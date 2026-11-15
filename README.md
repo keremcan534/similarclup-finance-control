@@ -64,6 +64,11 @@ npm run restore -- data/backups/finance-....db   # sunucu durdurulmuşken
 | Uygulama › Şanslı hediye ayarı | Uygulamadaki Şanslı paketlerin fiyatı, olasılık tablosu (%100), günlük ödül limiti, duyuru çarpanı; bugünkü ve toplam gönderim, geri ödeme, son gönderimler. |
 | Uygulama › Canlı ayarlar | Kur, jeton kampanyası, gizli hediye ve paketler, fiyatlar, sınırlar, acil durum anahtarları: önizleme, nedenle kayıt, geçmiş ve geri alma. |
 | Uygulama › Oyun Salonu ve durum | Oyun Salonu'nun kasası, jackpot'ları ve oyun başına dönem raporu; uygulama sunucusunun uyarıları ve bu panele veri gönderimi. |
+| Uygulama › Kullanıcılar | Uygulamanın hesaplarını ad, kullanıcı adı, kimlik, e-posta ya da oda ID'siyle arama; askıya alma (1–30 gün ya da süresiz, nedenle) ve kaldırma, oda seviyesi, davet ödülünü geri alma, hesap silme, deneme hesaplarını silme. |
+| Uygulama › Şikâyetler | Kişi, oda, mesaj, an, yorum ve aile şikâyetleri: sorun yok, işlem yapıldı, askıya alma, an/yorumu kaldırma; şikâyet edilen odanın süslemesi ve kapağı (kaldırma). |
+| Uygulama › Destek | Destek talepleri (bekleyen, yanıtlanan, kapalı): yazışma, fotoğraflar, yanıt (kişiye "Destek" adıyla), kapatma, yeniden açma. |
+| Uygulama › Duyurular | Similar Ekibi duyuruları: herkese ya da tek kişiye, görsel, uygulama içi bağlantı, odalarda banner (1–30 gün); kaldırma. |
+| Uygulama › Etkinlikler | Etkinlik başvurularını onaylama ya da gerekçeyle reddetme, yayındaki etkinliği kaldırma, etkinlik türleri, dönem raporu (7/30/90 gün). |
 
 ## Similar Club'tan veri alma
 
@@ -129,11 +134,19 @@ Hangi panel kullanıcısının hangi sayfayı kullanacağını bu panelin roller
 | `app.lucky` | Uygulama › Şanslı hediye ayarı | Süper yönetici, finans yöneticisi |
 | `app.settings` | Uygulama › Canlı ayarlar | Süper yönetici, finans yöneticisi |
 | `app.reports` | Uygulama › Oyun Salonu ve durum | Süper yönetici, finans yöneticisi, operasyon yöneticisi |
+| `app.users` | Uygulama › Kullanıcılar | Süper yönetici, operasyon yöneticisi |
+| `app.complaints` | Uygulama › Şikâyetler | Süper yönetici, operasyon yöneticisi |
+| `app.support` | Uygulama › Destek | Süper yönetici, operasyon yöneticisi |
+| `app.notices` | Uygulama › Duyurular | Süper yönetici, operasyon yöneticisi |
+| `app.events` | Uygulama › Etkinlikler | Süper yönetici, operasyon yöneticisi |
 
 Panelden yapılan her işlem uygulamada tek bir hesaptan (Finance Control) yapılmış sayılır; kimin yaptığı iki tarafın
 denetim kaydında da yazar. Bunun bir sonucu: ajans ödemelerinde **iki kişili onay** açıksa, panelden onaylanan bir
 ödemenin "Ödendi" işaretini uygulamadaki Yönetim'den başka bir yönetici koymalıdır (uygulama onaylayanla ödeyeni
 aynı hesap sayar). Kendi talebine karar verememe gibi kurallar uygulamanın kendisinde kalır.
+
+Uygulamada kalanlar: **Yaptırımlar** (kanıt, onay, itiraz, cihaz engeli, personelin yaptırım yetkileri), **Ajans
+merkezi** (ajans kurma, oran, kademe, transfer), Yönetim'in **Özet** sekmesi ve odanın içinden yapılan işler.
 
 Dosyalar (ikon, video, SVGA) tarayıcıdan bu sunucu üzerinden uygulamanın deposuna akar (en çok 100 MB). Depodaki
 dosyalar da önizleme için bu sunucudan okunur (`/api/app/media/f/…`, `/api/app/fx/…`).

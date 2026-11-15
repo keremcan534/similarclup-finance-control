@@ -5,7 +5,8 @@
 import { Badge, Button, Card, Kpi, Loading, Modal, Page, Table, Tabs, act, dateTimeTr, html, num, post, showError, toast, useApi, useApp, usePrompt, useState } from '../lib.js';
 
 const usd = (n) => `$${num(n, 2)}`;
-const Chips = ({ value, options, onChange }) =>
+/** A row of filter chips: [value, label] pairs, one on. */
+export const Chips = ({ value, options, onChange }) =>
   html`<div class="row gap wrap" style="margin-bottom:10px">${options.map(([k, l]) => html`<button class=${`chip ${value === k ? 'on' : ''}`} onClick=${() => onChange(k)}>${l}</button>`)}</div>`;
 const STATUS_BADGE = { pending: 'pending', ready: 'approved', paid: 'paid', rejected: 'rejected', cancelled: 'cancelled', credited: 'active', refunded: 'cancelled' };
 const PURCHASE = (p) => html`<${Badge} s=${STATUS_BADGE[p.status]} label=${p.status === 'refunded' ? 'İade edildi' : 'Yüklendi'} />`;
