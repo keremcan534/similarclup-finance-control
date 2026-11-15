@@ -50,6 +50,11 @@ export const PERMISSIONS = {
   'app.events': 'Uygulama: etkinlik başvuruları, türleri ve raporu',
   'app.agencies': 'Uygulama: Ajans merkezi (ajanslar, başvurular, oran, kademe, transfer, performans, rapor)',
   'app.agency_ledger': 'Uygulama: ajans komisyon defteri ve ağ kuralları (kritik)',
+  'app.agency_staff': 'Uygulama: Ajans merkezi personeli ve rolleri, BD atama, operasyon puanı, ihlal ve itirazlar, arka plan işleri',
+  'app.sanctions': 'Uygulama: yaptırımlar ve itirazlar, moderatör yetkisiyle (susturma, süreli ban, kaldırma, itiraz inceleme)',
+  'app.sanctions_full': 'Uygulama: bütün yaptırımlar (ömür boyu ban, ikinci kişi onayı, itiraz kararı), ceza kademeleri, yaptırım yetkileri, cihaz riski (kritik)',
+  'app.economy': 'Uygulama: kişinin mağaza eşyaları (ver, geri al) ve iadenin bıraktığı eşyalar',
+  'app.jeton': 'Uygulama: Jeton Noktası hesabı açma ve kapama, toptan jeton satışı (kritik)',
 } as const;
 export type Permission = keyof typeof PERMISSIONS;
 export const ALL_PERMISSIONS = Object.keys(PERMISSIONS) as Permission[];

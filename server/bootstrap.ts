@@ -45,6 +45,7 @@ export const SYSTEM_ROLES: { key: string; name: string; scope: 'platform' | 'age
       'app.reports',
       'app.agencies',
       'app.agency_ledger',
+      'app.jeton',
     ],
   },
   {
@@ -67,8 +68,14 @@ export const SYSTEM_ROLES: { key: string; name: string; scope: 'platform' | 'age
       'app.support',
       'app.notices',
       'app.events',
+      'app.agency_staff',
+      'app.sanctions',
+      'app.sanctions_full',
+      'app.economy',
     ],
   },
+  // The app's moderators: what Ayarlar › Yönetim shows them there (Yaptırımlar with a moderator's permissions, Destek).
+  { key: 'moderator', name: 'Moderatör', scope: 'platform', permissions: ['dashboard.view', 'app.sanctions', 'app.support'] },
   { key: 'agency_manager', name: 'Ajans yöneticisi', scope: 'agency', permissions: ['parties.view', 'statements.view', 'reports.view'] },
   { key: 'read_only', name: 'Salt okunur', scope: 'platform', permissions: ['dashboard.view', 'reports.view'] },
 ];

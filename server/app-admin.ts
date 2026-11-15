@@ -73,6 +73,7 @@ export const APP_ROUTES: [string, string, Permission | Permission[]][] = [
   ['GET', '/api/admin/casino/report', 'app.reports'],
   ['GET', '/api/admin/alerts', 'app.reports'],
   ['GET', '/api/admin/finance-sync', 'app.reports'],
+  ['GET', '/api/admin/money-check', 'app.reports'],
   // Kullanıcılar: search, ban (and lifting it), room level, deleting, an invite's coins back
   ['GET', '/api/admin/users', 'app.users'],
   ['POST', '/api/admin/users/delete', 'app.users'],
@@ -106,7 +107,8 @@ export const APP_ROUTES: [string, string, Permission | Permission[]][] = [
   // transition commission, performance runs, reports, the simulator, the centre's audit log
   ['GET', '/api/admin/agency/tree', 'app.agencies'],
   ['GET', '/api/admin/agency/overview', 'app.agencies'],
-  ['GET', '/api/admin/agency/list', 'app.agencies'],
+  // The list also serves Ajans personeli's agency search (BD, operations score, violations).
+  ['GET', '/api/admin/agency/list', ['app.agencies', 'app.agency_staff']],
   ['POST', '/api/admin/agency/create', 'app.agencies'],
   ['POST', '/api/admin/agency/decide', 'app.agencies'],
   ['POST', '/api/admin/agency/status', 'app.agencies'],
@@ -131,6 +133,43 @@ export const APP_ROUTES: [string, string, Permission | Permission[]][] = [
   ['POST', '/api/admin/agency/adjust', 'app.agency_ledger'],
   ['POST', '/api/admin/agency/periods/close', 'app.agency_ledger'],
   ['POST', '/api/admin/agency/settings', 'app.agency_ledger'],
+  // Ajans merkezi's staff: roles and who holds them, BD assignment, operations score, violations and appeals, the
+  // background jobs run now
+  ['GET', '/api/admin/agency/roles', 'app.agency_staff'],
+  ['POST', '/api/admin/agency/roles', 'app.agency_staff'],
+  ['GET', '/api/admin/agency/staff', 'app.agency_staff'],
+  ['POST', '/api/admin/agency/staff/set', 'app.agency_staff'],
+  ['POST', '/api/admin/agency/staff/remove', 'app.agency_staff'],
+  ['POST', '/api/admin/agency/bd', 'app.agency_staff'],
+  ['POST', '/api/admin/agency/ops-score', 'app.agency_staff'],
+  ['POST', '/api/admin/agency/violation', 'app.agency_staff'],
+  ['GET', '/api/admin/agency/appeals', 'app.agency_staff'],
+  ['POST', '/api/admin/agency/appeals/decide', 'app.agency_staff'],
+  ['POST', '/api/admin/agency/jobs/run', 'app.agency_staff'],
+  // Yaptırımlar: a moderator's permissions or all of them; the app decides which sanction each may give from the
+  // permissions sent with the request (panelHeaders perms). The policies, who may do what, a device's risk: all only.
+  ['GET', '/api/admin/sanctions/meta', ['app.sanctions', 'app.sanctions_full']],
+  ['GET', '/api/admin/sanctions/search', ['app.sanctions', 'app.sanctions_full']],
+  ['GET', '/api/admin/sanctions/user', ['app.sanctions', 'app.sanctions_full']],
+  ['GET', '/api/admin/sanctions/pending', ['app.sanctions', 'app.sanctions_full']],
+  ['POST', '/api/admin/sanctions', ['app.sanctions', 'app.sanctions_full']],
+  ['POST', '/api/admin/sanctions/lift', ['app.sanctions', 'app.sanctions_full']],
+  ['POST', '/api/admin/sanctions/approve', 'app.sanctions_full'],
+  ['POST', '/api/admin/sanctions/evidence', ['app.sanctions', 'app.sanctions_full']],
+  ['GET', '/api/admin/appeals', ['app.sanctions', 'app.sanctions_full']],
+  ['POST', '/api/admin/appeals/decide', ['app.sanctions', 'app.sanctions_full']],
+  ['POST', '/api/admin/sanction-policies', 'app.sanctions_full'],
+  ['GET', '/api/admin/sanction-permissions', 'app.sanctions_full'],
+  ['POST', '/api/admin/sanction-permissions', 'app.sanctions_full'],
+  ['POST', '/api/admin/devices/risk', 'app.sanctions_full'],
+  // A person's shop items: what they own, giving one, taking one back, the items a refund left to review
+  ['GET', '/api/admin/economy/user', 'app.economy'],
+  ['POST', '/api/admin/economy/grant', 'app.economy'],
+  ['POST', '/api/admin/economy/revoke', 'app.economy'],
+  ['GET', '/api/admin/economy/reviews', ['app.economy', 'app.refunds']],
+  // Jeton Noktası: an account made a bank or back, a bank's stock sold to it (critical)
+  ['POST', '/api/admin/jeton/bank', 'app.jeton'],
+  ['POST', '/api/admin/jeton/wholesale', 'app.jeton'],
 ];
 /** POSTs that only compute (nothing changes in the app): no row in this panel's audit log. */
 const COMPUTE_ONLY = new Set(['/api/admin/agency/simulate']);
@@ -146,7 +185,9 @@ const off = () => new HttpError(503, 'Uygulama bağlantısı ayarlı değil: sun
 
 function panelHeaders(ctx: Ctx, link: NonNullable<AppLink>) {
   const u = ctx.user!;
-  const who = Buffer.from(JSON.stringify({ id: u.id, email: u.email, name: u.name, role: u.role_key }), 'utf8').toString('base64url');
+  // perms: this user's Uygulama permissions, for the app's rules that go finer than a page (sanctions.mjs permsOf).
+  const perms = [...u.permissions].filter((p) => p.startsWith('app.')).sort();
+  const who = Buffer.from(JSON.stringify({ id: u.id, email: u.email, name: u.name, role: u.role_key, perms }), 'utf8').toString('base64url');
   return { 'x-panel-key': link.key, 'x-panel-user': who };
 }
 

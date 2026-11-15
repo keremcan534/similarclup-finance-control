@@ -261,8 +261,9 @@ test('para sayfaları: her biri kendi yetkisiyle; operasyon yöneticisi yalnız 
   assert.equal(rows(), had);
   assert.equal((await call('POST', '/api/app/live-settings', { ...preview, dryRun: false, confirm: true }, fin)).status, 200);
   assert.equal(rows(), had + 1);
-  // Only the listed routes: anything else of the app's is not reachable from here.
-  assert.equal((await call('GET', '/api/app/sanctions/pending', undefined, fin)).status, 404);
+  // Only the listed routes: anything else of the app's is not reachable from here; a listed one needs its permission.
+  assert.equal((await call('GET', '/api/app/ledger', undefined, fin)).status, 404);
+  assert.equal((await call('GET', '/api/app/sanctions/pending', undefined, fin)).status, 403);
   assert.equal((await call('POST', '/api/app/withdrawals/decide', { id: 3, approve: true }, ro)).status, 403);
 });
 
@@ -352,7 +353,8 @@ test('Ajans merkezi: finans yöneticisi evet, operasyon yöneticisi ve salt okun
     assert.equal(r.status, 200, `${p}: ${JSON.stringify(r.json)}`);
     assert.equal(r.json.path, `/api/admin${p.slice('/api/app'.length)}`);
     assert.equal((await call('GET', p, undefined, team)).status, 200, `team ${p}`);
-    assert.equal((await call('GET', p, undefined, ops)).status, 403, `ops ${p}`);
+    // The list also serves Ajans personeli's agency search, the operations manager's page; the rest is the centre's.
+    assert.equal((await call('GET', p, undefined, ops)).status, p.startsWith('/api/app/agency/list') ? 200 : 403, `ops ${p}`);
     assert.equal((await call('GET', p, undefined, ro)).status, 403, `ro ${p}`);
   }
   // The network's rules serve Ajans ödemeleri and Ajans merkezi: either permission opens them.
@@ -407,9 +409,46 @@ test('Ajans merkezi: finans yöneticisi evet, operasyon yöneticisi ve salt okun
     assert.deepEqual(JSON.parse(seen.at(-1)!.body), body);
     assert.equal(logged(p), before + 1, `${p} is in this panel's audit log`);
   }
-  // The centre's staff roles and background jobs are not reachable from here.
-  assert.equal((await call('GET', '/api/app/agency/roles', undefined, fin)).status, 404);
-  assert.equal((await call('POST', '/api/app/agency/jobs/run', {}, fin)).status, 404);
+  // The centre's staff roles and background jobs: their own permission (the operations manager's), not finance's.
+  assert.equal((await call('GET', '/api/app/agency/roles', undefined, fin)).status, 403);
+  assert.equal((await call('POST', '/api/app/agency/jobs/run', {}, fin)).status, 403);
+});
+
+test('Yönetim\'in kalanı: yaptırımlar, ajans personeli, mağaza eşyaları, Jeton Noktası; her biri kendi yetkisiyle', async () => {
+  env.as('finance_manager', 'fin@test.local');
+  env.as('operations_manager', 'ops@test.local');
+  env.as('moderator', 'mod@test.local');
+  env.as('read_only', 'ro@test.local');
+  const [fin, ops, mod, ro] = await Promise.all(['fin@test.local', 'ops@test.local', 'mod@test.local', 'ro@test.local'].map(loginAs));
+  const get = async (p: string, who: Record<string, string>) => (await call('GET', p, undefined, who)).status;
+  const post = async (p: string, body: unknown, who: Record<string, string>) => (await call('POST', p, body, who)).status;
+  // A moderator: the sanctions with a moderator's permissions and support, nothing else.
+  for (const p of ['/api/app/sanctions/meta', '/api/app/sanctions/search?q=Ayşe', '/api/app/sanctions/pending', '/api/app/appeals?status=open', '/api/app/support']) assert.equal(await get(p, mod), 200, `mod ${p}`);
+  assert.equal(await post('/api/app/sanctions', { user: 'u', type: 'mute_global_text', minutes: 60, reason: 'spam', description: 'Spam' }, mod), 200);
+  assert.deepEqual(seen.at(-1)!.user.perms, ['app.sanctions', 'app.support'], 'uygulama yaptırım yetkisini buradan çıkarır');
+  for (const [p, b] of [['/api/app/sanctions/approve', { id: 1, approve: true, note: 'Onay' }], ['/api/app/sanction-policies', { reason: 'spam', steps: [] }], ['/api/app/devices/risk', { device: 1, status: 'normal' }], ['/api/app/sanction-permissions', { user: 'u', permission: 'sanction.ban', grant: true }]] as const)
+    assert.equal(await post(p, b, mod), 403, `mod ${p}`);
+  for (const p of ['/api/app/users', '/api/app/withdrawals', '/api/app/agency/staff', '/api/app/economy/reviews']) assert.equal(await get(p, mod), 403, `mod ${p}`);
+  // The operations manager: every sanction, the agency centre's staff, a person's shop items; not Jeton Noktası.
+  for (const p of ['/api/app/sanction-permissions?user=u', '/api/app/agency/roles', '/api/app/agency/staff', '/api/app/agency/appeals?status=open', '/api/app/economy/user?id=u', '/api/app/economy/reviews'])
+    assert.equal(await get(p, ops), 200, `ops ${p}`);
+  for (const [p, b] of [
+    ['/api/app/sanctions/approve', { id: 1, approve: true, note: 'Kanıt yeterli' }],
+    ['/api/app/agency/staff/set', { user: 'u', roleId: 2 }],
+    ['/api/app/agency/ops-score', { agencyId: 'a', score: 80, reason: 'Aylık değerlendirme' }],
+    ['/api/app/economy/grant', { userId: 'u', sku: 'fr-neon', days: 7, reason: 'Telafi', ref: 'r1234567' }],
+  ] as const) {
+    assert.equal(await post(p, b, ops), 200, `ops ${p}`);
+    assert.deepEqual(JSON.parse(seen.at(-1)!.body), b);
+  }
+  assert.ok(seen.at(-1)!.user.perms.includes('app.sanctions_full'));
+  assert.equal(await post('/api/app/jeton/wholesale', { bank: 'b', coins: 1000, paymentRef: 'DEKONT-1', ref: 'r7654321' }, ops), 403);
+  // The finance manager: Jeton Noktası; no sanctions, no staff.
+  assert.equal(await post('/api/app/jeton/bank', { user: 'b', enabled: true }, fin), 200);
+  assert.equal(await post('/api/app/jeton/wholesale', { bank: 'b', coins: 1000, paymentRef: 'DEKONT-1', ref: 'r7654321' }, fin), 200);
+  for (const p of ['/api/app/sanctions/meta', '/api/app/agency/staff']) assert.equal(await get(p, fin), 403, `fin ${p}`);
+  // Read only: none of it.
+  for (const p of ['/api/app/sanctions/meta', '/api/app/agency/roles', '/api/app/economy/reviews']) assert.equal(await get(p, ro), 403, `ro ${p}`);
 });
 
 test('bağlantıdan dosya: uygulama indirir; kaydedilecek adres olduğu gibi, önizlemesi bu sunucudan; yetki, denetim, ret', async () => {
