@@ -186,3 +186,16 @@ dl.kv dd { margin: 0; font-variant-numeric: tabular-nums; }
   .page { padding: 14px 16px 40px; }
   .topbar { padding: 10px 16px; }
 }
+
+/* Uygulama › Hediyeler: the app's own gift tile and its transparent video over a stage (pages/app-gifts.js). */
+.gift-icon { width: 44px; height: 44px; object-fit: contain; border-radius: 8px; background: var(--surface-2); }
+.gift-preview { display: flex; align-items: center; gap: 18px; flex-wrap: wrap; padding: 14px; border-radius: var(--radius); background: #1a1220; color: #fff; }
+.gift-preview .muted { color: rgba(255, 255, 255, 0.72); }
+.gift-tile { width: 88px; display: flex; flex-direction: column; align-items: center; gap: 2px; padding: 10px 4px 8px; border: 2px solid #ec4899; border-radius: 10px; background: rgba(255, 255, 255, 0.04); text-align: center; }
+.gift-tile img { width: 44px; height: 44px; object-fit: contain; }
+.gift-tile b { font-size: 12px; font-weight: 600; }
+.gift-tile small { font-size: 12px; opacity: 0.75; }
+.gift-emoji { font-size: 34px; line-height: 44px; }
+.gift-big { width: 120px; height: 120px; object-fit: contain; }
+.alpha-stage { display: grid; justify-items: center; gap: 6px; margin-top: 10px; padding: 10px; border-radius: var(--radius); background: radial-gradient(circle at 50% 30%, #3b2147, #120c18 70%); }
+.alpha-video { width: min(270px, 100%); height: auto; aspect-ratio: 9 / 16; }

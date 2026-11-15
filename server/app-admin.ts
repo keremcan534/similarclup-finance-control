@@ -1,0 +1,171 @@
+// Uygulama: this panel acting on the Similar Club app's own admin API (cix server/api/panel.mjs), so the team runs
+// the app from here (Hediyeler, …) with this panel's users and roles. The browser only ever talks to this server:
+// it calls the app's API on the same machine with FC_APP_API_KEY, which never leaves the server, and names the
+// panel user in X-Panel-User, so the app records who did it. Each page's routes are in APP_ROUTES with the
+// permission they need here; the app keeps its own list of what the panel may call, so both must allow a route.
+// Files (a gift's icon, video, SVGA) are streamed from the browser through here to the app's storage; stored files
+// are read back through here too (the page's CSP allows only this origin).
+//
+//   FC_APP_API_URL   the app's API on this machine (http://127.0.0.1:7890); empty: the Uygulama pages are off
+//   FC_APP_API_KEY   the app's PANEL_API_KEY
+import type { IncomingMessage, ServerResponse } from 'node:http';
+import { Readable } from 'node:stream';
+import { pipeline } from 'node:stream/promises';
+
+import { audit, need, type Ctx, type Permission } from './context.ts';
+import { HttpError, bad, type Router } from './lib/http.ts';
+
+export type AppLink = { url: string; key: string } | null;
+
+/** The link from the environment; null (pages off) unless both are set. */
+export function appLink(env: NodeJS.ProcessEnv = process.env): AppLink {
+  const url = String(env.FC_APP_API_URL ?? '').trim().replace(/\/+$/, '');
+  const key = String(env.FC_APP_API_KEY ?? '').trim();
+  return /^https?:\/\/[^\s/]+$/.test(url) && key.length >= 32 ? { url, key } : null;
+}
+
+/** [method, the app's path, the permission it needs here]. Served here at /api/app/<the rest after /api/admin/>. */
+export const APP_ROUTES: [string, string, Permission][] = [
+  ['GET', '/api/admin/gifts', 'app.gifts'],
+  ['POST', '/api/admin/gifts', 'app.gifts'],
+  ['POST', '/api/admin/gifts/update', 'app.gifts'],
+  ['POST', '/api/admin/gifts/delete', 'app.gifts'],
+  ['POST', '/api/admin/gifts/order', 'app.gifts'],
+];
+export const localPath = (appPath: string) => `/api/app${appPath.slice('/api/admin'.length)}`;
+/** Upload kinds and the permission each needs (the app's media.mjs kinds). */
+const UPLOADS: Record<string, Permission> = { gifticon: 'app.gifts', giftvideo: 'app.gifts', giftsource: 'app.gifts' };
+/** The permissions that may open the app's stored files through here (every page that shows them). */
+const FILE_PERMS: Permission[] = ['app.gifts'];
+
+const off = () => new HttpError(503, 'Uygulama bağlantısı ayarlı değil: sunucuda FC_APP_API_URL ve FC_APP_API_KEY gerekli', 'app_off');
+
+function panelHeaders(ctx: Ctx, link: NonNullable<AppLink>) {
+  const u = ctx.user!;
+  const who = Buffer.from(JSON.stringify({ id: u.id, email: u.email, name: u.name, role: u.role_key }), 'utf8').toString('base64url');
+  return { 'x-panel-key': link.key, 'x-panel-user': who };
+}
+
+/** The app's addresses for its stored files and videos, as this server serves them (/api/app/media/f/…, /api/app/fx/…). */
+const MEDIA = /^https?:\/\/[^/\s]+\/api\/media\/f\/([^\s"]+)$/;
+export function localFiles(v: unknown): unknown {
+  if (typeof v === 'string') {
+    const m = MEDIA.exec(v);
+    if (m) return `/api/app/media/f/${m[1]}`;
+    return v.startsWith('/api/fx/') ? `/api/app/fx/${v.slice('/api/fx/'.length)}` : v;
+  }
+  if (Array.isArray(v)) return v.map(localFiles);
+  if (v && typeof v === 'object') return Object.fromEntries(Object.entries(v).map(([k, x]) => [k, localFiles(x)]));
+  return v;
+}
+
+/** One call to the app's API as the signed-in panel user; its refusals come back with the app's own sentence. */
+export async function appCall(ctx: Ctx, link: AppLink, method: string, path: string, body?: unknown, { raw = false } = {}): Promise<any> {
+  if (!link) throw off();
+  let res: Response;
+  try {
+    res = await fetch(link.url + path, {
+      method,
+      headers: { ...panelHeaders(ctx, link), ...(body !== undefined ? { 'content-type': 'application/json' } : {}) },
+      body: body === undefined ? undefined : JSON.stringify(body),
+      signal: AbortSignal.timeout(30_000),
+    });
+  } catch {
+    throw new HttpError(502, 'Uygulama sunucusuna ulaşılamıyor', 'app_unreachable');
+  }
+  const text = await res.text();
+  let data: any = {};
+  try {
+    data = text ? JSON.parse(text) : {};
+  } catch {
+    data = { error: text.slice(0, 200) };
+  }
+  if (res.status === 401) throw new HttpError(502, 'Uygulama sunucusu panelin anahtarını kabul etmedi (PANEL_API_KEY ile FC_APP_API_KEY aynı olmalı)', 'app_key');
+  if (!res.ok) throw new HttpError(res.status, typeof data?.error === 'string' ? data.error : `Uygulama hatası (${res.status})`, 'app_error');
+  return raw ? data : localFiles(data);
+}
+
+/** The /api/app/… routes of APP_ROUTES; a change is also a row in this panel's own audit log. */
+export function appRoutes(r: Router<Ctx>, link: AppLink) {
+  r.get('/api/app/status', (_req, ctx) => {
+    if (!ctx.user) throw new HttpError(401, 'Oturum açmanız gerekiyor', 'unauthenticated');
+    return { connected: !!link };
+  });
+  for (const [method, path, perm] of APP_ROUTES) {
+    r.add(method, localPath(path), async (req, ctx) => {
+      need(ctx, perm);
+      const query = method === 'GET' ? req.query.toString() : '';
+      const out = await appCall(ctx, link, method, `${path}${query ? `?${query}` : ''}`, method === 'GET' ? undefined : req.body);
+      if (method !== 'GET') audit(ctx, `app${path.slice('/api/admin'.length).replace(/\//g, '.')}`, 'app', null, null, { method, path, body: req.body });
+      return out;
+    });
+  }
+}
+
+/**
+ * POST /api/app/upload?kind=gifticon|giftvideo|giftsource: the request's body is the file (its type in
+ * Content-Type, its size in Content-Length), streamed on to the address the app's storage gives, never held whole
+ * here. Answers { url }: the address to save (the app checks the file when it is saved).
+ */
+export async function appUpload(req: IncomingMessage, ctx: Ctx, link: AppLink, url: URL) {
+  const kind = url.searchParams.get('kind') ?? '';
+  const perm = Object.hasOwn(UPLOADS, kind) ? UPLOADS[kind] : null;
+  if (!perm) throw bad('Geçersiz yükleme türü');
+  need(ctx, perm);
+  if (!link) throw off();
+  const type = String(req.headers['content-type'] ?? '').split(';')[0].trim().toLowerCase();
+  const size = Number(req.headers['content-length']);
+  if (!type) throw bad('Dosya türü bilinmiyor');
+  if (!Number.isSafeInteger(size) || size < 1) throw new HttpError(411, 'Dosyanın boyutu bilinmiyor', 'length_required');
+  const target = await appCall(ctx, link, 'POST', '/api/media/upload-url', { kind, contentType: type, size }, { raw: true });
+  let put: Response;
+  try {
+    put = await fetch(target.uploadUrl, {
+      method: 'PUT',
+      headers: { ...target.headers, 'content-length': String(size) },
+      body: Readable.toWeb(req) as ReadableStream,
+      duplex: 'half',
+      signal: AbortSignal.timeout(10 * 60_000),
+    } as RequestInit);
+  } catch {
+    throw new HttpError(502, 'Dosya depoya yüklenemedi, tekrar deneyin', 'storage');
+  }
+  await put.body?.cancel().catch(() => {});
+  if (!put.ok) throw new HttpError(502, `Dosya depoya yüklenemedi (${put.status})`, 'storage');
+  audit(ctx, 'app.upload', 'app', null, null, { kind, type, size });
+  return { url: target.publicUrl as string };
+}
+
+/** GET /api/app/media/f/<key> and /api/app/fx/<name>: an app file as it is (a `Range` passed on), for the pages. */
+export async function appFile(req: IncomingMessage, res: ServerResponse, ctx: Ctx, link: AppLink, path: string) {
+  if (!ctx.user) throw new HttpError(401, 'Oturum açmanız gerekiyor', 'unauthenticated');
+  if (!FILE_PERMS.some((p) => ctx.user!.permissions.has(p))) throw new HttpError(403, 'Bu işlem için yetkiniz yok', 'forbidden');
+  if (!link) throw off();
+  const rest = path.startsWith('/api/app/media/f/') ? `/api/media/f/${path.slice('/api/app/media/f/'.length)}` : `/api/fx/${path.slice('/api/app/fx/'.length)}`;
+  if (rest.includes('..')) throw bad('Geçersiz dosya');
+  const range: Record<string, string> = typeof req.headers.range === 'string' && /^bytes=\d*-\d*$/.test(req.headers.range) ? { range: req.headers.range } : {};
+  const query = new URL(req.url ?? '/', 'http://x').search;
+  const ctl = new AbortController();
+  res.on('close', () => ctl.abort());
+  let up: Response;
+  try {
+    up = await fetch(link.url + rest + query, { headers: range, signal: ctl.signal });
+  } catch {
+    throw new HttpError(502, 'Uygulama sunucusuna ulaşılamıyor', 'app_unreachable');
+  }
+  if (![200, 206].includes(up.status) || !up.body) {
+    await up.body?.cancel().catch(() => {});
+    throw new HttpError(up.status === 404 ? 404 : 502, up.status === 404 ? 'Dosya bulunamadı' : 'Dosya açılamadı', 'app_file');
+  }
+  const head: Record<string, string> = { 'cache-control': 'private, max-age=86400', 'x-content-type-options': 'nosniff' };
+  for (const h of ['content-type', 'content-length', 'content-range', 'accept-ranges', 'etag']) {
+    const v = up.headers.get(h);
+    if (v) head[h] = v;
+  }
+  res.writeHead(up.status, head);
+  try {
+    await pipeline(Readable.fromWeb(up.body as any), res);
+  } catch {
+    res.destroy();
+  }
+}

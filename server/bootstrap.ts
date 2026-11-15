@@ -35,9 +35,15 @@ export const SYSTEM_ROLES: { key: string; name: string; scope: 'platform' | 'age
       'alerts.manage',
       'simulation.use',
       'audit.view',
+      'app.gifts',
     ],
   },
-  { key: 'operations_manager', name: 'Operasyon yöneticisi', scope: 'platform', permissions: ['dashboard.view', 'parties.view', 'costs.view', 'lucky.view', 'reports.view', 'alerts.view', 'simulation.use'] },
+  {
+    key: 'operations_manager',
+    name: 'Operasyon yöneticisi',
+    scope: 'platform',
+    permissions: ['dashboard.view', 'parties.view', 'costs.view', 'lucky.view', 'reports.view', 'alerts.view', 'simulation.use', 'app.gifts'],
+  },
   { key: 'agency_manager', name: 'Ajans yöneticisi', scope: 'agency', permissions: ['parties.view', 'statements.view', 'reports.view'] },
   { key: 'read_only', name: 'Salt okunur', scope: 'platform', permissions: ['dashboard.view', 'reports.view'] },
 ];

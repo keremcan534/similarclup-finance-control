@@ -2,6 +2,8 @@ import { existsSync, mkdirSync, readFileSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
+import { appLink } from './app-admin.ts';
+
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
 
 /** Loads .env (KEY=VALUE lines) without overriding real environment variables. */
@@ -29,5 +31,7 @@ export function config() {
     dbPath: resolve(dataDir, process.env.FC_DB_FILE ?? 'finance.db'),
     cookieSecure: process.env.FC_COOKIE_SECURE === '1',
     noLogin,
+    // Uygulama pages: the app's admin API (FC_APP_API_URL, FC_APP_API_KEY); null when not set.
+    appLink: appLink(),
   };
 }

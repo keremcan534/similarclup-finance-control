@@ -3,6 +3,7 @@ import { existsSync, readFileSync, statSync } from 'node:fs';
 import { dirname, extname, join, normalize, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
+import { appFile, appUpload } from './app-admin.ts';
 import { integrationForKey, loadUser, userForToken } from './auth.ts';
 import type { Ctx } from './context.ts';
 import type { Db } from './db.ts';
@@ -20,7 +21,8 @@ const VENDOR: Record<string, string> = {
 };
 const TYPES: Record<string, string> = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.mjs': 'text/javascript; charset=utf-8', '.css': 'text/css; charset=utf-8', '.svg': 'image/svg+xml', '.ico': 'image/x-icon' };
 const SECURITY_HEADERS = {
-  'content-security-policy': "default-src 'self'; img-src 'self' data:; style-src 'self' 'unsafe-inline'; script-src 'self'; connect-src 'self'; frame-ancestors 'none'; base-uri 'none'; form-action 'self'",
+  // blob: for a picked file's preview (Uygulama › Hediyeler: an icon, a video) before it is uploaded.
+  'content-security-policy': "default-src 'self'; img-src 'self' data: blob:; media-src 'self' blob:; style-src 'self' 'unsafe-inline'; script-src 'self'; connect-src 'self'; frame-ancestors 'none'; base-uri 'none'; form-action 'self'",
   'x-frame-options': 'DENY',
   'referrer-policy': 'no-referrer',
   'x-content-type-options': 'nosniff',
@@ -56,6 +58,24 @@ export function createApp(db: Db, cfg: AppConfig, now: () => Date = () => new Da
     }
     const ctx: Ctx = { db, user: null, integration: null, now };
     try {
+      // Who is asking comes first: the app's files and uploads (server/app-admin.ts) stream, they never read a JSON body.
+      const bearer = (req.headers.authorization ?? '').startsWith('Bearer ') ? req.headers.authorization!.slice(7) : null;
+      const token = bearer ?? cookies(req.headers).fc_session ?? null;
+      if (token) ctx.user = userForToken(db, token, now());
+      const apiKey = req.headers['x-api-key'];
+      if (typeof apiKey === 'string') ctx.integration = integrationForKey(db, apiKey);
+      // Local no-login mode: browser requests act as the first active super admin.
+      if (cfg.noLogin && !ctx.user && typeof apiKey !== 'string') {
+        const id = db.value<number>("SELECT u.id FROM users u JOIN roles r ON r.id = u.role_id WHERE r.key = 'super_admin' AND u.active = 1 ORDER BY u.id LIMIT 1");
+        if (id) ctx.user = loadUser(db, id);
+      }
+      if (method === 'POST' && url.pathname === '/api/app/upload') {
+        if (!ctx.user) throw new HttpError(401, 'Oturum açmanız gerekiyor', 'unauthenticated');
+        return send(res, 200, await appUpload(req, ctx, cfg.appLink ?? null, url));
+      }
+      if ((method === 'GET' || method === 'HEAD') && (url.pathname.startsWith('/api/app/media/f/') || url.pathname.startsWith('/api/app/fx/'))) {
+        return await appFile(req, res, ctx, cfg.appLink ?? null, url.pathname);
+      }
       const m = router.match(method, url.pathname);
       if (!m) throw new HttpError(404, 'Uç nokta bulunamadı', 'not_found');
       const raw = method === 'GET' ? '' : await readBody(req);
@@ -67,16 +87,6 @@ export function createApp(db: Db, cfg: AppConfig, now: () => Date = () => new Da
         } catch {
           throw new HttpError(400, 'Geçersiz JSON', 'bad_json');
         }
-      }
-      const bearer = (req.headers.authorization ?? '').startsWith('Bearer ') ? req.headers.authorization!.slice(7) : null;
-      const token = bearer ?? cookies(req.headers).fc_session ?? null;
-      if (token) ctx.user = userForToken(db, token, now());
-      const apiKey = req.headers['x-api-key'];
-      if (typeof apiKey === 'string') ctx.integration = integrationForKey(db, apiKey);
-      // Local no-login mode: browser requests act as the first active super admin.
-      if (cfg.noLogin && !ctx.user && typeof apiKey !== 'string') {
-        const id = db.value<number>("SELECT u.id FROM users u JOIN roles r ON r.id = u.role_id WHERE r.key = 'super_admin' AND u.active = 1 ORDER BY u.id LIMIT 1");
-        if (id) ctx.user = loadUser(db, id);
       }
       if (!m.route.public && !ctx.user) throw new HttpError(401, 'Oturum açmanız gerekiyor', 'unauthenticated');
       const r = { method, path: url.pathname, query: url.searchParams, params: m.params, body, headers: req.headers, ip: req.socket.remoteAddress ?? '', sessionToken: token };

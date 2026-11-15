@@ -34,6 +34,8 @@ export const PERMISSIONS = {
   'audit.view': 'Denetim kaydını görüntüle',
   'settings.edit': 'Kur, vergi, para birimi, sistem ayarları',
   'simulation.use': 'Büyüme simülasyonu',
+  // Uygulama: the Similar Club app's own admin API, through this panel (server/app-admin.ts).
+  'app.gifts': 'Uygulama: hediyeleri ekle, düzenle, sırala, kaldır',
 } as const;
 export type Permission = keyof typeof PERMISSIONS;
 export const ALL_PERMISSIONS = Object.keys(PERMISSIONS) as Permission[];
