@@ -307,7 +307,8 @@ function Editor({ gift, admin, onClose, onSaved }) {
     if (!kind) return showError(new Error('Hazır yığılmış MP4, saydam WebM / MOV ya da SVGA seçin'));
     if (kind === 'svga' && !admin.svga) return showError(new Error('Uygulamanın sunucusu şu an SVGA çeviremiyor'));
     if (kind === 'source' && !admin.convert) return showError(new Error('Uygulamanın sunucusu şu an video çeviremiyor'));
-    const max = kind === 'stacked' ? L.videoBytes : L.sourceBytes;
+    // An SVGA has its own, smaller limit (the app's server reads it whole); older servers give none.
+    const max = kind === 'stacked' ? L.videoBytes : kind === 'svga' ? (L.svgaBytes ?? L.sourceBytes) : L.sourceBytes;
     if (file.size > max) return showError(new Error(`Dosya en fazla ${mb(max)} MB olabilir (bu ${mb(file.size)} MB)`));
     setVideo({ mode: 'file', file, kind, fill: L.fill, url: kind === 'stacked' ? URL.createObjectURL(file) : null });
   };
@@ -434,8 +435,8 @@ function Editor({ gift, admin, onClose, onSaved }) {
     <p class="note bad">Arka plan silme yapılmaz. Uygulamanın sunucusu yalnız saydam (arka planı silinmiş) videoyu çevirir; siyah ya da renkli zeminli video reddedilir.</p>
     <ul class="muted">
       <li>Hazır yığılmış MP4: üst yarı renk, alt yarı alfa (ör. 540 × 1920), ${sec(L.videoMinMs)}–${sec(L.videoMaxMs)} sn, en çok ${mb(L.videoBytes)} MB. Olduğu gibi kullanılır.</li>
-      <li>Saydam WebM (VP8/VP9 alfa) ya da ProRes 4444 .mov, en çok ${mb(L.sourceBytes)} MB: ${L.width} × ${L.height}, ${L.fps} fps, sesli videoya çevrilir.</li>
-      <li>SVGA 2.x: aynı biçime çevrilir, sesi korunur; vektör şekiller ve maskeler çizilmez.</li>
+      <li>Saydam WebM (VP8/VP9 alfa) ya da ProRes 4444 .mov, en çok ${mb(L.sourceBytes)} MB: ${L.width} × ${L.height}, ${L.fps} fps, sesli videoya çevrilir. <b>Dosya küçük olsun:</b> videoyu bu boyutta (${L.width} × ${L.height}, ${L.fps} fps) dışa aktarın; uygulamada görüntü aynı kalır, dosya kabaca dörtte birine iner.</li>
+      <li>SVGA 2.x, en çok ${mb(L.svgaBytes ?? L.sourceBytes)} MB: aynı biçime çevrilir, sesi korunur; vektör şekiller ve maskeler çizilmez.</li>
       <li>Çevirme birkaç dakika sürebilir; bu sürede hediye videosuz gönderilir (ikonu uçar), eski video varsa o oynar.</li>
     </ul>
     <div class="row gap wrap">
