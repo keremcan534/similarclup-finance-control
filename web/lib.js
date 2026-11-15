@@ -146,6 +146,8 @@ export function minorToInput(minor, code) {
 export const num = (v, d = 0) => (v === null || v === undefined || v === '' ? '—' : nf(d).format(Number(v)));
 export const dateTr = (v) => (v ? String(v).slice(0, 10).split('-').reverse().join('.') : '—');
 export const dateTimeTr = (v) => (v ? `${dateTr(v)} ${String(v).slice(11, 16)}` : '—');
+/** Text as searched: Turkish lower case without accents (ş → s, İ → i), so "sikayet" finds "Şikâyetler". */
+export const searchable = (t) => String(t ?? '').toLocaleLowerCase('tr').normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/ı/g, 'i');
 export const today = () => new Date().toISOString().slice(0, 10);
 export const monthStart = (d = today()) => d.slice(0, 7) + '-01';
 
