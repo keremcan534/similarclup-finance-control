@@ -110,7 +110,12 @@ export function AppGifts() {
         empty="Henüz eklenmiş hediye yok. “Yeni hediye” ile ilkini ekleyin."
         columns=${[
           { key: 'icon', label: '', render: (g) => html`<img class="gift-icon" src=${g.icon} alt="" loading="lazy" />` },
-          { key: 'name', label: 'Ad', render: (g) => html`<strong>${g.name}</strong><br /><small class="muted">${g.id}</small>` },
+          {
+            key: 'name',
+            label: 'Ad',
+            render: (g) =>
+              html`<strong>${g.name}</strong><br /><small class="muted">${g.id}${g.iconLink || g.videoLink ? ' · 🔗 bağlantıdan' : ''}</small>`,
+          },
           {
             key: 'cat',
             label: 'Raf ve sıra',
@@ -194,6 +199,17 @@ function Stage({ src, onEnd }) {
   return html`<div class="alpha-stage"><canvas ref=${canvas} class="alpha-video"></canvas>${blocked && html`<small class="muted">Tarayıcı sesi kapattı</small>`}</div>`;
 }
 
+/** A file's size in words: KB under a megabyte. */
+const size = (n) => (n < 1024 * 1024 ? `${Math.max(1, Math.round(n / 1024))} KB` : `${mb(n)} MB`);
+/** The file name at the end of a link, for the line under the field. */
+const linkName = (link) => {
+  try {
+    return decodeURIComponent(new URL(link).pathname.split('/').filter(Boolean).pop() ?? '') || link;
+  } catch {
+    return link;
+  }
+};
+
 function Editor({ gift, admin, onClose, onSaved }) {
   const L = admin.limits;
   const [v, setV] = useState({
@@ -208,9 +224,12 @@ function Editor({ gift, admin, onClose, onSaved }) {
   const [video, setVideo] = useState(gift?.video || gift?.job ? { mode: 'keep' } : { mode: 'none' });
   const [step, setStep] = useState(null);
   const [preview, setPreview] = useState(null);
+  // "ya da bağlantı yapıştır": the links typed (a gift's kept ones to start with) and the one downloading now.
+  const [links, setLinks] = useState({ icon: gift?.iconLink ?? '', video: gift?.videoLink ?? '' });
+  const [pulling, setPulling] = useState(null);
   const set = (k) => (e) => setV({ ...v, [k]: e.target.type === 'checkbox' ? e.target.checked : e.target.value });
   const iconUrl = icon ? icon.url : gift?.icon ?? null;
-  useEffect(() => () => icon && URL.revokeObjectURL(icon.url), [icon]);
+  useEffect(() => () => icon?.file && URL.revokeObjectURL(icon.url), [icon]);
 
   const pickIcon = (e) => {
     const file = e.target.files?.[0];
@@ -231,6 +250,35 @@ function Editor({ gift, admin, onClose, onSaved }) {
     setVideo({ mode: 'file', file, kind, fill: L.fill, url: kind === 'stacked' ? URL.createObjectURL(file) : null });
   };
 
+  /** A file from the link typed for `slot`: the app's server downloads it once and keeps it as if uploaded. */
+  const pull = async (slot) => {
+    setPulling(slot);
+    try {
+      const out = await post('/api/app/gifts/fetch', { slot, url: links[slot].trim() });
+      if (slot === 'icon') setIcon({ at: out.url, url: out.preview, link: out.link, bytes: out.bytes });
+      else {
+        const kind = out.svga ? 'svga' : out.video === 'stacked' ? 'stacked' : 'source';
+        setVideo({ mode: 'link', at: out.url, link: out.link, bytes: out.bytes, kind, fill: L.fill, url: kind === 'stacked' ? out.preview : null, name: linkName(out.link) });
+      }
+      setLinks((x) => ({ ...x, [slot]: out.link }));
+      toast(`${slot === 'icon' ? 'İkon' : 'Video'} bağlantıdan alındı (${size(out.bytes)}); kaydedince hediyeye geçer`);
+    } catch (e) {
+      showError(e);
+    } finally {
+      setPulling(null);
+    }
+  };
+  /** The link field next to a file picker (a plain call, not a component, so typing keeps the focus). */
+  const linkRow = (slot, example) => {
+    const typed = links[slot].trim();
+    const again = !!typed && typed === (slot === 'icon' ? gift?.iconLink : gift?.videoLink);
+    return html`<div class="row gap wrap" style="margin-top:6px">
+      <input type="url" style="flex:1;min-width:280px" value=${links[slot]} placeholder=${`ya da bağlantı yapıştırın: ${example}`} aria-label=${slot === 'icon' ? 'İkonun bağlantısı' : 'Videonun bağlantısı'}
+        onInput=${(e) => setLinks({ ...links, [slot]: e.target.value })} />
+      <${Button} disabled=${!!pulling || !!step || !typed} onClick=${() => pull(slot)}>${pulling === slot ? 'İndiriliyor…' : again ? 'Bağlantıdan yeniden çek' : 'Bağlantıdan çek'}</${Button}>
+    </div>`;
+  };
+
   const save = async () => {
     const name = v.name.replace(/\s+/g, ' ').trim();
     const price = Number(v.price);
@@ -239,7 +287,8 @@ function Editor({ gift, admin, onClose, onSaved }) {
     if (!gift && !icon) return showError(new Error('İkon seçin'));
     try {
       let iconAt;
-      if (icon) {
+      if (icon?.at) iconAt = icon.at;
+      else if (icon) {
         setStep('İkon yükleniyor…');
         iconAt = await upload('gifticon', icon.file);
       }
@@ -250,6 +299,13 @@ function Editor({ gift, admin, onClose, onSaved }) {
         const url = await upload(kind, video.file, (p) => setStep(`Video yükleniyor %${Math.round(p * 100)}`));
         videoSpec = video.kind === 'stacked' ? { url, kind: 'stacked' } : { url, kind: 'source', ...(video.kind === 'svga' ? { fill: video.fill } : {}) };
       }
+      if (video.mode === 'link') {
+        const url = video.at;
+        videoSpec = video.kind === 'stacked' ? { url, kind: 'stacked' } : { url, kind: 'source', ...(video.kind === 'svga' ? { fill: video.fill } : {}) };
+      }
+      // Where a new file came from (null: picked from this computer), kept for "Bağlantıdan yeniden çek".
+      const iconLink = icon ? (icon.link ?? null) : undefined;
+      const videoLink = video.mode === 'link' ? video.link : video.mode === 'file' ? null : undefined;
       setStep('Kaydediliyor…');
       const fields = { name, price, cat: v.cat, minSvip: v.cat === 'privilege' ? Number(v.minSvip) : 0, emoji: v.emoji.trim(), enabled: !!v.enabled };
       if (gift) {
@@ -257,11 +313,13 @@ function Editor({ gift, admin, onClose, onSaved }) {
         for (const k of ['name', 'price', 'cat', 'minSvip', 'enabled']) if (fields[k] !== gift[k]) patch[k] = fields[k];
         if ((fields.emoji || '🎁') !== gift.emoji) patch.emoji = fields.emoji;
         if (iconAt) patch.icon = iconAt;
+        if (iconLink !== undefined) patch.iconLink = iconLink;
+        if (videoLink !== undefined) patch.videoLink = videoLink;
         if (videoSpec !== undefined && !(videoSpec === null && !gift.video && !gift.job)) patch.video = videoSpec;
         if (!Object.keys(patch).length) return onClose();
         await post('/api/app/gifts/update', { id: gift.id, ...patch });
       } else {
-        await post('/api/app/gifts', { ...fields, icon: iconAt, video: videoSpec ?? null });
+        await post('/api/app/gifts', { ...fields, icon: iconAt, video: videoSpec ?? null, iconLink: iconLink ?? null, videoLink: videoLink ?? null });
       }
       onSaved(videoSpec?.kind === 'source' ? 'Kaydedildi; video uygulamanın sunucusunda çevriliyor' : gift ? 'Kaydedildi' : 'Hediye eklendi');
     } catch (e) {
@@ -285,6 +343,8 @@ function Editor({ gift, admin, onClose, onSaved }) {
     <h3>İkon</h3>
     <p class="muted">Saydam (arka planı silinmiş) PNG ya da WebP, kare, ${L.iconMinPx}–${L.iconMaxPx} piksel (önerilen 512 × 512), en çok ${mb(L.iconBytes)} MB.</p>
     <input type="file" accept="image/png,image/webp" aria-label="İkon dosyası" onChange=${pickIcon} />
+    ${linkRow('icon', 'https://alanadiniz.com/hediyeler/yuzuk.png')}
+    ${icon?.at && html`<small class="muted">Bağlantıdan alındı: ${linkName(icon.link)} · ${size(icon.bytes)}</small>`}
 
     <h3>Video (isteğe bağlı)</h3>
     <p class="note bad">Arka plan silme yapılmaz. Uygulamanın sunucusu yalnız saydam (arka planı silinmiş) videoyu çevirir; siyah ya da renkli zeminli video reddedilir.</p>
@@ -296,13 +356,21 @@ function Editor({ gift, admin, onClose, onSaved }) {
     </ul>
     <div class="row gap wrap">
       <input type="file" accept=".mp4,.webm,.mov,.svga,video/mp4,video/webm,video/quicktime" aria-label="Video ya da SVGA dosyası" onChange=${pickVideo} />
+      ${video.mode === 'link' && html`<span class="muted">Bağlantıdan: ${video.name} · ${video.kind === 'stacked' ? 'hazır video' : video.kind === 'svga' ? 'SVGA, çevrilecek' : 'saydam kaynak, çevrilecek'} · ${size(video.bytes)}</span>`}
       ${video.mode === 'file' && html`<span class="muted">${video.file.name} · ${video.kind === 'stacked' ? 'hazır video' : video.kind === 'svga' ? 'SVGA, çevrilecek' : 'saydam kaynak, çevrilecek'} · ${mb(video.file.size)} MB</span>`}
       ${video.mode === 'keep' && html`<span>${videoLine(gift)}</span>`}
       ${video.mode === 'none' && html`<span class="muted">Video yok: gönderilince ikonu uçar.</span>`}
       ${video.mode !== 'none' && html`<${Button} kind="ghost" onClick=${() => setVideo({ mode: 'none' })}>Videoyu kaldır</${Button}>`}
       ${video.mode === 'none' && (gift?.video || gift?.job) && html`<${Button} kind="ghost" onClick=${() => setVideo({ mode: 'keep' })}>Vazgeç</${Button}>`}
     </div>
-    ${video.mode === 'file' && video.kind === 'svga' && html`<label class="field" style="max-width:280px"><span>Ekrandaki boyutu</span><select value=${String(video.fill)} onChange=${(e) => setVideo({ ...video, fill: Number(e.target.value) })}>${L.fills.map((f) => html`<option value=${String(f)}>${FILLS[f] ?? ''} (%${Math.round(f * 100)})</option>`)}</select></label>`}
+    ${linkRow('video', 'https://alanadiniz.com/hediyeler/yuzuk.svga')}
+    <p class="muted">
+      Bağlantı, dosyayı <b>doğrudan indiren</b> adres olmalı: tarayıcıda açınca dosyanın kendisi görünmeli ya da hemen inmeli (ör. sitenizin
+      <code>/hediyeler/</code> klasörüne koyduğunuz dosyanın adresi). Google Drive ya da Dropbox paylaşım sayfası, GoDaddy dosya yöneticisi
+      olmaz. Dosyayı uygulamanın sunucusu bir kez indirir, denetler ve kendisi sunar; telefonlar sizin sitenize bağlanmaz. Dosyayı aynı
+      adreste değiştirirseniz <b>Bağlantıdan yeniden çek</b> ve <b>Kaydet</b> ile hediye yenilenir.
+    </p>
+    ${(video.mode === 'file' || video.mode === 'link') && video.kind === 'svga' && html`<label class="field" style="max-width:280px"><span>Ekrandaki boyutu</span><select value=${String(video.fill)} onChange=${(e) => setVideo({ ...video, fill: Number(e.target.value) })}>${L.fills.map((f) => html`<option value=${String(f)}>${FILLS[f] ?? ''} (%${Math.round(f * 100)})</option>`)}</select></label>`}
 
     <h3>Önizleme</h3>
     <div class="gift-preview">
@@ -313,15 +381,15 @@ function Editor({ gift, admin, onClose, onSaved }) {
       </div>
       ${iconUrl && html`<img class="gift-big" src=${iconUrl} alt="" />`}
       <div class="muted">${CAT[v.cat]} rafının başında · ${v.enabled ? 'rafta' : 'kapalı'}</div>
-      ${(video.mode === 'file' && video.kind === 'stacked') || (video.mode === 'keep' && gift?.video)
-        ? html`<${Button} onClick=${() => setPreview(video.mode === 'file' ? video.url : gift.video.url)}>Videoyu oynat</${Button}>`
-        : video.mode === 'file' && html`<small class="muted">Bu dosya uygulamanın sunucusunda çevrildikten sonra listeden oynatılır.</small>`}
+      ${((video.mode === 'file' || video.mode === 'link') && video.kind === 'stacked') || (video.mode === 'keep' && gift?.video)
+        ? html`<${Button} onClick=${() => setPreview(video.mode === 'keep' ? gift.video.url : video.url)}>Videoyu oynat</${Button}>`
+        : (video.mode === 'file' || video.mode === 'link') && html`<small class="muted">Bu dosya uygulamanın sunucusunda çevrildikten sonra listeden oynatılır.</small>`}
     </div>
     ${preview && html`<${Stage} src=${preview} onEnd=${() => setPreview(null)} />`}
 
     <div class="row end gap" style="margin-top:12px">
       <${Button} onClick=${onClose} disabled=${!!step}>Vazgeç</${Button}>
-      <${Button} kind="primary" disabled=${!!step} onClick=${save}>${step ?? (gift ? 'Kaydet' : 'Hediyeyi ekle')}</${Button}>
+      <${Button} kind="primary" disabled=${!!step || !!pulling} onClick=${save}>${step ?? (gift ? 'Kaydet' : 'Hediyeyi ekle')}</${Button}>
     </div>
   </${Modal}>`;
 }
