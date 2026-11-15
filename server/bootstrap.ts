@@ -5,7 +5,7 @@ import { randomBytes } from 'node:crypto';
 import { writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 
-import { hashPassword } from './auth.ts';
+import { hashAny, hashPassword } from './auth.ts';
 import { ALL_PERMISSIONS, DEFAULT_SETTINGS } from './context.ts';
 import type { Db } from './db.ts';
 
@@ -135,11 +135,22 @@ export function bootstrap(db: Db, admin?: { email: string; password: string }): 
       add('due_payments', '7 gün içinde vadesi gelen ödemeler', { days: '7' }, 'info');
       add('invoice_mismatch', 'Fatura farkı %5 üzeri', { percent: '5' }, 'warning');
     }
-    if (db.value<number>('SELECT COUNT(*) FROM users')) return null;
-    const email = admin?.email ?? (process.env.FC_ADMIN_EMAIL || randomEmail('yonetici'));
-    const password = admin?.password ?? (process.env.FC_ADMIN_PASSWORD || randomPassword());
     const role = db.value<number>("SELECT id FROM roles WHERE key = 'super_admin'")!;
-    db.run('INSERT INTO users (email, name, password_hash, role_id) VALUES (?,?,?,?)', email, 'Süper yönetici', hashPassword(password), role);
+    const fromEnv = { email: (process.env.FC_ADMIN_EMAIL ?? '').trim(), password: process.env.FC_ADMIN_PASSWORD ?? '' };
+    if (db.value<number>('SELECT COUNT(*) FROM users')) {
+      // A login named in the environment (FC_ADMIN_EMAIL, FC_ADMIN_PASSWORD; any name, e.g. 'admin') that no account
+      // has yet is added once as a super admin. An account that exists is never changed here, so a password changed
+      // later in Hesabım stays changed.
+      if (fromEnv.email && fromEnv.password && !db.get('SELECT 1 FROM users WHERE email = ?', fromEnv.email)) {
+        db.run('INSERT INTO users (email, name, password_hash, role_id) VALUES (?,?,?,?)', fromEnv.email, 'Süper yönetici', hashAny(fromEnv.password), role);
+      }
+      return null;
+    }
+    const email = admin?.email ?? (fromEnv.email || randomEmail('yonetici'));
+    const password = admin?.password ?? (fromEnv.password || randomPassword());
+    // The environment's password is the owner's own choice (no length rule); a generated one is long anyway.
+    const hash = !admin?.password && fromEnv.password ? hashAny(password) : hashPassword(password);
+    db.run('INSERT INTO users (email, name, password_hash, role_id) VALUES (?,?,?,?)', email, 'Süper yönetici', hash, role);
     return { email, password };
   });
 }

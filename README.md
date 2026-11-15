@@ -23,6 +23,10 @@ Giriş e-postaları ve parolaları **rastgele üretilir** ve `data/giris-bilgile
 
 - **Demo ile başladıysanız** dosyada beş kullanıcı bulunur: süper yönetici, finans yöneticisi, operasyon yöneticisi, ajans yöneticisi (yalnız Yıldız Ajans) ve salt okunur kullanıcı.
 - **Demo yüklemeden başladıysanız** ilk açılışta yalnız süper yönetici oluşturulur. E-posta ve parolayı önceden belirlemek isterseniz `.env` dosyasında `FC_ADMIN_EMAIL` / `FC_ADMIN_PASSWORD` değişkenlerini kullanın.
+- Kullanıcılar zaten varken `FC_ADMIN_EMAIL` / `FC_ADMIN_PASSWORD` ile adı geçen giriş henüz yoksa, açılışta **bir kez**
+  süper yönetici olarak eklenir. Giriş adı e-posta olmak zorunda değildir (ör. `admin`). Var olan bir hesaba hiç
+  dokunulmaz: Hesabım'dan değiştirilen parola sonraki açılışlarda da geçerli kalır. Ortamdaki parolaya 10 karakter
+  kuralı uygulanmaz (sunucunun sahibinin seçimi); panelden konan her parola en az 10 karakterdir.
 
 İlk girişten sonra parolaları **Hesabım** ekranından değiştirin ve dosyayı silin.
 

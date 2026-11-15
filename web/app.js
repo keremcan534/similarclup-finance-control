@@ -90,7 +90,7 @@ function Login({ onDone }) {
       <p class="muted" style="margin-bottom:12px">Bağımsız finansal kontrol paneli. Devam etmek için oturum açın.</p>
       <${Form}
         fields=${[
-          { name: 'email', label: 'E-posta', required: true, wide: true },
+          { name: 'email', label: 'E-posta ya da kullanıcı adı', required: true, wide: true },
           { name: 'password', label: 'Parola', type: 'password', required: true, wide: true },
           ...(mfa ? [{ name: 'code', label: 'Doğrulama kodu (6 hane)', required: true, wide: true }] : []),
         ]}
