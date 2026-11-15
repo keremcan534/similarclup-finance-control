@@ -10,8 +10,17 @@ const LOCK_MINUTES = 15;
 
 export const sha256 = (s: string) => createHash('sha256').update(s).digest('hex');
 
+/** A password as stored (scrypt). Every password a person sets in the panel must have at least 10 characters. */
 export function hashPassword(pw: string): string {
   if (pw.length < 10) throw new HttpError(400, 'Parola en az 10 karakter olmalı', 'weak_password');
+  return hashAny(pw);
+}
+
+/**
+ * The same without the length rule: only for the login the server's owner names in the environment
+ * (FC_ADMIN_EMAIL / FC_ADMIN_PASSWORD, bootstrap.ts), which is their own choice.
+ */
+export function hashAny(pw: string): string {
   const salt = randomBytes(16);
   const h = scryptSync(pw, salt, 64, { N: 16384, r: 8, p: 1 });
   return `scrypt$16384$${salt.toString('base64')}$${h.toString('base64')}`;
