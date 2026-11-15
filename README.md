@@ -61,7 +61,8 @@ npm run restore -- data/backups/finance-....db   # sunucu durdurulmuşken
 | Kullanıcılar ve roller | 5 hazır rol ve yeni rol tanımlama. Yetkiler tek tek seçilebilir; ajans kapsamlı roller yalnız kendi ajansını görür. |
 | Denetim kaydı | Tüm kritik değişiklikler önce/sonra değerleriyle tutulur. Kayıtlar hash zinciriyle bağlıdır ve zincir doğrulanabilir. |
 | Ayarlar | Raporlama para birimi, çift onay, döviz kurları, jeton/elmas değerleri, vergi parametreleri, finansal dönem kapatma ve yedek alma. |
-| Uygulama › Hediyeler | Similar Club uygulamasının hediyeleri: ekleme, düzenleme (ad, fiyat, raf, VIP, emoji), raftan kaldırma, silme, sıralama; ikon, hazır saydam video, WebM/MOV ya da SVGA yükleme (uygulamanın sunucusu çevirir) ya da her dosya için kendi sitenizdeki bağlantıyı yapıştırma (uygulamanın sunucusu bir kez indirir, aynı denetimden geçirir; "Bağlantıdan yeniden çek" ile yenilenir) ve önizleme. Uygulama güncellemesi olmadan herkesin hediye panelinde görünür. Ayrıntı: [Similar Club'ı yönetme](#similar-clubı-yönetme). |
+| Uygulama › Hediyeler | Similar Club uygulamasının hediyeleri: ekleme, düzenleme (ad, fiyat, raf, VIP, emoji), raftan kaldırma, silme, sıralama; uygulamanın kendi hediyelerinin de her alanını değiştirme ve **Orijinale dön**; ikon, hazır saydam video, WebM/MOV ya da SVGA yükleme (uygulamanın sunucusu çevirir) ya da her dosya için kendi sitenizdeki bağlantıyı yapıştırma (uygulamanın sunucusu bir kez indirir, aynı denetimden geçirir; "Bağlantıdan yeniden çek" ile yenilenir) ve önizleme. Uygulama güncellemesi olmadan herkesin hediye panelinde görünür. Ayrıntı: [Similar Club'ı yönetme](#similar-clubı-yönetme). |
+| Uygulama › Emojiler | Emoji panelinin çıkartma paketleri: uygulamanın kendi paketleri (ad, fiyat, VIP, açık/kapalı, sıra) ve çıkartmaları (ad, emoji, resim, paket, açık/kapalı, sıra) değişir ve orijinaline döner; yeni paket ve çıkartma eklenir (saydam PNG/WebP ya da Lottie animasyonu, bilgisayardan ya da bağlantıdan). Uygulama güncellemesi olmadan telefonlara gider. |
 | Uygulama › Para çekme | Yayıncıların elmas → para talepleri: hesap bilgisi, tutar; bankadan gönderildikten sonra "Ödendi" işareti ya da nedenli ret (elmaslar geri döner). Para bu panelden gönderilmez. |
 | Uygulama › Ajans ödemeleri | Ajans komisyon talepleri: onay, dekont numarasıyla "Ödendi", ret, iptal. |
 | Uygulama › İadeler ve cüzdan | Mağaza alımlarını arama ve iade etme (harcanmamış jeton ve kilitli elmas geri alınır), Google Play iadelerini okuma, bir hesabın cüzdan dökümü. |
@@ -133,6 +134,7 @@ Hangi panel kullanıcısının hangi sayfayı kullanacağını bu panelin roller
 | Yetki | Sayfa | Hazır rollerde |
 | --- | --- | --- |
 | `app.gifts` | Uygulama › Hediyeler | Süper yönetici, finans yöneticisi, operasyon yöneticisi |
+| `app.emojis` | Uygulama › Emojiler | Süper yönetici, finans yöneticisi, operasyon yöneticisi |
 | `app.withdrawals` | Uygulama › Para çekme | Süper yönetici, finans yöneticisi |
 | `app.payouts` | Uygulama › Ajans ödemeleri | Süper yönetici, finans yöneticisi |
 | `app.refunds` | Uygulama › İadeler ve cüzdan | Süper yönetici, finans yöneticisi |

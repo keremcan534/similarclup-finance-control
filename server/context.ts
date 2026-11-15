@@ -35,7 +35,8 @@ export const PERMISSIONS = {
   'settings.edit': 'Kur, vergi, para birimi, sistem ayarları',
   'simulation.use': 'Büyüme simülasyonu',
   // Uygulama: the Similar Club app's own admin API, through this panel (server/app-admin.ts).
-  'app.gifts': 'Uygulama: hediyeleri ekle, düzenle, sırala, kaldır',
+  'app.gifts': 'Uygulama: hediyeleri (uygulamanın kendi hediyeleri de) ekle, düzenle, sırala, kaldır, orijinaline döndür',
+  'app.emojis': 'Uygulama: emoji paketleri ve çıkartmaları (uygulamanınkiler de) ekle, düzenle, sırala, kaldır, orijinaline döndür',
   'app.withdrawals': 'Uygulama: para çekme taleplerini ödendi işaretle / reddet (kritik)',
   'app.payouts': 'Uygulama: ajans ödemelerini onayla, ödendi işaretle, reddet (kritik)',
   'app.refunds': 'Uygulama: mağaza iadesi ve cüzdan denetimi',

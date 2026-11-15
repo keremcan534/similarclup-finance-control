@@ -1,9 +1,10 @@
-// Uygulama › Hediyeler: the Similar Club app's gifts that the team adds without an app update (the app's Yönetim ›
-// Hediyeler does the same; server/app-admin.ts passes the calls on as the signed-in panel user). A list per shelf in
-// the phones' order, an editor (name, price, shelf, VIP, emoji, icon, video or SVGA), and a preview: the shelf tile,
-// the icon, and the transparent video drawn over a stage the way the phones draw it. Files go through this server to
-// the app's storage; the app checks them when the gift is saved and converts a WebM / MOV / SVGA itself. Nothing
-// removes a background: the editor says so before a file is picked.
+// Uygulama › Hediyeler: the Similar Club app's gifts, changed without an app update (the app's Yönetim › Hediyeler
+// does the same; server/app-admin.ts passes the calls on as the signed-in panel user): the ones the team adds, and the
+// app's own (?builtin=1), whose every value (name, price, shelf, VIP, emoji, on/off, order, icon, video) can change
+// and go back to the app's ("Orijinale dön"). A list per shelf in the phones' order, an editor, and a preview: the
+// shelf tile, the icon, and the transparent video drawn over a stage the way the phones draw it. Files go through this
+// server to the app's storage; the app checks them when the gift is saved and converts a WebM / MOV / SVGA itself.
+// Nothing removes a background: the editor says so before a file is picked.
 import { Badge, Button, Loading, Modal, Page, Table, act, dateTimeTr, html, num, post, showError, toast, useApi, useApp, useEffect, useRef, useState } from '../lib.js';
 
 const CATS = [
@@ -17,6 +18,16 @@ const FILLS = { 0.45: 'Küçük', 0.6: 'Orta', 0.8: 'Büyük', 1: 'Tam ekran' };
 const mb = (n) => (n / 1024 / 1024).toLocaleString('tr-TR', { maximumFractionDigits: 1 });
 const sec = (ms) => (ms / 1000).toLocaleString('tr-TR', { maximumFractionDigits: 1 });
 const ending = (name) => (/\.([A-Za-z0-9]{1,8})$/.exec(name ?? '')?.[1] ?? '').toLowerCase();
+/** What "Değiştirildi" names, as the app answers it (`changed`). */
+const FIELD_TR = { name: 'ad', emoji: 'emoji', price: 'fiyat', cat: 'raf / VIP', enabled: 'rafta / kapalı', icon: 'ikon', video: 'video' };
+const changedText = (g) => (g.changed ?? []).map((f) => FIELD_TR[f] ?? f).join(', ');
+const KINDS = [
+  ['all', 'Hepsi'],
+  ['app', 'Uygulamanın'],
+  ['mine', 'Eklenenler'],
+  ['changed', 'Değiştirilenler'],
+];
+const kindOk = (k, g) => k === 'all' || (k === 'app' && g.builtin) || (k === 'mine' && !g.builtin) || (k === 'changed' && g.builtin && g.changed?.length > 0);
 
 /** What a picked file is uploaded as (the app's upload kinds), or null when the app won't take it. */
 function typeOf(kind, file) {
@@ -57,16 +68,21 @@ function upload(kind, file, onProgress) {
 function videoLine(g) {
   if (g.job?.status === 'processing') return html`<${Badge} s="pending" label=${g.video ? 'Yeni video çevriliyor' : 'Video çevriliyor'} />`;
   if (g.job?.status === 'failed') return html`<span><${Badge} s="error" label="Çevrilemedi" /> <small class="muted">${g.job.error}</small></span>`;
-  if (g.video) return html`<${Badge} s="active" label=${`Hazır · ${sec(g.video.ms)} sn · ${mb(g.video.bytes)} MB`} />`;
+  // The app's own clip, as long as nobody replaced or stopped it.
+  const own = g.builtin && !g.changed?.includes('video');
+  if (g.video) return html`<${Badge} s="active" label=${`${own ? 'Uygulamanın videosu' : 'Hazır'} · ${sec(g.video.ms)} sn · ${mb(g.video.bytes)} MB`} />`;
+  if (g.videoOff) return html`<span class="muted">Kapatıldı (ikon uçar)</span>`;
   return html`<span class="muted">Yok (ikon uçar)</span>`;
 }
 
 export function AppGifts() {
   const { can, meta } = useApp();
   const [shelf, setShelf] = useState('all');
+  const [kind, setKind] = useState('all');
   const [edit, setEdit] = useState(null);
   const [playing, setPlaying] = useState(null);
-  const list = useApi(meta.app_link ? '/api/app/gifts' : null);
+  // builtin=1: the app's own gifts too, with their values in the app and what was changed.
+  const list = useApi(meta.app_link ? '/api/app/gifts?builtin=1' : null);
   const processing = !!list.data?.gifts.some((g) => g.job?.status === 'processing');
   // A video converts on the app's server: the list is read again every few seconds until it is done.
   useEffect(() => {
@@ -88,33 +104,45 @@ export function AppGifts() {
     (await act(() => post('/api/app/gifts/order', { ids }), 'Sıra kaydedildi')) && list.reload();
   };
   const toggle = async (g) => {
-    if (!confirm(g.enabled ? `“${g.name}” raflardan kalksın mı? Gönderilemez; burada kalır ve yeniden rafa konabilir.` : `“${g.name}” herkesin hediye panelinde görünsün mü?`)) return;
+    const off = g.builtin
+      ? `“${g.name}” raflardan kalksın mı? Hediye panelinde görünmez; çantasında olan (ya da eski bir telefon) yine gönderebilir. Burada kalır ve yeniden rafa konabilir.`
+      : `“${g.name}” raflardan kalksın mı? Gönderilemez; burada kalır ve yeniden rafa konabilir.`;
+    if (!confirm(g.enabled ? off : `“${g.name}” herkesin hediye panelinde görünsün mü?`)) return;
     (await act(() => post('/api/app/gifts/update', { id: g.id, enabled: !g.enabled }), g.enabled ? 'Raftan kaldırıldı' : 'Rafa kondu')) && list.reload();
   };
   const remove = async (g) => {
     if (!confirm(`“${g.name}” raflardan ve bu listeden kalksın mı? İkonu ve videosu silinir; gönderim geçmişi kalır. Geri alınamaz.`)) return;
     (await act(() => post('/api/app/gifts/delete', { id: g.id }), 'Hediye silindi')) && list.reload();
   };
+  /** One of the app's gifts back to the app's values (its place on the shelf stays). */
+  const reset = async (g) => {
+    if (!confirm(`“${g.name}” uygulamadaki haline dönsün mü? Geri alınacak: ${changedText(g)}. Yüklenen ikon ve video silinir; raftaki yeri değişmez.`)) return;
+    (await act(() => post('/api/app/gifts/reset', { id: g.id }), 'Orijinaline döndü')) && list.reload();
+  };
 
   return html`<${Page}
     title="Uygulama hediyeleri"
-    subtitle="Buradan eklenen hediye uygulama güncellemesi olmadan herkesin hediye panelinde, rafının başında görünür. Fiyatı uygulamanın sunucusu belirler; gönderim, PK, oda seviyesi ve elmaslar diğer hediyeler gibi işler. Her işlem hem burada hem uygulamada denetim kaydına adınızla yazılır."
+    subtitle="Buradan eklenen hediye uygulama güncellemesi olmadan herkesin hediye panelinde, rafının başında görünür. Uygulamanın kendi hediyelerinin de adı, fiyatı, rafı, VIP'i, sırası, rafta olup olmadığı, ikonu ve videosu buradan değişir ve istenince orijinaline döner. Fiyatı uygulamanın sunucusu belirler; fiyatı değişen uygulama hediyesini eski APK'lar göstermez. Her işlem hem burada hem uygulamada denetim kaydına adınızla yazılır."
     actions=${can('app.gifts') && html`<${Button} kind="primary" disabled=${!list.data?.storage} onClick=${() => setEdit({})}>Yeni hediye</${Button}>`}
   >
-    <div class="row gap wrap" style="margin-bottom:10px">
+    <div class="row gap wrap" style="margin-bottom:6px">
       ${[['all', 'Tümü'], ...CATS].map(([k, l]) => html`<button class=${`chip ${shelf === k ? 'on' : ''}`} onClick=${() => setShelf(k)}>${l}</button>`)}
+    </div>
+    <div class="row gap wrap" style="margin-bottom:10px">
+      ${KINDS.map(([k, l]) => html`<button class=${`chip ${kind === k ? 'on' : ''}`} onClick=${() => setKind(k)}>${l}</button>`)}
     </div>
     <${Loading} state=${list}>${(d) => html`
       ${!d.storage && html`<div class="empty bad">Uygulamanın dosya deposu açık değil: ikon ve video yüklenemez, yeni hediye eklenemez.</div>`}
       <${Table}
-        empty="Henüz eklenmiş hediye yok. “Yeni hediye” ile ilkini ekleyin."
+        empty="Bu süzgeçte hediye yok."
         columns=${[
-          { key: 'icon', label: '', render: (g) => html`<img class="gift-icon" src=${g.icon} alt="" loading="lazy" />` },
+          { key: 'icon', label: '', render: (g) => (g.icon ? html`<img class="gift-icon" src=${g.icon} alt="" loading="lazy" />` : html`<span class="gift-emoji">${g.emoji}</span>`) },
           {
             key: 'name',
             label: 'Ad',
-            render: (g) =>
-              html`<strong>${g.name}</strong><br /><small class="muted">${g.id}${g.iconLink || g.videoLink ? ' · 🔗 bağlantıdan' : ''}</small>`,
+            render: (g) => html`<strong>${g.name}</strong> ${g.builtin ? html`<${Badge} s="info" label="Uygulamanın" />` : ''}
+              ${g.changed?.length > 0 ? html` <${Badge} s="warning" label=${`Değiştirildi: ${changedText(g)}`} />` : ''}
+              <br /><small class="muted">${g.id}${g.iconLink || g.videoLink ? ' · 🔗 bağlantıdan' : ''}${g.builtin && g.changed?.includes('name') ? ` · uygulamada: ${g.original.name}` : ''}</small>`,
           },
           {
             key: 'cat',
@@ -126,10 +154,25 @@ export function AppGifts() {
                 ${can('app.gifts') && html`<button class="btn ghost" aria-label="Bir üste" disabled=${i === 0} onClick=${() => move(d.gifts, g, -1)}>↑</button><button class="btn ghost" aria-label="Bir alta" disabled=${i === row.length - 1} onClick=${() => move(d.gifts, g, 1)}>↓</button>`}</span>`;
             },
           },
-          { key: 'price', label: 'Fiyat (jeton)', align: 'right', render: (g) => num(g.price) },
-          { key: 'enabled', label: 'Durum', render: (g) => html`<${Badge} s=${g.enabled ? 'active' : 'passive'} label=${g.enabled ? 'Rafta' : 'Kapalı'} />` },
+          {
+            key: 'price',
+            label: 'Fiyat (jeton)',
+            align: 'right',
+            render: (g) => html`${num(g.price)}${g.builtin && g.price !== g.original.price ? html`<br /><small class="muted">uygulamada <s>${num(g.original.price)}</s></small>` : ''}`,
+          },
+          {
+            key: 'enabled',
+            label: 'Durum',
+            render: (g) =>
+              html`<${Badge} s=${g.enabled ? 'active' : 'passive'} label=${g.enabled ? 'Rafta' : 'Kapalı'} />${g.builtin && !g.enabled && !g.original.enabled && !g.changed?.includes('enabled') ? html`<br /><small class="muted">uygulamada duraklatılmış</small>` : ''}`,
+          },
           { key: 'video', label: 'Video', render: videoLine },
-          { key: 'sent', label: 'Gönderim', align: 'right', render: (g) => (g.sent.count ? `${num(g.sent.count)} · ${num(g.sent.coins)} jeton` : '—') },
+          {
+            key: 'sent',
+            label: 'Gönderim',
+            align: 'right',
+            render: (g) => (g.sent.count ? html`${num(g.sent.count)} · ${num(g.sent.coins)} jeton${g.sent.days ? html`<br /><small class="muted">son ${g.sent.days} gün</small>` : ''}` : '—'),
+          },
           { key: 'updatedAt', label: 'Son değişiklik', render: (g) => html`${dateTimeTr(g.updatedAt)}<br /><small class="muted">${g.updatedBy?.name ?? ''}</small>` },
           {
             key: 'a',
@@ -138,11 +181,13 @@ export function AppGifts() {
               ${g.video && html`<${Button} kind="ghost" onClick=${() => setPlaying(g.video.url)}>Oynat</${Button}>`}
               ${can('app.gifts') && html`<${Button} onClick=${() => setEdit({ gift: g })}>Düzenle</${Button}>
               <${Button} kind="ghost" onClick=${() => toggle(g)}>${g.enabled ? 'Raftan kaldır' : 'Rafa koy'}</${Button}>
-              <${Button} kind="danger" onClick=${() => remove(g)}>Sil</${Button}>`}
+              ${g.builtin
+                ? g.changed?.length > 0 && html`<${Button} kind="ghost" onClick=${() => reset(g)}>Orijinale dön</${Button}>`
+                : html`<${Button} kind="danger" onClick=${() => remove(g)}>Sil</${Button}>`}`}
             </span>`,
           },
         ]}
-        rows=${d.gifts.filter((g) => shelf === 'all' || g.cat === shelf)}
+        rows=${d.gifts.filter((g) => (shelf === 'all' || g.cat === shelf) && kindOk(kind, g))}
       />`}</${Loading}>
     ${edit && list.data && html`<${Editor} gift=${edit.gift} admin=${list.data} onClose=${() => setEdit(null)} onSaved=${(text) => (setEdit(null), toast(text), list.reload())} />`}
     ${playing && html`<${Modal} title="Önizleme" onClose=${() => setPlaying(null)}><${Stage} src=${playing} onEnd=${() => setPlaying(null)} /></${Modal}>`}
@@ -212,6 +257,9 @@ const linkName = (link) => {
 
 function Editor({ gift, admin, onClose, onSaved }) {
   const L = admin.limits;
+  // One of the app's own gifts: its values in the app (`original`) show under each field that differs.
+  const app = !!gift?.builtin;
+  const o = gift?.original;
   const [v, setV] = useState({
     name: gift?.name ?? '',
     price: gift ? String(gift.price) : '',
@@ -220,6 +268,7 @@ function Editor({ gift, admin, onClose, onSaved }) {
     emoji: gift?.emoji ?? '',
     enabled: gift ? gift.enabled : true,
   });
+  // A picked or fetched icon ({ file, url } / { at, url, link }), or { reset: true }: back to the app's picture.
   const [icon, setIcon] = useState(null);
   const [video, setVideo] = useState(gift?.video || gift?.job ? { mode: 'keep' } : { mode: 'none' });
   const [step, setStep] = useState(null);
@@ -228,8 +277,10 @@ function Editor({ gift, admin, onClose, onSaved }) {
   const [links, setLinks] = useState({ icon: gift?.iconLink ?? '', video: gift?.videoLink ?? '' });
   const [pulling, setPulling] = useState(null);
   const set = (k) => (e) => setV({ ...v, [k]: e.target.type === 'checkbox' ? e.target.checked : e.target.value });
-  const iconUrl = icon ? icon.url : gift?.icon ?? null;
+  const iconUrl = icon?.reset ? (o?.icon ?? null) : icon ? icon.url : (gift?.icon ?? null);
   useEffect(() => () => icon?.file && URL.revokeObjectURL(icon.url), [icon]);
+  /** The app's value of a field, under it, when the gift's differs. */
+  const was = (show, text) => app && show && html`<small class="muted">Uygulamada: ${text}</small>`;
 
   const pickIcon = (e) => {
     const file = e.target.files?.[0];
@@ -279,6 +330,12 @@ function Editor({ gift, admin, onClose, onSaved }) {
     </div>`;
   };
 
+  /** One of the app's gifts: its video back to the app's own clip (a separate call, nothing else changes). */
+  const videoBack = async () => {
+    if (!confirm('Video uygulamadaki haline dönsün mü? Yüklenen video silinir.')) return;
+    if (await act(() => post('/api/app/gifts/reset', { id: gift.id, fields: ['video'] }))) onSaved('Video orijinaline döndü');
+  };
+
   const save = async () => {
     const name = v.name.replace(/\s+/g, ' ').trim();
     const price = Number(v.price);
@@ -288,7 +345,7 @@ function Editor({ gift, admin, onClose, onSaved }) {
     try {
       let iconAt;
       if (icon?.at) iconAt = icon.at;
-      else if (icon) {
+      else if (icon?.file) {
         setStep('İkon yükleniyor…');
         iconAt = await upload('gifticon', icon.file);
       }
@@ -304,15 +361,17 @@ function Editor({ gift, admin, onClose, onSaved }) {
         videoSpec = video.kind === 'stacked' ? { url, kind: 'stacked' } : { url, kind: 'source', ...(video.kind === 'svga' ? { fill: video.fill } : {}) };
       }
       // Where a new file came from (null: picked from this computer), kept for "Bağlantıdan yeniden çek".
-      const iconLink = icon ? (icon.link ?? null) : undefined;
+      const iconLink = icon && !icon.reset ? (icon.link ?? null) : undefined;
       const videoLink = video.mode === 'link' ? video.link : video.mode === 'file' ? null : undefined;
       setStep('Kaydediliyor…');
       const fields = { name, price, cat: v.cat, minSvip: v.cat === 'privilege' ? Number(v.minSvip) : 0, emoji: v.emoji.trim(), enabled: !!v.enabled };
       if (gift) {
         const patch = {};
         for (const k of ['name', 'price', 'cat', 'minSvip', 'enabled']) if (fields[k] !== gift[k]) patch[k] = fields[k];
-        if ((fields.emoji || '🎁') !== gift.emoji) patch.emoji = fields.emoji;
+        if ((fields.emoji || (app ? o.emoji : '🎁')) !== gift.emoji) patch.emoji = fields.emoji;
         if (iconAt) patch.icon = iconAt;
+        // Back to the app's picture.
+        if (icon?.reset) patch.icon = null;
         if (iconLink !== undefined) patch.iconLink = iconLink;
         if (videoLink !== undefined) patch.videoLink = videoLink;
         if (videoSpec !== undefined && !(videoSpec === null && !gift.video && !gift.job)) patch.video = videoSpec;
@@ -330,19 +389,24 @@ function Editor({ gift, admin, onClose, onSaved }) {
   };
 
   const price = Number(v.price);
-  return html`<${Modal} title=${gift ? gift.name : 'Yeni hediye'} wide onClose=${onClose}>
+  return html`<${Modal} title=${gift ? `${gift.name}${app ? ' (uygulamanın hediyesi)' : ''}` : 'Yeni hediye'} wide onClose=${onClose}>
+    ${app && html`<p class="note">Uygulamayla gelen bir hediye. Değiştirdiğiniz her şey uygulama güncellemesi olmadan telefonlara gider; listedeki <b>Orijinale dön</b> hepsini geri alır. Fiyatı değişirse eski APK'lar bu hediyeyi göstermez (yanlış fiyat göstermesinler diye).</p>`}
     <div class="form"><div class="grid2">
-      <label class="field"><span>Ad *</span><input value=${v.name} maxlength=${L.nameMax} onInput=${set('name')} placeholder="Ör. Altın Yıldız" /></label>
-      <label class="field"><span>Fiyat (jeton) *</span><input inputmode="numeric" value=${v.price} onInput=${(e) => setV({ ...v, price: e.target.value.replace(/[^\d]/g, '') })} placeholder="Ör. 9999" /><small class="muted">1–${num(L.priceMax)} jeton; değişiklik yeni gönderimlerden itibaren geçer.</small></label>
-      <label class="field"><span>Raf</span><select value=${v.cat} onChange=${set('cat')}>${CATS.map(([k, l]) => html`<option value=${k}>${l}</option>`)}</select></label>
+      <label class="field"><span>Ad *</span><input value=${v.name} maxlength=${L.nameMax} onInput=${set('name')} placeholder="Ör. Altın Yıldız" />${was(v.name.trim() !== o?.name, o?.name)}</label>
+      <label class="field"><span>Fiyat (jeton) *</span><input inputmode="numeric" value=${v.price} onInput=${(e) => setV({ ...v, price: e.target.value.replace(/[^\d]/g, '') })} placeholder="Ör. 9999" /><small class="muted">1–${num(L.priceMax)} jeton; değişiklik yeni gönderimlerden itibaren geçer.</small>${was(price !== o?.price, `${num(o?.price)} jeton`)}</label>
+      <label class="field"><span>Raf</span><select value=${v.cat} onChange=${set('cat')}>${CATS.map(([k, l]) => html`<option value=${k}>${l}</option>`)}</select>${was(v.cat !== o?.cat, `${CAT[o?.cat]}${o?.cat === 'privilege' ? ` · VIP ${o.minSvip}+` : ''}`)}</label>
       ${v.cat === 'privilege' && html`<label class="field"><span>En düşük VIP seviyesi</span><select value=${v.minSvip} onChange=${set('minSvip')}>${Array.from({ length: L.svipMax }, (_, i) => html`<option value=${String(i + 1)}>VIP ${i + 1}</option>`)}</select></label>`}
-      <label class="field"><span>Emoji (isteğe bağlı)</span><input value=${v.emoji} maxlength="8" onInput=${set('emoji')} placeholder="🎁" /><small class="muted">Sohbet satırlarında ve ikon yüklenmeden önce görünür.</small></label>
-      <label class="field inline"><span>Rafta (herkes görür)</span><input type="checkbox" checked=${v.enabled} onChange=${set('enabled')} /></label>
+      <label class="field"><span>Emoji ${app ? '' : '(isteğe bağlı)'}</span><input value=${v.emoji} maxlength="8" onInput=${set('emoji')} placeholder=${app ? o.emoji : '🎁'} /><small class="muted">Sohbet satırlarında ve ikon yüklenmeden önce görünür.</small>${was(v.emoji.trim() && v.emoji.trim() !== o?.emoji, o?.emoji)}</label>
+      <label class="field inline"><span>Rafta (herkes görür)</span><input type="checkbox" checked=${v.enabled} onChange=${set('enabled')} />${was(!!v.enabled !== o?.enabled, o?.enabled ? 'rafta' : 'duraklatılmış')}</label>
     </div></div>
 
     <h3>İkon</h3>
-    <p class="muted">Saydam (arka planı silinmiş) PNG ya da WebP, kare, ${L.iconMinPx}–${L.iconMaxPx} piksel (önerilen 512 × 512), en çok ${mb(L.iconBytes)} MB.</p>
-    <input type="file" accept="image/png,image/webp" aria-label="İkon dosyası" onChange=${pickIcon} />
+    <p class="muted">Saydam (arka planı silinmiş) PNG ya da WebP, kare, ${L.iconMinPx}–${L.iconMaxPx} piksel (önerilen 512 × 512), en çok ${mb(L.iconBytes)} MB.${app ? ' Seçmezseniz uygulamanın resmi kalır.' : ''}</p>
+    <div class="row gap wrap">
+      <input type="file" accept="image/png,image/webp" aria-label="İkon dosyası" onChange=${pickIcon} />
+      ${app && (gift.changed?.includes('icon') || (icon && !icon.reset)) && !icon?.reset && html`<${Button} kind="ghost" onClick=${() => setIcon({ reset: true })}>Uygulamanın resmine dön</${Button}>`}
+      ${icon?.reset && html`<span class="muted">Kaydedince uygulamanın resmi döner.</span> <${Button} kind="ghost" onClick=${() => setIcon(null)}>Vazgeç</${Button}>`}
+    </div>
     ${linkRow('icon', 'https://alanadiniz.com/hediyeler/yuzuk.png')}
     ${icon?.at && html`<small class="muted">Bağlantıdan alındı: ${linkName(icon.link)} · ${size(icon.bytes)}</small>`}
 
@@ -362,6 +426,7 @@ function Editor({ gift, admin, onClose, onSaved }) {
       ${video.mode === 'none' && html`<span class="muted">Video yok: gönderilince ikonu uçar.</span>`}
       ${video.mode !== 'none' && html`<${Button} kind="ghost" onClick=${() => setVideo({ mode: 'none' })}>Videoyu kaldır</${Button}>`}
       ${video.mode === 'none' && (gift?.video || gift?.job) && html`<${Button} kind="ghost" onClick=${() => setVideo({ mode: 'keep' })}>Vazgeç</${Button}>`}
+      ${app && gift.changed?.includes('video') && html`<${Button} kind="ghost" disabled=${!!step} onClick=${videoBack}>${o.video ? 'Uygulamanın videosuna dön' : 'Videoyu orijinaline döndür'}</${Button}>`}
     </div>
     ${linkRow('video', 'https://alanadiniz.com/hediyeler/yuzuk.svga')}
     <p class="muted">
@@ -375,12 +440,12 @@ function Editor({ gift, admin, onClose, onSaved }) {
     <h3>Önizleme</h3>
     <div class="gift-preview">
       <div class="gift-tile">
-        ${iconUrl ? html`<img src=${iconUrl} alt="" />` : html`<span class="gift-emoji">${v.emoji.trim() || '🎁'}</span>`}
+        ${iconUrl ? html`<img src=${iconUrl} alt="" />` : html`<span class="gift-emoji">${v.emoji.trim() || o?.emoji || '🎁'}</span>`}
         <b>${v.name.trim() || 'Hediye adı'}</b>
         <small>${v.cat === 'privilege' ? `VIP ${v.minSvip}` : `🪙 ${Number.isSafeInteger(price) && price > 0 ? num(price) : '—'}`}</small>
       </div>
       ${iconUrl && html`<img class="gift-big" src=${iconUrl} alt="" />`}
-      <div class="muted">${CAT[v.cat]} rafının başında · ${v.enabled ? 'rafta' : 'kapalı'}</div>
+      <div class="muted">${CAT[v.cat]} rafı · ${v.enabled ? 'rafta' : 'kapalı'}</div>
       ${((video.mode === 'file' || video.mode === 'link') && video.kind === 'stacked') || (video.mode === 'keep' && gift?.video)
         ? html`<${Button} onClick=${() => setPreview(video.mode === 'keep' ? gift.video.url : video.url)}>Videoyu oynat</${Button}>`
         : (video.mode === 'file' || video.mode === 'link') && html`<small class="muted">Bu dosya uygulamanın sunucusunda çevrildikten sonra listeden oynatılır.</small>`}

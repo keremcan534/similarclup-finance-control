@@ -29,11 +29,25 @@ export function appLink(env: NodeJS.ProcessEnv = process.env): AppLink {
  * /api/app/<the rest after /api/admin/>.
  */
 export const APP_ROUTES: [string, string, Permission | Permission[]][] = [
+  // Hediyeler: the admins' own and the app's own (?builtin=1 lists them, reset takes one back to the app's values).
   ['GET', '/api/admin/gifts', 'app.gifts'],
   ['POST', '/api/admin/gifts', 'app.gifts'],
   ['POST', '/api/admin/gifts/update', 'app.gifts'],
+  ['POST', '/api/admin/gifts/reset', 'app.gifts'],
   ['POST', '/api/admin/gifts/delete', 'app.gifts'],
   ['POST', '/api/admin/gifts/order', 'app.gifts'],
+  // Emojiler: the emoji panel's packs and stickers, the app's and the admins' own
+  ['GET', '/api/admin/emoji', 'app.emojis'],
+  ['POST', '/api/admin/emoji/packs', 'app.emojis'],
+  ['POST', '/api/admin/emoji/packs/update', 'app.emojis'],
+  ['POST', '/api/admin/emoji/packs/reset', 'app.emojis'],
+  ['POST', '/api/admin/emoji/packs/delete', 'app.emojis'],
+  ['POST', '/api/admin/emoji/packs/order', 'app.emojis'],
+  ['POST', '/api/admin/emoji/stickers', 'app.emojis'],
+  ['POST', '/api/admin/emoji/stickers/update', 'app.emojis'],
+  ['POST', '/api/admin/emoji/stickers/reset', 'app.emojis'],
+  ['POST', '/api/admin/emoji/stickers/delete', 'app.emojis'],
+  ['POST', '/api/admin/emoji/stickers/order', 'app.emojis'],
   // Para çekme
   ['GET', '/api/admin/withdrawals', 'app.withdrawals'],
   ['POST', '/api/admin/withdrawals/decide', 'app.withdrawals'],
@@ -122,11 +136,11 @@ export const APP_ROUTES: [string, string, Permission | Permission[]][] = [
 const COMPUTE_ONLY = new Set(['/api/admin/agency/simulate']);
 export const localPath = (appPath: string) => `/api/app${appPath.slice('/api/admin'.length)}`;
 /** Upload kinds and the permission each needs (the app's media.mjs kinds). */
-const UPLOADS: Record<string, Permission> = { gifticon: 'app.gifts', giftvideo: 'app.gifts', giftsource: 'app.gifts', notice: 'app.notices' };
+const UPLOADS: Record<string, Permission> = { gifticon: 'app.gifts', giftvideo: 'app.gifts', giftsource: 'app.gifts', stickerart: 'app.emojis', notice: 'app.notices' };
 /** The permissions that may open the app's stored files through here (every page that shows them). */
 // The app serves these files to anyone with the address (media.mjs GET /api/media/f/…); the panel still asks for a
 // page that shows them: gift art, a reported post's or room's picture, a ticket's photo, a notice's or event's picture.
-const FILE_PERMS: Permission[] = ['app.gifts', 'app.complaints', 'app.support', 'app.notices', 'app.events'];
+const FILE_PERMS: Permission[] = ['app.gifts', 'app.emojis', 'app.complaints', 'app.support', 'app.notices', 'app.events'];
 
 const off = () => new HttpError(503, 'Uygulama bağlantısı ayarlı değil: sunucuda FC_APP_API_URL ve FC_APP_API_KEY gerekli', 'app_off');
 
@@ -184,6 +198,13 @@ export function appRoutes(r: Router<Ctx>, link: AppLink) {
     need(ctx, 'app.gifts');
     const out = await appCall(ctx, link, 'POST', '/api/admin/gifts/fetch', req.body, { raw: true, timeoutMs: 330_000 });
     audit(ctx, 'app.gifts.fetch', 'app', null, null, { method: 'POST', path: '/api/admin/gifts/fetch', body: req.body });
+    return { ...out, preview: localFiles(out.url) };
+  });
+  // A sticker's picture from a link (Emojiler): the same, for a PNG, WebP or Lottie JSON of at most 512 KB.
+  r.add('POST', '/api/app/emoji/fetch', async (req, ctx) => {
+    need(ctx, 'app.emojis');
+    const out = await appCall(ctx, link, 'POST', '/api/admin/emoji/fetch', req.body, { raw: true, timeoutMs: 90_000 });
+    audit(ctx, 'app.emoji.fetch', 'app', null, null, { method: 'POST', path: '/api/admin/emoji/fetch', body: req.body });
     return { ...out, preview: localFiles(out.url) };
   });
   r.get('/api/app/status', (_req, ctx) => {
