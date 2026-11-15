@@ -65,9 +65,15 @@ function upload(kind, file, onProgress) {
   });
 }
 
+/** A link plainly to a video or to a picture, by its file name (the app's server checks the file itself anyway). */
+const VIDEO_LINK = /\.(mp4|m4v|webm|mov|svga)(?:[?#]|$)/i;
+const IMAGE_LINK = /\.(png|webp|jpe?g|gif)(?:[?#]|$)/i;
+
 function videoLine(g) {
   if (g.job?.status === 'processing') return html`<${Badge} s="pending" label=${g.video ? 'Yeni video çevriliyor' : 'Video çevriliyor'} />`;
-  if (g.job?.status === 'failed') return html`<span><${Badge} s="error" label="Çevrilemedi" /> <small class="muted">${g.job.error}</small></span>`;
+  // The whole sentence (what is wrong and how to export it), wrapped: the cell would otherwise cut it off.
+  if (g.job?.status === 'failed')
+    return html`<div style="white-space:normal;min-width:240px;max-width:420px"><${Badge} s="error" label="Çevrilemedi" /> <small class="muted">${g.job.error}</small>${g.job.preview ? html`<br /><small>Nasıl göründüğü: <strong>Önizle</strong></small>` : ''}</div>`;
   // The app's own clip, as long as nobody replaced or stopped it.
   const own = g.builtin && !g.changed?.includes('video');
   if (g.video) return html`<${Badge} s="active" label=${`${own ? 'Uygulamanın videosu' : 'Hazır'} · ${sec(g.video.ms)} sn · ${mb(g.video.bytes)} MB`} />`;
@@ -178,7 +184,8 @@ export function AppGifts() {
             key: 'a',
             label: '',
             render: (g) => html`<span class="row gap">
-              ${g.video && html`<${Button} kind="ghost" onClick=${() => setPlaying(g.video.url)}>Oynat</${Button}>`}
+              ${g.video && html`<${Button} kind="ghost" onClick=${() => setPlaying({ src: g.video.url })}>Oynat</${Button}>`}
+              ${g.job?.status === 'failed' && g.job.preview && html`<${Button} kind="ghost" onClick=${() => setPlaying({ src: g.job.preview, refused: true })}>Önizle</${Button}>`}
               ${can('app.gifts') && html`<${Button} onClick=${() => setEdit({ gift: g })}>Düzenle</${Button}>
               <${Button} kind="ghost" onClick=${() => toggle(g)}>${g.enabled ? 'Raftan kaldır' : 'Rafa koy'}</${Button}>
               ${g.builtin
@@ -190,7 +197,10 @@ export function AppGifts() {
         rows=${d.gifts.filter((g) => (shelf === 'all' || g.cat === shelf) && kindOk(kind, g))}
       />`}</${Loading}>
     ${edit && list.data && html`<${Editor} gift=${edit.gift} admin=${list.data} onClose=${() => setEdit(null)} onSaved=${(text) => (setEdit(null), toast(text), list.reload())} />`}
-    ${playing && html`<${Modal} title="Önizleme" onClose=${() => setPlaying(null)}><${Stage} src=${playing} onEnd=${() => setPlaying(null)} /></${Modal}>`}
+    ${playing && html`<${Modal} title="Önizleme" onClose=${() => setPlaying(null)}>
+      ${playing.refused && html`<p class="note bad">Kullanılmayan video: odada böyle, arka planıyla kutu gibi görünürdü. Hediyedeki video değişmedi.</p>`}
+      <${Stage} src=${playing.src} onEnd=${() => setPlaying(null)} />
+    </${Modal}>`}
   </${Page}>`;
 }
 
@@ -301,11 +311,20 @@ function Editor({ gift, admin, onClose, onSaved }) {
     setVideo({ mode: 'file', file, kind, fill: L.fill, url: kind === 'stacked' ? URL.createObjectURL(file) : null });
   };
 
-  /** A file from the link typed for `slot`: the app's server downloads it once and keeps it as if uploaded. */
-  const pull = async (slot) => {
+  /**
+   * A file from the link typed for `slot`: the app's server downloads it once and keeps it as if uploaded. A link
+   * plainly for the other field (a video's in the icon's, a picture's in the video's) moves there and is fetched for it.
+   */
+  const pull = async (slot, url = links[slot].trim()) => {
+    const other = slot === 'icon' && VIDEO_LINK.test(url) ? 'video' : slot === 'video' && IMAGE_LINK.test(url) ? 'icon' : null;
+    if (other) {
+      setLinks((x) => ({ ...x, [slot]: (slot === 'icon' ? gift?.iconLink : gift?.videoLink) ?? '', [other]: url }));
+      toast(other === 'video' ? 'Bu bir video bağlantısı: Video alanına taşındı' : 'Bu bir resim bağlantısı: İkon alanına taşındı');
+      return pull(other, url);
+    }
     setPulling(slot);
     try {
-      const out = await post('/api/app/gifts/fetch', { slot, url: links[slot].trim() });
+      const out = await post('/api/app/gifts/fetch', { slot, url });
       if (slot === 'icon') setIcon({ at: out.url, url: out.preview, link: out.link, bytes: out.bytes });
       else {
         const kind = out.svga ? 'svga' : out.video === 'stacked' ? 'stacked' : 'source';
@@ -423,6 +442,7 @@ function Editor({ gift, admin, onClose, onSaved }) {
       ${video.mode === 'link' && html`<span class="muted">Bağlantıdan: ${video.name} · ${video.kind === 'stacked' ? 'hazır video' : video.kind === 'svga' ? 'SVGA, çevrilecek' : 'saydam kaynak, çevrilecek'} · ${size(video.bytes)}</span>`}
       ${video.mode === 'file' && html`<span class="muted">${video.file.name} · ${video.kind === 'stacked' ? 'hazır video' : video.kind === 'svga' ? 'SVGA, çevrilecek' : 'saydam kaynak, çevrilecek'} · ${mb(video.file.size)} MB</span>`}
       ${video.mode === 'keep' && html`<span>${videoLine(gift)}</span>`}
+      ${video.mode === 'keep' && gift?.job?.status === 'failed' && gift.job.preview && html`<${Button} kind="ghost" onClick=${() => setPreview(gift.job.preview)}>Önizle</${Button}>`}
       ${video.mode === 'none' && html`<span class="muted">Video yok: gönderilince ikonu uçar.</span>`}
       ${video.mode !== 'none' && html`<${Button} kind="ghost" onClick=${() => setVideo({ mode: 'none' })}>Videoyu kaldır</${Button}>`}
       ${video.mode === 'none' && (gift?.video || gift?.job) && html`<${Button} kind="ghost" onClick=${() => setVideo({ mode: 'keep' })}>Vazgeç</${Button}>`}
