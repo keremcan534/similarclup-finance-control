@@ -147,6 +147,8 @@ textarea { font-family: ui-monospace, Consolas, monospace; font-size: 12px; }
 .note { padding: 8px 12px; border-radius: 8px; background: var(--info-bg); color: var(--info); font-size: 13px; margin-bottom: 12px; }
 .note.warn { background: var(--warn-bg); color: var(--warn); }
 .note.bad { background: var(--bad-bg); color: var(--bad); }
+/* Uygulama › Destek: the support side of a ticket's thread. */
+.card.support-line { border-left: 3px solid var(--info); }
 pre, code { font-family: ui-monospace, Consolas, monospace; font-size: 12px; }
 pre { background: var(--surface-2); border: 1px solid var(--border); border-radius: 8px; padding: 10px; overflow-x: auto; white-space: pre-wrap; word-break: break-word; }
 dl.kv { display: grid; grid-template-columns: max-content 1fr; gap: 4px 16px; margin: 0; }

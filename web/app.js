@@ -13,6 +13,7 @@ import { Alerts } from './pages/alerts.js';
 import { Integrations, Users, Audit, Settings, Account } from './pages/admin.js';
 import { AppGifts } from './pages/app-gifts.js';
 import { AppLucky, AppPayouts, AppRefunds, AppReports, AppSettings, AppWithdrawals } from './pages/app-finance.js';
+import { AppComplaints, AppEvents, AppNotices, AppSupport, AppUsers } from './pages/app-ops.js';
 
 const NAV = [
   ['Genel', [
@@ -51,6 +52,11 @@ const NAV = [
     ['app-lucky', 'Şanslı hediye ayarı', 'app.lucky', AppLucky],
     ['app-settings', 'Canlı ayarlar', 'app.settings', AppSettings],
     ['app-reports', 'Oyun Salonu ve durum', 'app.reports', AppReports],
+    ['app-users', 'Kullanıcılar', 'app.users', AppUsers],
+    ['app-complaints', 'Şikâyetler', 'app.complaints', AppComplaints],
+    ['app-support', 'Destek', 'app.support', AppSupport],
+    ['app-notices', 'Duyurular', 'app.notices', AppNotices],
+    ['app-events', 'Etkinlikler', 'app.events', AppEvents],
   ]],
   ['Yönetim', [
     ['integrations', 'Entegrasyonlar', 'integrations.manage', Integrations],

@@ -253,22 +253,82 @@ test('para sayfaları: her biri kendi yetkisiyle; operasyon yöneticisi yalnız 
   assert.equal((await call('POST', '/api/app/live-settings', { ...preview, dryRun: false, confirm: true }, fin)).status, 200);
   assert.equal(rows(), had + 1);
   // Only the listed routes: anything else of the app's is not reachable from here.
-  assert.equal((await call('GET', '/api/app/users', undefined, fin)).status, 404);
+  assert.equal((await call('GET', '/api/app/sanctions/pending', undefined, fin)).status, 404);
   assert.equal((await call('POST', '/api/app/withdrawals/decide', { id: 3, approve: true }, ro)).status, 403);
+});
+
+test('operasyon sayfaları: operasyon yöneticisi evet, finans yöneticisi ve salt okunur hayır; duyuru görseli yüklenir', async () => {
+  env.as('finance_manager', 'fin@test.local');
+  env.as('operations_manager', 'ops@test.local');
+  env.as('read_only', 'ro@test.local');
+  const fin = await loginAs('fin@test.local');
+  const ops = await loginAs('ops@test.local');
+  const ro = await loginAs('ro@test.local');
+  const reads = [
+    '/api/app/users?q=Ay%C5%9Fe&offset=50',
+    '/api/app/reports?status=open',
+    '/api/app/rooms/background?room=r1',
+    '/api/app/support?status=waiting',
+    '/api/app/support/ticket?id=12',
+    '/api/app/team',
+    '/api/app/events?status=review&q=gala',
+    '/api/app/events/categories',
+    '/api/app/events/report?days=30',
+  ];
+  for (const p of reads) {
+    const r = await call('GET', p, undefined, ops);
+    assert.equal(r.status, 200, `${p}: ${JSON.stringify(r.json)}`);
+    assert.equal(r.json.path, `/api/admin${p.slice('/api/app'.length)}`);
+    assert.equal((await call('GET', p, undefined, fin)).status, 403, `fin ${p}`);
+    assert.equal((await call('GET', p, undefined, ro)).status, 403, `ro ${p}`);
+  }
+  for (const [p, body] of [
+    ['/api/app/ban', { user: 'u1', days: 7, reason: 'spam' }],
+    ['/api/app/users/room-level', { id: 'u1', level: 15 }],
+    ['/api/app/users/delete', { id: 'u1' }],
+    ['/api/app/referrals/revoke', { invitee: 'u1', reason: 'Sahte hesap' }],
+    ['/api/app/reports/handle', { id: 4, status: 'actioned', banDays: 3 }],
+    ['/api/app/rooms/cover/remove', { room: 'r1', reason: 'Kural ihlali' }],
+    ['/api/app/support/reply', { id: '12', text: 'Merhaba, inceledik.', close: true }],
+    ['/api/app/support/status', { id: '12', status: 'open' }],
+    ['/api/app/team', { kind: 'update', title: 'Bakım', body: 'Gece 03.00' }],
+    ['/api/app/team/remove', { id: '9' }],
+    ['/api/app/events/review', { id: 5, approve: false, reason: 'Saat uygun değil' }],
+    ['/api/app/events/remove', { id: 5, reason: 'Kural ihlali' }],
+    ['/api/app/events/categories', { name: 'Gala', icon: 'sparkles', theme: 'sade', sort: 0, active: true }],
+    ['/api/app/events/categories/remove', { id: 'gala' }],
+  ] as const) {
+    assert.equal((await call('POST', p, body, fin)).status, 403, `fin ${p}`);
+    const r = await call('POST', p, body, ops);
+    assert.equal(r.status, 200, `${p}: ${JSON.stringify(r.json)}`);
+    assert.deepEqual(JSON.parse(seen.at(-1)!.body), body);
+    assert.equal(seen.at(-1)!.user.email, 'ops@test.local');
+    const action = `app${p.slice('/api/app'.length).replace(/\//g, '.')}`;
+    assert.ok(env.db.get('SELECT 1 FROM audit_logs WHERE action = ? ORDER BY id DESC LIMIT 1', action), action);
+  }
+  // A notice's picture: the operations manager uploads it; the finance manager may not.
+  const up = (h: Record<string, string>) => fetch(`${base}/api/app/upload?kind=notice`, { method: 'POST', headers: { ...h, 'content-type': 'image/png' }, body: ICON });
+  const u = await up(ops);
+  assert.equal(u.status, 200);
+  assert.equal(((await u.json()) as any).url, `${appBase}/api/media/f/notice/u1/new`);
+  assert.deepEqual(stored.get('notice-1')?.body, ICON);
+  assert.equal((await up(fin)).status, 403);
+  // The app's pictures (a ticket's photo, a reported room's) open for the operations manager too.
+  assert.equal((await fetch(`${base}/api/app/media/f/ticket/u1/x.png`, { headers: ops })).status, 200);
 });
 
 test('daha önce kurulmuş rollere yeni yetki bir kez eklenir', () => {
   const { db } = setup();
   const ADDED: Record<string, string[]> = {
     finance_manager: ['app.gifts', 'app.withdrawals', 'app.payouts', 'app.refunds', 'app.lucky', 'app.settings', 'app.reports'],
-    operations_manager: ['app.gifts', 'app.reports'],
+    operations_manager: ['app.gifts', 'app.reports', 'app.users', 'app.complaints', 'app.support', 'app.notices', 'app.events'],
   };
-  // A database made before 002 and 003: the roles without the app permissions.
+  // A database made before 002, 003 and 004: the roles without the app permissions.
   for (const [key, list] of Object.entries(ADDED)) {
     const perms: string[] = JSON.parse(db.value<string>('SELECT permissions FROM roles WHERE key = ?', key)!);
     db.run('UPDATE roles SET permissions = ? WHERE key = ?', JSON.stringify(perms.filter((p) => !list.includes(p))), key);
   }
-  db.run("DELETE FROM schema_migrations WHERE name IN ('002_app_permissions.sql', '003_app_finance_permissions.sql')");
+  db.run("DELETE FROM schema_migrations WHERE name IN ('002_app_permissions.sql', '003_app_finance_permissions.sql', '004_app_operations_permissions.sql')");
   db.migrate();
   db.migrate();
   for (const [key, list] of Object.entries(ADDED)) {
@@ -281,4 +341,6 @@ test('daha önce kurulmuş rollere yeni yetki bir kez eklenir', () => {
   assert.ok(!ro.some((p) => p.startsWith('app.')));
   const ops: string[] = JSON.parse(db.value<string>("SELECT permissions FROM roles WHERE key = 'operations_manager'")!);
   assert.ok(!ops.includes('app.withdrawals') && !ops.includes('app.settings'));
+  const fin: string[] = JSON.parse(db.value<string>("SELECT permissions FROM roles WHERE key = 'finance_manager'")!);
+  assert.ok(!fin.includes('app.users') && !fin.includes('app.support'));
 });

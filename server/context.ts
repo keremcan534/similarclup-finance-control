@@ -42,6 +42,11 @@ export const PERMISSIONS = {
   'app.lucky': 'Uygulama: Şanslı hediye paketleri, olasılıklar ve limit',
   'app.settings': 'Uygulama: Canlı ayarlar (kur, kampanya, paketler, fiyatlar, acil durum)',
   'app.reports': 'Uygulama: Oyun Salonu raporu ve sunucu durumu',
+  'app.users': 'Uygulama: kullanıcı arama, askıya alma, oda seviyesi, hesap silme (kritik)',
+  'app.complaints': 'Uygulama: şikâyetler ve şikâyet edilen odanın görselleri',
+  'app.support': 'Uygulama: destek talepleri, yanıt ve durum',
+  'app.notices': 'Uygulama: Similar Ekibi duyuruları ve bannerları',
+  'app.events': 'Uygulama: etkinlik başvuruları, türleri ve raporu',
 } as const;
 export type Permission = keyof typeof PERMISSIONS;
 export const ALL_PERMISSIONS = Object.keys(PERMISSIONS) as Permission[];
