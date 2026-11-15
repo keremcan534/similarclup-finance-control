@@ -11,6 +11,7 @@ import { Reports } from './pages/reports.js';
 import { Simulation } from './pages/simulation.js';
 import { Alerts } from './pages/alerts.js';
 import { Integrations, Users, Audit, Settings, Account } from './pages/admin.js';
+import { AppGifts } from './pages/app-gifts.js';
 
 const NAV = [
   ['Genel', [
@@ -39,6 +40,10 @@ const NAV = [
     ['reports', 'Raporlar', 'reports.view', Reports],
     ['cash', 'Nakit ve bütçe', 'reports.view', Cash],
     ['simulation', 'Büyüme simülasyonu', 'simulation.use', Simulation],
+  ]],
+  // The Similar Club app itself, through its admin API (server/app-admin.ts).
+  ['Uygulama', [
+    ['app-gifts', 'Hediyeler', 'app.gifts', AppGifts],
   ]],
   ['Yönetim', [
     ['integrations', 'Entegrasyonlar', 'integrations.manage', Integrations],

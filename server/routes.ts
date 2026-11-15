@@ -3,6 +3,7 @@ import { join } from 'node:path';
 
 import { hashPassword, login, logout, newApiKey, newTotpSecret, verifyTotp } from './auth.ts';
 import { ALL_PERMISSIONS, PERMISSIONS, agencyScope, assertAgencyAccess, audit, can, currency, need, setting, today, verifyAuditChain, type Ctx } from './context.ts';
+import { appRoutes, type AppLink } from './app-admin.ts';
 import { createRow, updateRow, type Resource } from './lib/crud.ts';
 import { parseCsv, toCsv } from './lib/csv.ts';
 import { FUNCTIONS, validateFormula } from './lib/formula.ts';
@@ -18,7 +19,7 @@ import { agencyContribution, catalogReport, dailySeries, drill, summary, unitEco
 import { PRESET_USERS, SIM_INPUTS, runSimulation } from './domain/simulation.ts';
 import { addAdjustment, approveStatement, calculateAll, calculateStatement, cancelStatement, partyFinance, recordPayout, setDispute, type PartyType } from './domain/statements.ts';
 
-export type AppConfig = { dataDir: string; dbPath: string; cookieSecure: boolean; noLogin?: boolean };
+export type AppConfig = { dataDir: string; dbPath: string; cookieSecure: boolean; noLogin?: boolean; appLink?: AppLink };
 
 const monthStartOf = (d: string) => d.slice(0, 7) + '-01';
 function range(req: Req, ctx: Ctx) {
@@ -260,6 +261,8 @@ export function buildRouter(cfg: AppConfig) {
   // ---- meta ----------------------------------------------------------------------------
   r.get('/api/meta', (_req, ctx) => ({
     no_login: !!cfg.noLogin,
+    // Whether the Uygulama pages can reach the app's API (server/app-admin.ts).
+    app_link: !!cfg.appLink,
     permissions: PERMISSIONS,
     currencies: ctx.db.all('SELECT * FROM currencies ORDER BY kind, code'),
     reporting_currency: setting(ctx.db, 'reporting_currency'),
@@ -1383,6 +1386,9 @@ export function buildRouter(cfg: AppConfig) {
     audit(ctx, 'admin.backup', 'database', null, null, { file });
     return { file };
   });
+
+  // ---- Uygulama: the app's own admin API through this panel (server/app-admin.ts) ------------
+  appRoutes(r, cfg.appLink ?? null);
 
   return r;
 }

@@ -57,6 +57,7 @@ npm run restore -- data/backups/finance-....db   # sunucu durdurulmuşken
 | Kullanıcılar ve roller | 5 hazır rol ve yeni rol tanımlama. Yetkiler tek tek seçilebilir; ajans kapsamlı roller yalnız kendi ajansını görür. |
 | Denetim kaydı | Tüm kritik değişiklikler önce/sonra değerleriyle tutulur. Kayıtlar hash zinciriyle bağlıdır ve zincir doğrulanabilir. |
 | Ayarlar | Raporlama para birimi, çift onay, döviz kurları, jeton/elmas değerleri, vergi parametreleri, finansal dönem kapatma ve yedek alma. |
+| Uygulama › Hediyeler | Similar Club uygulamasının hediyeleri: ekleme, düzenleme (ad, fiyat, raf, VIP, emoji), raftan kaldırma, silme, sıralama; ikon, hazır saydam video, WebM/MOV ya da SVGA yükleme (uygulamanın sunucusu çevirir) ve önizleme. Uygulama güncellemesi olmadan herkesin hediye panelinde görünür. Ayrıntı: [Similar Club'ı yönetme](#similar-clubı-yönetme). |
 
 ## Similar Club'tan veri alma
 
@@ -95,6 +96,30 @@ Content-Type: application/json
 - **Bilinmeyen yayıncı id'si** "Eşleşmemiş" yayıncı olarak açılır ve uyarı üretir.
 - **Kapalı döneme ait gecikmiş olaylar** ilk açık güne kaydedilir. Geçmiş dönem sonuçları değişmez.
 - **Lucky sonucunu bu platform çeksin isterseniz:** `POST /api/ingest/lucky/draw` kullanın. Çekiliş CSPRNG ile yapılır, limitler uygulanır ve sonuç kaydedilir.
+
+## Similar Club'ı yönetme
+
+**Uygulama** bölümündeki sayfalar Similar Club'ın kendi yönetim API'sini bu panelden kullanır (`server/app-admin.ts`).
+Tarayıcı yalnız bu sunucuyla konuşur; bu sunucu uygulamanın API'sini **aynı makinede** bir anahtarla çağırır ve
+isteği yapan panel kullanıcısını (`id`, e-posta, ad, rol) bildirir. Uygulama her işlemi kendi denetim kaydına bu
+kişinin adıyla yazar; panel de kendi denetim kaydına yazar.
+
+| Ayar | Anlamı |
+| --- | --- |
+| `FC_APP_API_URL` | Uygulamanın API'si (sunucuda `http://127.0.0.1:7890`). Boşsa Uygulama sayfaları "bağlantı ayarlı değil" der. |
+| `FC_APP_API_KEY` | Uygulamanın `PANEL_API_KEY`'i (en az 32 karakter). Yalnız sunucuda durur; tarayıcıya hiç gitmez. |
+
+Sunucuda ikisi de kurulumla gelir (`cix` deposu: `server/infra/compose.yaml`, `.github/workflows/server.yml`).
+Uygulama da anahtarı yalnız kendi makinesinden gelen ve kendi listesindeki uçlar için kabul eder.
+
+Hangi panel kullanıcısının hangi sayfayı kullanacağını bu panelin rolleri belirler:
+
+| Yetki | Sayfa | Hazır rollerde |
+| --- | --- | --- |
+| `app.gifts` | Uygulama › Hediyeler | Süper yönetici, finans yöneticisi, operasyon yöneticisi |
+
+Dosyalar (ikon, video, SVGA) tarayıcıdan bu sunucu üzerinden uygulamanın deposuna akar (en çok 100 MB). Depodaki
+dosyalar da önizleme için bu sunucudan okunur (`/api/app/media/f/…`, `/api/app/fx/…`).
 
 ## Mimari
 
