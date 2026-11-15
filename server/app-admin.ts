@@ -237,7 +237,8 @@ export function appRoutes(r: Router<Ctx>, link: AppLink) {
   // same file through this server.
   r.add('POST', '/api/app/gifts/fetch', async (req, ctx) => {
     need(ctx, 'app.gifts');
-    const out = await appCall(ctx, link, 'POST', '/api/admin/gifts/fetch', req.body, { raw: true, timeoutMs: 330_000 });
+    // The app's server gives a video's link up to 10 minutes (a source up to 500 MB from the client's site).
+    const out = await appCall(ctx, link, 'POST', '/api/admin/gifts/fetch', req.body, { raw: true, timeoutMs: 630_000 });
     audit(ctx, 'app.gifts.fetch', 'app', null, null, { method: 'POST', path: '/api/admin/gifts/fetch', body: req.body });
     return { ...out, preview: localFiles(out.url) };
   });
@@ -290,7 +291,8 @@ export async function appUpload(req: IncomingMessage, ctx: Ctx, link: AppLink, u
       headers: { ...target.headers, 'content-length': String(size) },
       body: Readable.toWeb(req) as ReadableStream,
       duplex: 'half',
-      signal: AbortSignal.timeout(10 * 60_000),
+      // A video source up to 500 MB from a home connection: half an hour.
+      signal: AbortSignal.timeout(30 * 60_000),
     } as RequestInit);
   } catch {
     throw new HttpError(502, 'Dosya depoya yüklenemedi, tekrar deneyin', 'storage');

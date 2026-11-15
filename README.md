@@ -167,7 +167,7 @@ Uygulamada kalanlar: **Yaptırımlar** (kanıt, onay, itiraz, cihaz engeli, pers
 merkezinin **personel rolleri ve yetkileri**, BD atama, operasyon puanı, ihlal ve itirazlar, arka plan işleri,
 Yönetim'in **Özet** sekmesi ve odanın içinden yapılan işler.
 
-Dosyalar (ikon, video, SVGA) tarayıcıdan bu sunucu üzerinden uygulamanın deposuna akar (en çok 100 MB). Depodaki
+Dosyalar (ikon, video, SVGA) tarayıcıdan bu sunucu üzerinden uygulamanın deposuna akar, hiçbir yerde bütün tutulmaz (video kaynağı en çok 500 MB, SVGA 100 MB). Depodaki
 dosyalar da önizleme için bu sunucudan okunur (`/api/app/media/f/…`, `/api/app/fx/…`).
 
 ## Mimari
