@@ -36,6 +36,12 @@ export const PERMISSIONS = {
   'simulation.use': 'Büyüme simülasyonu',
   // Uygulama: the Similar Club app's own admin API, through this panel (server/app-admin.ts).
   'app.gifts': 'Uygulama: hediyeleri ekle, düzenle, sırala, kaldır',
+  'app.withdrawals': 'Uygulama: para çekme taleplerini ödendi işaretle / reddet (kritik)',
+  'app.payouts': 'Uygulama: ajans ödemelerini onayla, ödendi işaretle, reddet (kritik)',
+  'app.refunds': 'Uygulama: mağaza iadesi ve cüzdan denetimi',
+  'app.lucky': 'Uygulama: Şanslı hediye paketleri, olasılıklar ve limit',
+  'app.settings': 'Uygulama: Canlı ayarlar (kur, kampanya, paketler, fiyatlar, acil durum)',
+  'app.reports': 'Uygulama: Oyun Salonu raporu ve sunucu durumu',
 } as const;
 export type Permission = keyof typeof PERMISSIONS;
 export const ALL_PERMISSIONS = Object.keys(PERMISSIONS) as Permission[];
