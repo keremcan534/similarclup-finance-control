@@ -3,7 +3,7 @@
 // app's own packs and stickers change (a pack's name, price, VIP level, on/off and order; a sticker's name, emoji, pack,
 // picture, on/off and order) and go back to the app's values ("Orijinale dön"); the team adds packs and stickers of its
 // own, with a transparent PNG/WebP or a Lottie animation as the picture. Each pack is a card with its stickers.
-import { Badge, Button, Card, Loading, Modal, Page, act, html, num, post, showError, toast, useApi, useApp, useState } from '../lib.js';
+import { Badge, Button, Card, Loading, Modal, Page, act, html, num, post, searchable, showError, toast, useApi, useApp, useState } from '../lib.js';
 
 const kb = (n) => `${Math.max(1, Math.round(n / 1024))} KB`;
 const ending = (name) => (/\.([A-Za-z0-9]{1,8})$/.exec(name ?? '')?.[1] ?? '').toLowerCase();
@@ -50,6 +50,7 @@ export function AppEmojis() {
   const [open, setOpen] = useState(() => new Set());
   const [packEdit, setPackEdit] = useState(null);
   const [stickerEdit, setStickerEdit] = useState(null);
+  const [q, setQ] = useState('');
 
   if (!meta.app_link)
     return html`<${Page} title="Uygulama emojileri"><div class="empty bad">Uygulama bağlantısı ayarlı değil: sunucuda FC_APP_API_URL ve FC_APP_API_KEY gerekli.</div></${Page}>`;
@@ -88,13 +89,27 @@ export function AppEmojis() {
 
   return html`<${Page}
     title="Uygulama emojileri"
-    subtitle="Emoji panelinin çıkartma paketleri. Uygulamanın kendi paketlerinin adı, fiyatı, VIP'i, sırası ve çıkartmalarının adı, emojisi, resmi ve paketi buradan değişir, istenince orijinaline döner; yeni paket ve çıkartma da eklenir. Değişiklik uygulama güncellemesi olmadan bu sürümden sonraki APK'lara gider. Her işlem hem burada hem uygulamada denetim kaydına adınızla yazılır."
+    subtitle="Emoji panelinin çıkartma paketleri: değişiklikler uygulama güncellemesi olmadan telefonlara gider, uygulamanın kendi paketleri Orijinale dön ile geri alınır."
     actions=${edit && html`<${Button} kind="primary" onClick=${() => setPackEdit({})}>Yeni paket</${Button}>`}
   >
     <${Loading} state=${list}>${(d) => html`
       ${!d.storage && html`<div class="empty bad">Uygulamanın dosya deposu açık değil: çıkartma resmi yüklenemez, yeni çıkartma eklenemez.</div>`}
+      <div class="row gap wrap" style="margin-bottom:10px">
+        <input type="search" class="list-search" style="margin-left:0" placeholder="Paket ya da çıkartma ara: ad, emoji ya da kimlik" aria-label="Emoji ara" value=${q} onInput=${(e) => setQ(e.target.value)} />
+      </div>
+      ${(() => {
+        const w = searchable(q.trim());
+        const hit = (...t) => t.some((x) => x && searchable(x).includes(w));
+        const rows = d.packs.map((p, i) => ({ p, i, match: !w || hit(p.name, p.id, p.original?.name) ? p.stickers : p.stickers.filter((s) => hit(s.name, s.emoji, s.id)) })).filter((x) => !w || x.match.length || hit(x.p.name, x.p.id));
+        return rows.length ? '' : html`<div class="empty">“${q}” için paket ya da çıkartma yok.</div>`;
+      })()}
       ${d.packs.map((p, i) => {
-        const shown = open.has(p.id) ? p.stickers : p.stickers.slice(0, PEEK);
+        const w = searchable(q.trim());
+        const hit = (...t) => t.some((x) => x && searchable(x).includes(w));
+        const packHit = !w || hit(p.name, p.id, p.original?.name);
+        const matching = packHit ? p.stickers : p.stickers.filter((s) => hit(s.name, s.emoji, s.id));
+        if (w && !packHit && !matching.length) return '';
+        const shown = w ? matching : open.has(p.id) ? p.stickers : p.stickers.slice(0, PEEK);
         return html`<${Card}
           key=${p.id}
           title=${html`<span>${p.name}</span> ${p.builtin ? html`<${Badge} s="info" label="Uygulamanın" />` : html`<${Badge} s="active" label="Eklenen" />`}
@@ -123,14 +138,14 @@ export function AppEmojis() {
                   ${s.changed?.length > 0 && html`<${Badge} s="warning" label=${listOf(s.changed, STICKER_TR)} />`}
                   ${!s.builtin && html`<${Badge} s="active" label="Eklenen" />`}
                 </span>
-                ${edit && open.has(p.id) && html`<span class="row gap">
+                ${edit && open.has(p.id) && !w && html`<span class="row gap">
                   <button class="btn ghost" aria-label="Öne al" disabled=${k === 0} onClick=${() => moveSticker(p, s, -1)}>←</button>
                   <button class="btn ghost" aria-label="Arkaya al" disabled=${k === p.stickers.length - 1} onClick=${() => moveSticker(p, s, 1)}>→</button>
                 </span>`}
               </div>`,
             )}
           </div>
-          ${p.stickers.length > PEEK || (edit && p.stickers.length > 1)
+          ${!w && (p.stickers.length > PEEK || (edit && p.stickers.length > 1))
             ? html`<${Button} kind="ghost" onClick=${() => fold(p.id)}>${open.has(p.id) ? 'Kapat' : p.stickers.length > PEEK ? `Hepsini göster (${p.stickers.length})` : 'Sırala'}</${Button}>`
             : ''}
         </${Card}>`;

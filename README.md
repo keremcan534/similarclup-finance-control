@@ -41,6 +41,8 @@ npm run restore -- data/backups/finance-....db   # sunucu durdurulmuşken
 
 ## Ekranlar
 
+Menü konulara göre gruplu: Ana sayfa, Kullanıcılar ve güvenlik, Hediye ve mağaza, Duyuru ve etkinlik, Ajanslar, Para, Rapor ve maliyet, Ayarlar. Başlıklar açılıp kapanır (bu bilgisayarda hatırlanır), açık sayfanın konusu hep açıktır. En üstteki arama kutusu (Ctrl+K ya da /) her sayfayı adıyla ve ilgili kelimelerle bulur (ör. "ban" → Yaptırımlar, "sikayet" → Şikâyetler); Enter ilk sonucu açar.
+
 | Bölüm | Ne yapar |
 | --- | --- |
 | Ana panel | 14 gösterge kartı vardır: brüt satış, tahsilat, net gelir, ödenen ve tahakkuk eden gider, bekleyen ajans/BD/yayıncı hakedişleri, servis gideri, işletme sonucu, nakit, yükümlülük ve ay sonu tahmini.<br>Her kart, hesaplandığı kayıtlara tıklanarak açılır. Panelde ayrıca günlük seri, gider dağılımı, veri kalitesi paneli ve canlı göstergeler bulunur. Bağlı olmayan kaynaklar boş bırakılır. |
@@ -51,16 +53,16 @@ npm run restore -- data/backups/finance-....db   # sunucu durdurulmuşken
 | Hakedişler | Dönem hesaplama → onay (hesaplayan kişi onaylayamaz) → ödeme kaydı. İtiraz, iptal, düzeltme/bonus/kesinti kayıtları ve devreden negatif bakiye de buradan yönetilir. |
 | Sunucu ve servisler | Sağlayıcı, tarife (sabit ücret, kota, birim fiyat, kademe, vergi), kullanım kaydı, fatura ve mutabakat. Kullanımı olmayan servis "veri yok" görünür, 0 sayılmaz. |
 | Oyun, hediye, PK | Lisans, üretim, aylık ve kullanım başı maliyetler ayrı izlenir. PK ödül maliyeti ve kalem bazında kârlılık gösterilir. |
-| Lucky Gift | Sürümlü olasılık tablosu (toplam tam 1 olmalı), maksimum ödül, günlük, kişi başı ve bütçe limitleri.<br>Teorik ve gerçekleşen geri ödeme, çarpan dağılımı, sapma (z) değerleri ve rezerv uyarısı. Her sonuç rastgele değeri ve tablo sürümüyle saklanır. |
+| Şanslı hediye maliyeti (Lucky Gift) | Sürümlü olasılık tablosu (toplam tam 1 olmalı), maksimum ödül, günlük, kişi başı ve bütçe limitleri.<br>Teorik ve gerçekleşen geri ödeme, çarpan dağılımı, sapma (z) değerleri ve rezerv uyarısı. Her sonuç rastgele değeri ve tablo sürümüyle saklanır. |
 | Genel giderler | Kategori, tedarikçi, sabit/değişken, vergi, tahakkuk ve vade bilgisiyle girilir. Tekrarlanan giderler (aylık, yıllık, N günde bir) desteklenir; ödeme ve iptal de buradadır. |
 | Raporlar | Gelir tablosu, nakit akışı, ajans katkısı, BD ve yayıncı raporları, birim ekonomi (kullanıcı başı, ARPPU, saatlik ses/video maliyeti), oyun ve hediye raporları. Raporlar CSV olarak indirilebilir. |
 | Nakit ve bütçe | Banka hesapları, bakiye girişleri, bütçe ve kâr hedefleri. |
 | Büyüme simülasyonu | 100, 500, 1.000, 5.000 ve 10.000 kullanıcılık senaryolar ile özel senaryo. Gelir, gider, net sonuç, nakit ihtiyacı, başa baş gelir ve oranı ile marjinal maliyet hesaplanır. Sonuçlar tahmin olarak işaretlenir. |
 | Uyarılar | 16 eşik türü vardır; önem derecesi, ilgili kayıt ve önerilen aksiyonla gösterilir. Kontroller saatte bir ve elle çalıştırılabilir. |
 | Entegrasyonlar | API anahtarı üretme ve yenileme (anahtar yalnız bir kez gösterilir), içe aktarma geçmişi ve satır bazında hatalar. |
-| Kullanıcılar ve roller | 6 hazır rol (Moderatör dahil) ve yeni rol tanımlama. Yetkiler tek tek seçilebilir; ajans kapsamlı roller yalnız kendi ajansını görür. |
+| Panel kullanıcıları ve rolleri | 6 hazır rol (Moderatör dahil) ve yeni rol tanımlama. Yetkiler tek tek seçilebilir; ajans kapsamlı roller yalnız kendi ajansını görür. |
 | Denetim kaydı | Tüm kritik değişiklikler önce/sonra değerleriyle tutulur. Kayıtlar hash zinciriyle bağlıdır ve zincir doğrulanabilir. |
-| Ayarlar | Raporlama para birimi, çift onay, döviz kurları, jeton/elmas değerleri, vergi parametreleri, finansal dönem kapatma ve yedek alma. |
+| Panel ayarları | Raporlama para birimi, çift onay, döviz kurları, jeton/elmas değerleri, vergi parametreleri, finansal dönem kapatma ve yedek alma. |
 | Uygulama › Hediyeler | Similar Club uygulamasının hediyeleri: ekleme, düzenleme (ad, fiyat, raf, VIP, emoji), raftan kaldırma, silme, sıralama; uygulamanın kendi hediyelerinin de her alanını değiştirme ve **Orijinale dön**; ikon, hazır saydam video, WebM/MOV ya da SVGA yükleme (uygulamanın sunucusu çevirir) ya da her dosya için kendi sitenizdeki bağlantıyı yapıştırma (uygulamanın sunucusu bir kez indirir, aynı denetimden geçirir; "Bağlantıdan yeniden çek" ile yenilenir) ve önizleme. Uygulama güncellemesi olmadan herkesin hediye panelinde görünür. Ayrıntı: [Similar Club'ı yönetme](#similar-clubı-yönetme). |
 | Uygulama › Emojiler | Emoji panelinin çıkartma paketleri: uygulamanın kendi paketleri (ad, fiyat, VIP, açık/kapalı, sıra) ve çıkartmaları (ad, emoji, resim, paket, açık/kapalı, sıra) değişir ve orijinaline döner; yeni paket ve çıkartma eklenir (saydam PNG/WebP ya da Lottie animasyonu, bilgisayardan ya da bağlantıdan). Uygulama güncellemesi olmadan telefonlara gider. |
 | Uygulama › Para çekme | Yayıncıların elmas → para talepleri: hesap bilgisi, tutar; bankadan gönderildikten sonra "Ödendi" işareti ya da nedenli ret (elmaslar geri döner). Para bu panelden gönderilmez. |
