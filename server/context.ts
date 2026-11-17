@@ -37,6 +37,7 @@ export const PERMISSIONS = {
   // Uygulama: the Similar Club app's own admin API, through this panel (server/app-admin.ts).
   'app.gifts': 'Uygulama: hediyeleri (uygulamanın kendi hediyeleri de) ekle, düzenle, sırala, kaldır, orijinaline döndür',
   'app.emojis': 'Uygulama: emoji paketleri ve çıkartmaları (uygulamanınkiler de) ekle, düzenle, sırala, kaldır, orijinaline döndür',
+  'app.shop': 'Uygulama: mağazanın çerçeveleri ve giriş efektleri (uygulamanınkiler de): ekle, resim ve video yükle, isim plakası, fiyat, gün, VIP, sıra, kaldır',
   'app.levels': 'Uygulama: VIP, Rütbe, Cömertlik, Yankı ve Abonelik ayarları (eşikler, adlar, Rütbe fiyatı, haklar, seviye düşmesi; kritik)',
   'app.withdrawals': 'Uygulama: para çekme taleplerini ödendi işaretle / reddet (kritik)',
   'app.payouts': 'Uygulama: ajans ödemelerini onayla, ödendi işaretle, reddet (kritik)',

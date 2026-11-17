@@ -48,6 +48,14 @@ export const APP_ROUTES: [string, string, Permission | Permission[]][] = [
   ['POST', '/api/admin/emoji/stickers/reset', 'app.emojis'],
   ['POST', '/api/admin/emoji/stickers/delete', 'app.emojis'],
   ['POST', '/api/admin/emoji/stickers/order', 'app.emojis'],
+  // Mağaza (the app's shop-items.mjs): frames and entry effects, the app's own and the team's (uploads shopframe, and
+  // giftvideo / giftsource for an entry effect's video, as a gift's).
+  ['GET', '/api/admin/shop', 'app.shop'],
+  ['POST', '/api/admin/shop', 'app.shop'],
+  ['POST', '/api/admin/shop/update', 'app.shop'],
+  ['POST', '/api/admin/shop/reset', 'app.shop'],
+  ['POST', '/api/admin/shop/delete', 'app.shop'],
+  ['POST', '/api/admin/shop/order', 'app.shop'],
   // Seviyeler ve VIP (the app's levels-admin.mjs): every system's settings, the change preview, saving (a drop asks
   // for a confirm first), back to today's values, the level drops.
   ['GET', '/api/admin/levels', 'app.levels'],
@@ -182,11 +190,19 @@ export const APP_ROUTES: [string, string, Permission | Permission[]][] = [
 const COMPUTE_ONLY = new Set(['/api/admin/agency/simulate', '/api/admin/levels/preview']);
 export const localPath = (appPath: string) => `/api/app${appPath.slice('/api/admin'.length)}`;
 /** Upload kinds and the permission each needs (the app's media.mjs kinds). */
-const UPLOADS: Record<string, Permission> = { gifticon: 'app.gifts', giftvideo: 'app.gifts', giftsource: 'app.gifts', stickerart: 'app.emojis', notice: 'app.notices' };
+const UPLOADS: Record<string, Permission[]> = {
+  gifticon: ['app.gifts'],
+  // A gift's video, and a shop entry effect's (the app's converter makes both).
+  giftvideo: ['app.gifts', 'app.shop'],
+  giftsource: ['app.gifts', 'app.shop'],
+  stickerart: ['app.emojis'],
+  shopframe: ['app.shop'],
+  notice: ['app.notices'],
+};
 /** The permissions that may open the app's stored files through here (every page that shows them). */
 // The app serves these files to anyone with the address (media.mjs GET /api/media/f/…); the panel still asks for a
 // page that shows them: gift art, a reported post's or room's picture, a ticket's photo, a notice's or event's picture.
-const FILE_PERMS: Permission[] = ['app.gifts', 'app.emojis', 'app.complaints', 'app.support', 'app.notices', 'app.events'];
+const FILE_PERMS: Permission[] = ['app.gifts', 'app.emojis', 'app.shop', 'app.complaints', 'app.support', 'app.notices', 'app.events'];
 
 const off = () => new HttpError(503, 'Uygulama bağlantısı ayarlı değil: sunucuda FC_APP_API_URL ve FC_APP_API_KEY gerekli', 'app_off');
 
@@ -282,9 +298,9 @@ export function appRoutes(r: Router<Ctx>, link: AppLink) {
  */
 export async function appUpload(req: IncomingMessage, ctx: Ctx, link: AppLink, url: URL) {
   const kind = url.searchParams.get('kind') ?? '';
-  const perm = Object.hasOwn(UPLOADS, kind) ? UPLOADS[kind] : null;
-  if (!perm) throw bad('Geçersiz yükleme türü');
-  need(ctx, perm);
+  const perms = Object.hasOwn(UPLOADS, kind) ? UPLOADS[kind] : null;
+  if (!perms) throw bad('Geçersiz yükleme türü');
+  if (!perms.some((p) => can(ctx, p))) need(ctx, perms[0]);
   if (!link) throw off();
   const type = String(req.headers['content-type'] ?? '').split(';')[0].trim().toLowerCase();
   const size = Number(req.headers['content-length']);
