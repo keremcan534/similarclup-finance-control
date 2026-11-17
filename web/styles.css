@@ -258,6 +258,13 @@ table.levels td { vertical-align: middle; }
 .plate-controls { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 10px; width: 270px; }
 .plate-controls input[type='range'] { flex: 1 1 100%; margin: 0; }
 .shop-icon { width: 48px; height: 48px; flex: none; object-fit: contain; border-radius: 8px; background: #0c1628; }
+/* Toplu çerçeve ekle: a card per frame of the designer's set. */
+.bulk-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(170px, 1fr)); gap: 10px; margin-top: 10px; }
+.bulk-card { display: grid; gap: 6px; justify-items: stretch; padding: 10px; border: 1px solid var(--border); border-radius: var(--radius); background: var(--surface-2); }
+.bulk-card .frame-preview { justify-self: center; }
+.bulk-card.done { opacity: 0.6; }
+.bulk-card .bad { color: var(--bad); }
+.bulk-card .good { color: var(--ok); font-weight: 600; }
 .shop-icon.empty { display: grid; place-items: center; font-size: 22px; opacity: 0.5; }
 .frame-preview { position: relative; display: grid; place-items: center; flex: none; }
 .frame-preview .frame-photo { border-radius: 50%; display: grid; place-items: center; font-size: 26px; background: linear-gradient(135deg, #f9a8d4, #a78bfa); }

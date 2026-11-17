@@ -1,7 +1,9 @@
 // Uygulama › Mağaza: the Similar Club app's shop frames, entry effects, chat bubbles and voice waves (the app's
 // server/api/shop-items.mjs; server/app-admin.ts passes the calls on as the signed-in panel user). The app's own items
 // change (name, price, days, VIP level, on the shelf, order) and go back to the app's values; the team adds its own:
-//   - a frame: a transparent square PNG/WebP drawn around the photo, with how big the photo's hole is;
+//   - a frame: a transparent square PNG/WebP drawn around the photo, with how big the photo's hole is (measured from
+//     the picture's clear middle when one is picked), and a moving version (an animated WebP) the new app plays; a
+//     whole set at once ("Toplu çerçeve ekle": a designer's folder, each frame's still and moving file paired by name);
 //   - an entry effect: a video (a ready stacked MP4, or a transparent WebM, ProRes .mov or SVGA the app's server converts,
 //     as a gift's), its name plate: where the entering person's name is written over it (dragged on the preview, or
 //     the sliders), how wide it may be (a long name is drawn smaller), how big, which colour, and how it looks and when
@@ -12,7 +14,7 @@
 //     corners kept (how far in each corner goes is set here; the browser draws it the same way, border-image);
 //   - a voice wave: a style the app draws and its colours; the sparkle style's sparks may be a picture.
 // Phones read the shop from the server (a new APK); older APKs keep their compiled shop.
-import { Badge, Button, Card, Loading, Modal, Page, Tabs, act, html, num, post, searchable, useApi, useApp, useEffect, useRef, useState } from '../lib.js';
+import { Badge, Button, Card, Loading, Modal, Page, Tabs, act, html, num, post, searchable, toast, useApi, useApp, useEffect, useRef, useState } from '../lib.js';
 import { Stage, typeOf, upload, videoKindOf } from './app-gifts.js';
 
 const KINDS = [
@@ -237,11 +239,15 @@ function PlateStage({ src, plate, name, onPlate, limits }) {
   </div>`;
 }
 
-/** A frame over a sample photo, as a seat or a profile shows it: the photo fills the frame's hole. */
-function FramePreview({ src, hole, size = 120 }) {
+/**
+ * A frame over a sample photo, as a seat or a profile shows it: the photo fills the frame's hole, at the hole's centre
+ * (`at`, shares of the picture; the middle when there is none). The phone moves the picture instead; it looks the same.
+ */
+function FramePreview({ src, hole, at, size = 120 }) {
   const photo = Math.round(size * hole * 2);
+  const c = at ?? { x: 0.5, y: 0.5 };
   return html`<div class="frame-preview" style=${`width:${size}px;height:${size}px`}>
-    <div class="frame-photo" style=${`width:${photo}px;height:${photo}px`}>🙂</div>
+    <div class="frame-photo" style=${`position:absolute;width:${photo}px;height:${photo}px;left:${c.x * size - photo / 2}px;top:${c.y * size - photo / 2}px`}>🙂</div>
     ${src && html`<img src=${src} alt="" width=${size} height=${size} />`}
   </div>`;
 }
@@ -290,6 +296,7 @@ export function AppShop() {
   const [q, setQ] = useState('');
   const [edit, setEdit] = useState(null);
   const [play, setPlay] = useState(null);
+  const [bulk, setBulk] = useState(false);
   if (!meta.app_link)
     return html`<${Page} title="Mağaza"><div class="empty bad">Uygulama bağlantısı ayarlı değil: sunucuda FC_APP_API_URL ve FC_APP_API_KEY gerekli.</div></${Page}>`;
   const editing = can('app.shop');
@@ -319,7 +326,9 @@ export function AppShop() {
   return html`<${Page}
     title="Mağaza"
     subtitle="Giriş efektleri, çerçeveler, sohbet balonları ve ses dalgaları: uygulamanın kendileri ve sizin eklediğiniz. Değişiklikler sunucuda hemen geçerli; yeni APK'da telefonlar mağazayı buradan gösterir."
-    actions=${editing && html`<${Button} kind="primary" onClick=${() => setEdit({ kind })}>${NEW_LABEL[kind]}</${Button}>`}
+    actions=${editing &&
+    html`${kind === 'frame' && list.data?.limits?.motionPxMin && html`<${Button} onClick=${() => setBulk(true)}>Toplu çerçeve ekle</${Button}>`}
+      <${Button} kind="primary" onClick=${() => setEdit({ kind })}>${NEW_LABEL[kind]}</${Button}>`}
   >
     <${Loading} state=${list}>${(d) => {
       const w = searchable(q.trim());
@@ -339,11 +348,12 @@ export function AppShop() {
           title=${html`<span>${x.name}</span> ${x.builtin ? html`<${Badge} s="info" label="Uygulamanın" />` : html`<${Badge} s="active" label="Eklenen" />`}
             ${!x.enabled && html` <${Badge} s="passive" label="Satışta değil" />`}
             ${x.changed?.length > 0 && html` <${Badge} s="warning" label=${`Değiştirildi: ${x.changed.map((f) => FIELD_TR[f] ?? f).join(', ')}`} />`}
+            ${x.art?.motion && html` <${Badge} s="info" label="Hareketli" />`}
             ${x.job?.status === 'processing' && html` <${Badge} s="pending" label="Video çevriliyor…" />`}
             ${x.job?.status === 'failed' && html` <${Badge} s="error" label="Video çevrilemedi" />`}`}
         >
           <div class="row gap" style="align-items:flex-start">
-            ${x.kind === 'frame' && x.art ? html`<${FramePreview} src=${x.art.url} hole=${x.art.hole} size=${88} />` : ''}
+            ${x.kind === 'frame' && x.art ? html`<${FramePreview} src=${x.art.motion?.url ?? x.art.url} hole=${x.art.hole} at=${x.art.at} size=${88} />` : ''}
             ${x.kind === 'bubble' && (x.look || APP_LOOKS[x.id]) ? html`<div class="bubble-stage small"><${BubbleSample} look=${x.look ?? APP_LOOKS[x.id]} src=${x.art?.url} /></div>` : ''}
             ${x.kind === 'wave' && (x.look || APP_LOOKS[x.id]) ? html`<div class="bubble-stage small"><${WaveSample} look=${x.look ?? APP_LOOKS[x.id]} src=${x.art?.url} size=${48} /></div>` : ''}
             ${x.kind === 'entry' && x.icon ? html`<img class="shop-icon" src=${x.icon.url} alt="" title="Mağazadaki ikonu" />` : ''}
@@ -366,6 +376,7 @@ export function AppShop() {
         </${Card}>`)}</div>
         ${edit && html`<${Editor} item=${edit.id ? edit : null} kind=${edit.kind} limits=${d.limits} convert=${d.convert} svga=${d.svga} onClose=${() => setEdit(null)} onSaved=${() => (setEdit(null), done())} />`}
         ${play && html`<${Modal} title=${play.name} onClose=${() => setPlay(null)}><${PlateStage} src=${play.video.url} plate=${plateIn(play.plate ?? d.limits.plateDefault)} name=${SAMPLE} /></${Modal}>`}
+        ${bulk && html`<${BulkFrames} limits=${d.limits} taken=${d.items.filter((x) => x.kind === 'frame').flatMap((x) => [x.name, x.original?.name].filter(Boolean))} onClose=${() => setBulk(false)} onDone=${done} />`}
       `;
     }}</${Loading}>
   </${Page}>`;
@@ -377,6 +388,65 @@ async function sizeOf(src) {
   img.src = src;
   await img.decode();
   return { w: img.naturalWidth, h: img.naturalHeight };
+}
+/** A picked WebP's first bytes: whether it moves (VP8X's animation flag) and can be transparent; null: not a WebP. */
+async function webpFlags(file) {
+  const b = new Uint8Array(await file.slice(0, 32).arrayBuffer());
+  const tag = (i) => String.fromCharCode(...b.slice(i, i + 4));
+  if (b.length < 21 || tag(0) !== 'RIFF' || tag(8) !== 'WEBP') return null;
+  return tag(12) === 'VP8X' ? { animated: (b[20] & 0x02) !== 0, alpha: (b[20] & 0x10) !== 0 } : { animated: false, alpha: tag(12) === 'VP8L' };
+}
+/**
+ * A frame picture's hole, where the photo goes: the biggest clear circle near the picture's middle (its centre tried
+ * on a grid, then finer round the best; from each, 72 rays out to the first solid pixel or the edge, the nearest is
+ * its radius). A designer's ring is often not in the middle (a crown above, a name plate below): `x`, `y` is its
+ * centre and `hole` its radius, as shares of the picture, in the sliders' steps, the photo inside the picture.
+ * Measured at up to 256 px.
+ */
+async function measureHole(src, limits) {
+  const img = new Image();
+  img.src = src;
+  await img.decode();
+  const n = Math.min(256, img.naturalWidth);
+  const c = document.createElement('canvas');
+  c.width = n;
+  c.height = n;
+  const g = c.getContext('2d', { willReadFrequently: true });
+  g.drawImage(img, 0, 0, n, n);
+  const px = g.getImageData(0, 0, n, n).data;
+  const radius = (ox, oy) => {
+    let near = n;
+    for (let k = 0; k < 72 && near > 0; k++) {
+      const dx = Math.cos((2 * Math.PI * k) / 72);
+      const dy = Math.sin((2 * Math.PI * k) / 72);
+      let r = 0;
+      for (; r < near; r += 0.5) {
+        const x = Math.round(ox + r * dx);
+        const y = Math.round(oy + r * dy);
+        if (x < 0 || y < 0 || x >= n || y >= n || px[(y * n + x) * 4 + 3] > 40) break;
+      }
+      near = Math.min(near, r);
+    }
+    return near;
+  };
+  const mid = (n - 1) / 2;
+  let best = { r: radius(mid, mid), x: mid, y: mid };
+  for (const [step, span] of [[Math.max(1, Math.round(n / 64)), Math.round(n * 0.16)], [1, Math.max(2, Math.round(n / 64))]]) {
+    const { x: bx, y: by } = best;
+    for (let dy = -span; dy <= span; dy += step) {
+      for (let dx = -span; dx <= span; dx += step) {
+        const r = radius(bx + dx, by + dy);
+        if (r > best.r) best = { r, x: bx + dx, y: by + dy };
+      }
+    }
+  }
+  const step = (v) => Math.round(v * 200) / 200;
+  const lo = limits.holeAtMin ?? 0.5;
+  const hi = limits.holeAtMax ?? 0.5;
+  const x = clamp(step((best.x + 0.5) / n), lo, hi);
+  const y = clamp(step((best.y + 0.5) / n), lo, hi);
+  const hole = clamp(Math.min(step(best.r / n), x, 1 - x, y, 1 - y), limits.holeMin, limits.holeMax);
+  return { hole, x, y };
 }
 /** A third of each side, as the app's server starts a bubble's picture. */
 const thirds = ({ w, h }) => ({ t: Math.floor(h / 3), r: Math.floor(w / 3), b: Math.floor(h / 3), l: Math.floor(w / 3) });
@@ -406,6 +476,8 @@ function Editor({ item, kind, limits, convert, svga, onClose, onSaved }) {
     minVip: item?.minVip ?? 0,
     enabled: item?.enabled ?? true,
     hole: item?.art?.hole ?? limits.holeDefault,
+    holeX: item?.art?.at?.x ?? 0.5,
+    holeY: item?.art?.at?.y ?? 0.5,
     plate: plateIn(item?.plate ?? limits.plateDefault),
   }));
   // An entry effect's icon: the address to save and what this page draws, as a frame's picture (`art`, `artShown`).
@@ -415,6 +487,9 @@ function Editor({ item, kind, limits, convert, svga, onClose, onSaved }) {
   // copy of a saved one, or the picked file itself: the app's address is another origin, which the page doesn't load).
   const [art, setArt] = useState(item?.art?.url ?? null);
   const [artShown, setArtShown] = useState(item?.art?.url ?? null);
+  // A frame's moving version (an animated WebP), the same way.
+  const [motion, setMotion] = useState(item?.art?.motion?.url ?? null);
+  const [motionShown, setMotionShown] = useState(item?.art?.motion?.url ?? null);
   const [video, setVideo] = useState(null);
   const [preview, setPreview] = useState(item?.video?.url ?? null);
   const [sample, setSample] = useState(SAMPLE);
@@ -430,9 +505,12 @@ function Editor({ item, kind, limits, convert, svga, onClose, onSaved }) {
     if (!typeOf('shopframe', file)) return alert('Resim PNG ya da WebP olmalı');
     const max = kind === 'bubble' ? limits.bubbleBytes : kind === 'wave' ? limits.sparkBytes : limits.frameBytes;
     if (file.size > max) return alert(`Resim en fazla ${max >= 1024 * 1024 ? `${Math.round(max / 1024 / 1024)} MB` : `${Math.round(max / 1024)} KB`} olabilir`);
+    if (kind === 'frame' && (await webpFlags(file))?.animated) return alert('Bu resim hareketli: onu "Hareketli hali"ne yükleyin. Çerçeve resmi durağan bir PNG ya da WebP olmalı (eski telefonlar onu gösterir).');
     setBusy('Resim yükleniyor…');
     try {
       const local = URL.createObjectURL(file);
+      // The photo's hole, measured from the picture's clear middle (the sliders fine-tune it).
+      if (kind === 'frame') await measure(local);
       if (kind === 'bubble') {
         const d = await sizeOf(local);
         if (d.w < limits.bubblePxMin || d.h < limits.bubblePxMin || d.w > limits.bubblePxMax || d.h > limits.bubblePxMax)
@@ -473,6 +551,31 @@ function Editor({ item, kind, limits, convert, svga, onClose, onSaved }) {
     setDims(null);
     setSlice(null);
   };
+  /** The hole's size and, where the app's server takes it, its place, measured from a frame's picture. */
+  const measure = async (src) => {
+    const m = await measureHole(src, limits);
+    setV((s) => ({ ...s, hole: m.hole, ...(limits.holeAtMin ? { holeX: m.x, holeY: m.y } : {}) }));
+  };
+  const pickMotion = async (file) => {
+    if (!file) return;
+    const flags = await webpFlags(file);
+    if (!flags?.animated) return alert('Hareketli hali hareketli bir WebP olmalı (GIF ya da SVGA değil). Tasarımcının "animated_webp" klasöründeki dosya.');
+    if (!flags.alpha) return alert('Hareketli çerçevede saydamlık yok: ortası ve çevresi saydam olmalı');
+    if (file.size > limits.motionBytes) return alert(`Hareketli çerçeve en fazla ${Math.round(limits.motionBytes / 1024 / 1024)} MB olabilir`);
+    setBusy('Hareketli çerçeve yükleniyor…');
+    try {
+      const local = URL.createObjectURL(file);
+      const d = await sizeOf(local);
+      if (Math.abs(d.w - d.h) > Math.max(2, d.w * 0.02)) throw new Error(`Hareketli çerçeve kare olmalı (bu ${d.w} × ${d.h})`);
+      if (d.w < limits.motionPxMin || d.w > limits.motionPxMax) throw new Error(`Hareketli çerçeve ${limits.motionPxMin}–${limits.motionPxMax} piksel olmalı (bu ${d.w})`);
+      setMotion(await upload('shopframe', file));
+      setMotionShown(local);
+    } catch (e) {
+      alert(e.message);
+    } finally {
+      setBusy(null);
+    }
+  };
   const pickIcon = async (file) => {
     if (!file) return;
     if (!typeOf('shopframe', file)) return alert('İkon PNG ya da WebP olmalı');
@@ -493,7 +596,13 @@ function Editor({ item, kind, limits, convert, svga, onClose, onSaved }) {
   };
   const save = async () => {
     const body = { name: v.name, price: Number(v.price), days: Number(v.days), minVip: Number(v.minVip), enabled: v.enabled };
-    if (own && kind === 'frame') Object.assign(body, { hole: Number(v.hole), ...(art && art !== item?.art?.url ? { art } : {}) });
+    if (own && kind === 'frame')
+      Object.assign(body, {
+        hole: Number(v.hole),
+        ...(limits.holeAtMin ? { holeX: Number(v.holeX), holeY: Number(v.holeY) } : {}),
+        ...(art && art !== item?.art?.url ? { art } : {}),
+        ...(motion !== (item?.art?.motion?.url ?? null) ? { motion } : {}),
+      });
     if (own && looks) {
       // The picture: a new one goes with its address; one taken away as null; the one in use isn't sent.
       const artNow = art !== (item?.art?.url ?? null) ? { art } : {};
@@ -548,12 +657,23 @@ function Editor({ item, kind, limits, convert, svga, onClose, onSaved }) {
     ${own &&
     kind === 'frame' &&
     html`<div class="row gap wrap" style="align-items:flex-start;margin-top:10px">
-      <${FramePreview} src=${artShown} hole=${v.hole} size=${160} />
+      <${FramePreview} src=${motionShown ?? artShown} hole=${v.hole} at=${{ x: v.holeX, y: v.holeY }} size=${160} />
       <div class="stack" style="flex:1;min-width:220px">
-        <label class="field"><span>Çerçeve resmi * (saydam, kare PNG ya da WebP, ${limits.framePxMin}–${limits.framePxMax} px)</span><input type="file" accept="image/png,image/webp" onChange=${(e) => pickArt(e.target.files[0])} /></label>
+        <label class="field"><span>Çerçeve resmi * (durağan; saydam, kare PNG ya da WebP, ${limits.framePxMin}–${limits.framePxMax} px)</span><input type="file" accept="image/png,image/webp" onChange=${(e) => pickArt(e.target.files[0])} /></label>
+        ${limits.motionPxMin &&
+        html`<label class="field"><span>Hareketli hali (isteğe bağlı): hareketli WebP, kare, ${limits.motionPxMin}–${limits.motionPxMax} px, en çok ${Math.round(limits.motionBytes / 1024 / 1024)} MB</span>
+            <input type="file" accept="image/webp" onChange=${(e) => pickMotion(e.target.files[0])} /></label>
+          ${motionShown && html`<div><${Button} kind="ghost" onClick=${() => (setMotion(null), setMotionShown(null))}>Hareketli halini kaldır</${Button}></div>`}
+          <small class="muted">Yeni APK hareketli halini oynatır. Eski APK'lar, Düşük veri modu ve listelerdeki küçük fotoğraflar durağan resmi gösterir; ikisi aynı çerçeve olmalı.</small>`}
         <label class="field"><span>Fotoğraf alanı: resmin %${pct(v.hole * 2)}'i</span>
           <input type="range" min=${limits.holeMin} max=${limits.holeMax} step="0.005" value=${v.hole} onInput=${(e) => set('hole', Number(e.target.value))} /></label>
-        <small class="muted">Kaydırıcıyı, örnek fotoğraf çerçevenin ortasındaki boşluğu tam dolduracak yere getirin.</small>
+        ${limits.holeAtMin &&
+        html`<label class="field"><span>Fotoğrafın yeri, yatay: %${pct(v.holeX)}</span>
+            <input type="range" min=${limits.holeAtMin} max=${limits.holeAtMax} step="0.005" value=${v.holeX} onInput=${(e) => set('holeX', Number(e.target.value))} /></label>
+          <label class="field"><span>Fotoğrafın yeri, dikey: %${pct(v.holeY)}</span>
+            <input type="range" min=${limits.holeAtMin} max=${limits.holeAtMax} step="0.005" value=${v.holeY} onInput=${(e) => set('holeY', Number(e.target.value))} /></label>
+          ${artShown && html`<div><${Button} kind="ghost" onClick=${() => measure(artShown).catch((e) => alert(e.message))}>Resimden yeniden ölç</${Button}></div>`}`}
+        <small class="muted">Resim seçilince fotoğrafın yeri ve büyüklüğü, resmin saydam halkasından ölçülür: halka resmin ortasında değilse (üstte taç, altta isim levhası) fotoğraf halkaya kayar. Kaydırıcılarla, örnek fotoğraf halkanın içini tam dolduracak yere getirin.</small>
       </div>
     </div>`}
     ${own &&
@@ -684,4 +804,196 @@ function WaveEditor({ look, setLook, setColor, src, pickArt, removeArt, limits }
         ${src && html`<div><${Button} kind="ghost" onClick=${removeArt}>Resmi kaldır (renkli noktalar)</${Button}></div>`}`}
     </div>
   </div>`;
+}
+
+// --- Toplu çerçeve ekle ----------------------------------------------------------------------------------------
+/** Turkish words a designer's file name writes in plain letters ("altin_tac" → "Altın Taç"). */
+const TR_WORDS = { altin: 'Altın', tac: 'Taç', kralice: 'Kraliçe', aslani: 'Aslanı', buyu: 'Büyü', kusu: 'Kuşu', ejderhasi: 'Ejderhası', ask: 'Aşk', melegi: 'Meleği', tatli: 'Tatlı', gumus: 'Gümüş', yildiz: 'Yıldız', isik: 'Işık', gul: 'Gül', cicek: 'Çiçek', ates: 'Ateş', gunes: 'Güneş', guc: 'Güç', kis: 'Kış', vip: 'VIP' };
+/** A file's frame name: its number gone, Turkish capitals ("02_imparator" → "İmparator"), the shop's length. */
+const frameNameOf = (key) =>
+  key
+    .replace(/^\d+[\s_-]*/, '')
+    .split(/[\s_-]+/)
+    .filter(Boolean)
+    .map((w) => TR_WORDS[w] ?? w.charAt(0).toLocaleUpperCase('tr') + w.slice(1))
+    .join(' ')
+    .slice(0, 24);
+/**
+ * A picked file's frame and type: the name the still and the moving file of one frame share (without the preview
+ * word, and without the combining dot a Turkish "İ" leaves when a name is lowered: "02_i̇mparator").
+ */
+function frameFileOf(file) {
+  const m = /^(.+)\.(png|webp|gif|svga)$/i.exec(file.name.normalize('NFC'));
+  if (!m) return null;
+  const key = m[1].normalize('NFD').replace(/̇/g, '').normalize('NFC').toLocaleLowerCase('tr').replace(/[\s_-]*(onizleme|önizleme|preview|still)$/, '');
+  return { key, ext: m[2].toLowerCase(), file };
+}
+/** A designer's folder as frames: each one's still picture and moving WebP, in their numbers' order; GIF and SVGA counted, not used. */
+async function framesOf(files) {
+  const by = new Map();
+  let skipped = 0;
+  for (const f of files) {
+    const x = frameFileOf(f);
+    if (!x) continue;
+    if (x.ext === 'gif' || x.ext === 'svga') {
+      skipped++;
+      continue;
+    }
+    const row = by.get(x.key) ?? { key: x.key, still: null, motion: null };
+    if (x.ext === 'webp' && (await webpFlags(f))?.animated) row.motion ??= f;
+    else row.still ??= f;
+    by.set(x.key, row);
+  }
+  return { rows: [...by.values()].sort((a, b) => a.key.localeCompare(b.key, 'tr', { numeric: true })), skipped };
+}
+/** One frame of a set checked as the app's server will check it, with its pictures to show and its hole measured. */
+async function readyFrame(r, limits) {
+  const out = { key: r.key, name: frameNameOf(r.key), on: true, hole: limits.holeDefault, at: { x: 0.5, y: 0.5 }, still: r.still, motion: r.motion, stillUrl: null, motionUrl: null, problem: null, state: null };
+  const mb = (n) => `${Math.round((n / 1024 / 1024) * 10) / 10} MB`;
+  try {
+    if (!r.still) throw new Error('Durağan resmi (PNG önizleme) yok: onu da seçin');
+    if (!typeOf('shopframe', r.still)) throw new Error('Durağan resim PNG ya da WebP olmalı');
+    if (r.still.size > limits.frameBytes) throw new Error(`Durağan resim en fazla ${mb(limits.frameBytes)} olabilir`);
+    out.stillUrl = URL.createObjectURL(r.still);
+    const d = await sizeOf(out.stillUrl);
+    if (Math.abs(d.w - d.h) > Math.max(2, d.w * 0.02)) throw new Error(`Durağan resim kare olmalı (bu ${d.w} × ${d.h})`);
+    if (d.w < limits.framePxMin || d.w > limits.framePxMax) throw new Error(`Durağan resim ${limits.framePxMin}–${limits.framePxMax} piksel olmalı (bu ${d.w})`);
+    const m = await measureHole(out.stillUrl, limits);
+    out.hole = m.hole;
+    out.at = { x: m.x, y: m.y };
+    if (r.motion) {
+      if (r.motion.size > limits.motionBytes) throw new Error(`Hareketli WebP en fazla ${mb(limits.motionBytes)} olabilir`);
+      out.motionUrl = URL.createObjectURL(r.motion);
+      const m = await sizeOf(out.motionUrl);
+      if (Math.abs(m.w - m.h) > Math.max(2, m.w * 0.02) || m.w < limits.motionPxMin || m.w > limits.motionPxMax)
+        throw new Error(`Hareketli WebP kare ve ${limits.motionPxMin}–${limits.motionPxMax} piksel olmalı (bu ${m.w} × ${m.h})`);
+    }
+  } catch (e) {
+    out.problem = e.message;
+    out.on = false;
+  }
+  return out;
+}
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+/** Runs `fn` again after half a minute when the app's server says "too many" (uploads: a minute's limit), up to 3 times. */
+async function patiently(fn, onWait) {
+  for (let i = 0; ; i++) {
+    try {
+      return await fn();
+    } catch (e) {
+      if (i >= 3 || !(e.status === 429 || /Çok fazla/.test(e.message ?? ''))) throw e;
+      onWait('Çok hızlı gitti: yarım dakika bekleniyor…');
+      await sleep(30_000);
+    }
+  }
+}
+
+/**
+ * A designer's set of frames added at once: the folder (or its files) is read here, each frame's still picture and
+ * moving WebP paired by name, checked, its hole measured; the names are made from the file names (editable), the
+ * price, days, VIP level and shelf go for all. Each is added as "Yeni çerçeve" would (uploads, then the app's
+ * POST /api/admin/shop), one after another, last first so the set keeps its numbers' order at the top of the shop. A
+ * frame refused (a name taken) says why and the others go on; adding again sends only those not added.
+ */
+function BulkFrames({ limits, taken, onClose, onDone }) {
+  const [rows, setRows] = useState([]);
+  const [skipped, setSkipped] = useState(0);
+  const [common, setCommon] = useState({ price: '', days: 30, minVip: 0, enabled: true });
+  const [busy, setBusy] = useState(null);
+  const urls = useRef([]);
+  useEffect(() => () => urls.current.forEach((u) => URL.revokeObjectURL(u)), []);
+  const setRow = (key, o) => setRows((rs) => rs.map((r) => (r.key === key ? { ...r, ...o } : r)));
+  const setAll = (k, x) => setCommon((c) => ({ ...c, [k]: x }));
+  const pick = async (list) => {
+    const files = [...(list ?? [])];
+    if (!files.length) return;
+    setBusy('Dosyalar okunuyor…');
+    try {
+      const found = await framesOf(files);
+      const ready = [];
+      for (const r of found.rows) ready.push(await readyFrame(r, limits));
+      urls.current.push(...ready.flatMap((r) => [r.stillUrl, r.motionUrl]).filter(Boolean));
+      setRows(ready);
+      setSkipped(found.skipped);
+    } catch (e) {
+      alert(e.message);
+    } finally {
+      setBusy(null);
+    }
+  };
+  const low = (s) => s.trim().toLocaleLowerCase('tr');
+  const clash = (r) => taken.some((t) => low(t) === low(r.name)) || rows.some((o) => o !== r && o.on && o.state !== 'done' && low(o.name) === low(r.name));
+  const todo = rows.filter((r) => r.on && !r.problem && r.state !== 'done');
+  const run = async () => {
+    const price = Number(common.price);
+    if (!Number.isSafeInteger(price) || price < 1) return alert('Fiyatı yazın (jeton, hepsi için)');
+    let added = 0;
+    let failed = 0;
+    setBusy('Ekleniyor…');
+    for (const r of [...todo].reverse()) {
+      const say = (state) => setRow(r.key, { state });
+      say('Yükleniyor…');
+      try {
+        const art = await patiently(() => upload('shopframe', r.still), say);
+        const motion = r.motion ? await patiently(() => upload('shopframe', r.motion), say) : null;
+        say('Kaydediliyor…');
+        const body = {
+          kind: 'frame',
+          name: r.name.trim(),
+          price,
+          days: Number(common.days),
+          minVip: Number(common.minVip),
+          enabled: common.enabled,
+          art,
+          hole: r.hole,
+          ...(limits.holeAtMin ? { holeX: r.at.x, holeY: r.at.y } : {}),
+          ...(motion ? { motion } : {}),
+        };
+        await patiently(() => post('/api/app/shop', body), say);
+        say('done');
+        added++;
+      } catch (e) {
+        say(`Eklenmedi: ${e.message}`);
+        failed++;
+      }
+    }
+    setBusy(null);
+    toast(failed ? `${added} çerçeve eklendi, ${failed} eklenemedi: sebebi kartında` : `${added} çerçeve eklendi`, failed ? 'warn' : 'ok');
+    onDone();
+  };
+  return html`<${Modal} title="Toplu çerçeve ekle" onClose=${busy ? () => {} : onClose} wide>
+    <p class="note">Tasarımcının klasörünü seçin. Her çerçevenin durağan PNG'si (önizleme) ve hareketli WebP'si adından eşleştirilir; fotoğraf alanı resmin saydam ortasından ölçülür. GIF ve SVGA kullanılmaz: hareketli WebP aynı çerçevedir ve telefon onu oynatır.</p>
+    <div class="row gap wrap">
+      <label class="field"><span>Klasör</span><input type="file" webkitdirectory multiple disabled=${!!busy} onChange=${(e) => pick(e.target.files)} /></label>
+      <label class="field"><span>ya da dosyalar</span><input type="file" multiple accept=".png,.webp,image/png,image/webp" disabled=${!!busy} onChange=${(e) => pick(e.target.files)} /></label>
+    </div>
+    ${rows.length > 0 &&
+    html`<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(170px,1fr));gap:10px;margin-top:8px">
+        <label class="field"><span>Fiyat (jeton) *: hepsi</span><input type="number" min="1" value=${common.price} onInput=${(e) => setAll('price', e.target.value)} /></label>
+        <label class="field"><span>Süre (gün; 0 = süresiz)</span><input type="number" min="0" max=${limits.daysMax} value=${common.days} onInput=${(e) => setAll('days', e.target.value)} /></label>
+        <label class="field"><span>VIP seviyesi (0 = herkes)</span><input type="number" min="0" max=${limits.vipMax} value=${common.minVip} onInput=${(e) => setAll('minVip', e.target.value)} /></label>
+        <label class="field inline" style="align-self:end"><span>Satışta</span><input type="checkbox" checked=${common.enabled} onChange=${(e) => setAll('enabled', e.target.checked)} /></label>
+      </div>
+      <small class="muted">${rows.length} çerçeve bulundu${skipped ? `; ${skipped} GIF ya da SVGA dosyası kullanılmadı` : ''}. Adları ve fotoğraf alanını tek tek düzeltebilirsiniz; işaretsizler eklenmez. İlk numara mağazada başta durur.</small>
+      <div class="bulk-grid">
+        ${rows.map(
+          (r) => html`<div class=${`bulk-card${r.state === 'done' ? ' done' : ''}`} key=${r.key}>
+            <${FramePreview} src=${r.motionUrl ?? r.stillUrl} hole=${r.hole} at=${r.at} size=${110} />
+            <label class="field inline"><span>Ekle</span><input type="checkbox" checked=${r.on} disabled=${!!r.problem || r.state === 'done' || !!busy} onChange=${(e) => setRow(r.key, { on: e.target.checked })} /></label>
+            <input value=${r.name} maxlength=${limits.nameMax} aria-label="Ad" disabled=${r.state === 'done' || !!busy} onInput=${(e) => setRow(r.key, { name: e.target.value })} />
+            ${!r.problem &&
+            html`<label class="field"><span>Fotoğraf alanı: %${pct(r.hole * 2)}</span>
+              <input type="range" min=${limits.holeMin} max=${limits.holeMax} step="0.005" value=${r.hole} disabled=${r.state === 'done' || !!busy} onInput=${(e) => setRow(r.key, { hole: Number(e.target.value) })} /></label>`}
+            <small class=${r.problem ? 'bad' : 'muted'}>${r.problem ?? (r.motion ? 'Hareketli ve durağan' : 'Yalnız durağan (hareketli WebP yok)')}</small>
+            ${r.on && !r.problem && r.state !== 'done' && clash(r) && html`<small class="bad">Bu ad zaten var: değiştirin</small>`}
+            ${r.state && html`<small class=${r.state === 'done' ? 'good' : r.state.startsWith('Eklenmedi') ? 'bad' : 'muted'}>${r.state === 'done' ? '✓ Eklendi' : r.state}</small>`}
+          </div>`,
+        )}
+      </div>
+      <div class="row gap end" style="margin-top:10px">
+        ${busy && html`<small class="muted">${busy}</small>`}
+        <${Button} onClick=${onClose} disabled=${!!busy}>Kapat</${Button}>
+        <${Button} kind="primary" onClick=${run} disabled=${!!busy || !todo.length}>${todo.length} çerçeveyi ekle</${Button}>
+      </div>`}
+  </${Modal}>`;
 }
