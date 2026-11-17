@@ -242,13 +242,77 @@ function PlateStage({ src, plate, name, onPlate, limits }) {
 /**
  * A frame over a sample photo, as a seat or a profile shows it: the photo fills the frame's hole, at the hole's centre
  * (`at`, shares of the picture; the middle when there is none). The phone moves the picture instead; it looks the same.
+ * With `onChange` the photo is placed by hand (the frame's picture lets the pointer through to it): dragged, or put
+ * where the preview is clicked; sized by the dot on its rim or the mouse wheel; nudged with the arrow keys (Shift:
+ * further), + and − size it. A dashed circle over the picture shows its edge. Each change goes out as `{ x, y }` or
+ * `{ hole }`, within `limits`, the photo inside the picture.
  */
-function FramePreview({ src, hole, at, size = 120 }) {
+function FramePreview({ src, hole, at, size = 120, onChange, limits }) {
+  const box = useRef(null);
+  const drag = useRef(null);
+  const edit = !!onChange;
   const photo = Math.round(size * hole * 2);
   const c = at ?? { x: 0.5, y: 0.5 };
-  return html`<div class="frame-preview" style=${`width:${size}px;height:${size}px`}>
-    <div class="frame-photo" style=${`position:absolute;width:${photo}px;height:${photo}px;left:${c.x * size - photo / 2}px;top:${c.y * size - photo / 2}px`}>🙂</div>
+  const round = (v) => Math.round(v * 1000) / 1000;
+  const place = (x, y) => {
+    const fit = (v) => round(clamp(clamp(v, limits.holeAtMin ?? 0.5, limits.holeAtMax ?? 0.5), hole, 1 - hole));
+    onChange({ x: fit(x), y: fit(y) });
+  };
+  const resize = (h) => onChange({ hole: round(clamp(Math.min(h, c.x, 1 - c.x, c.y, 1 - c.y), limits.holeMin, limits.holeMax)) });
+  const point = (e) => {
+    const r = box.current.getBoundingClientRect();
+    return { x: (e.clientX - r.left) / r.width, y: (e.clientY - r.top) / r.height };
+  };
+  const grab = (mode) => (e) => {
+    if (e.button !== 0) return;
+    e.preventDefault();
+    e.stopPropagation();
+    const p = point(e);
+    if (mode === 'place') place(p.x, p.y);
+    // Moving keeps where the photo was taken hold of under the pointer; a click elsewhere starts from its centre.
+    drag.current = { mode: mode === 'size' ? 'size' : 'move', dx: mode === 'move' ? p.x - c.x : 0, dy: mode === 'move' ? p.y - c.y : 0 };
+    box.current.setPointerCapture(e.pointerId);
+    box.current.focus();
+  };
+  const move = (e) => {
+    const d = drag.current;
+    if (!d) return;
+    const p = point(e);
+    if (d.mode === 'move') place(p.x - d.dx, p.y - d.dy);
+    else resize(Math.hypot(p.x - c.x, p.y - c.y));
+  };
+  const drop = () => (drag.current = null);
+  const wheel = (e) => {
+    e.preventDefault();
+    resize(hole + (e.deltaY < 0 ? 0.005 : -0.005));
+  };
+  const key = (e) => {
+    const k = { ArrowLeft: [-1, 0], ArrowRight: [1, 0], ArrowUp: [0, -1], ArrowDown: [0, 1] }[e.key];
+    const step = e.shiftKey ? 0.02 : 0.003;
+    if (k) place(c.x + k[0] * step, c.y + k[1] * step);
+    else if (e.key === '+' || e.key === '=') resize(hole + 0.005);
+    else if (e.key === '-') resize(hole - 0.005);
+    else return;
+    e.preventDefault();
+  };
+  const circle = `left:${c.x * size - photo / 2}px;top:${c.y * size - photo / 2}px;width:${photo}px;height:${photo}px`;
+  const dot = `left:${c.x * size + (photo / 2) * Math.SQRT1_2 - 6}px;top:${c.y * size + (photo / 2) * Math.SQRT1_2 - 6}px`;
+  return html`<div
+    ref=${box}
+    class=${`frame-preview${edit ? ' edit' : ''}`}
+    style=${`width:${size}px;height:${size}px`}
+    tabindex=${edit ? 0 : undefined}
+    title=${edit ? 'Fotoğrafı sürükleyin; noktadan ya da tekerlekle büyütün; ok tuşları ince ayar yapar' : undefined}
+    onPointerDown=${edit ? grab('place') : undefined}
+    onPointerMove=${edit ? move : undefined}
+    onPointerUp=${edit ? drop : undefined}
+    onPointerCancel=${edit ? drop : undefined}
+    onWheel=${edit ? wheel : undefined}
+    onKeyDown=${edit ? key : undefined}
+  >
+    <div class="frame-photo" style=${`position:absolute;${circle}`}>🙂</div>
     ${src && html`<img src=${src} alt="" width=${size} height=${size} />`}
+    ${edit && html`<i class="frame-guide" style=${circle} onPointerDown=${grab('move')}></i><i class="frame-handle" style=${dot} onPointerDown=${grab('size')}></i>`}
   </div>`;
 }
 
@@ -397,11 +461,56 @@ async function webpFlags(file) {
   return tag(12) === 'VP8X' ? { animated: (b[20] & 0x02) !== 0, alpha: (b[20] & 0x10) !== 0 } : { animated: false, alpha: tag(12) === 'VP8L' };
 }
 /**
- * A frame picture's hole, where the photo goes: the biggest clear circle near the picture's middle (its centre tried
- * on a grid, then finer round the best; from each, 72 rays out to the first solid pixel or the edge, the nearest is
- * its radius). A designer's ring is often not in the middle (a crown above, a name plate below): `x`, `y` is its
- * centre and `hole` its radius, as shares of the picture, in the sliders' steps, the photo inside the picture.
- * Measured at up to 256 px.
+ * A moving WebP's first frame as a PNG, for a frame that came without its still picture (older phones, "Düşük veri
+ * modu" and small photos show the still one): the browser draws the first frame of an animated picture not on show.
+ */
+async function stillOf(file) {
+  const url = URL.createObjectURL(file);
+  try {
+    const img = new Image();
+    img.src = url;
+    await img.decode();
+    const c = document.createElement('canvas');
+    c.width = img.naturalWidth;
+    c.height = img.naturalHeight;
+    c.getContext('2d').drawImage(img, 0, 0);
+    const blob = await new Promise((ok, no) => c.toBlob((b) => (b ? ok(b) : no(new Error('Hareketli resmin ilk karesi alınamadı'))), 'image/png'));
+    return new File([blob], `${file.name.replace(/\.webp$/i, '')}_ilk_kare.png`, { type: 'image/png' });
+  } finally {
+    URL.revokeObjectURL(url);
+  }
+}
+/** The circle nearest to these points (least squares, Kåsa): its centre and radius; null when they don't make one. */
+function circleThrough(pts) {
+  const s = { xx: 0, xy: 0, x: 0, yy: 0, y: 0, xz: 0, yz: 0, z: 0 };
+  for (const { x, y } of pts) {
+    const z = x * x + y * y;
+    s.xx += x * x;
+    s.xy += x * y;
+    s.x += x;
+    s.yy += y * y;
+    s.y += y;
+    s.xz += x * z;
+    s.yz += y * z;
+    s.z += z;
+  }
+  const A = [[s.xx, s.xy, s.x], [s.xy, s.yy, s.y], [s.x, s.y, pts.length]];
+  const b = [-s.xz, -s.yz, -s.z];
+  const det = (M) => M[0][0] * (M[1][1] * M[2][2] - M[1][2] * M[2][1]) - M[0][1] * (M[1][0] * M[2][2] - M[1][2] * M[2][0]) + M[0][2] * (M[1][0] * M[2][1] - M[1][1] * M[2][0]);
+  const d = det(A);
+  if (!d) return null;
+  const [D, E, F] = [0, 1, 2].map((i) => det(A.map((row, r) => row.map((v, c) => (c === i ? b[r] : v)))) / d);
+  const R = Math.sqrt((D * D + E * E) / 4 - F);
+  return Number.isFinite(R) ? { x: -D / 2, y: -E / 2, R } : null;
+}
+/**
+ * A frame picture's hole, where the photo goes: the ring's inner edge, found by rays from a centre out to the first
+ * solid pixel, with a circle fitted through the points they reach. The rays a gem, a wing tip or a moon stops early
+ * (much shorter than most) and those out through a gap (much longer) are left out, so a decoration reaching into the
+ * ring doesn't shrink or push the photo: it lies over the photo's rim, as the designer drew it. The fit is repeated
+ * from the circle's own centre; the photo's radius leaves four rays in five outside it. A designer's ring is often not
+ * in the middle (a crown above, a name plate below): `x`, `y` is its centre and `hole` its radius, as shares of the
+ * picture, in the sliders' steps, the photo inside the picture. Measured at up to 256 px.
  */
 async function measureHole(src, limits) {
   const img = new Image();
@@ -414,38 +523,38 @@ async function measureHole(src, limits) {
   const g = c.getContext('2d', { willReadFrequently: true });
   g.drawImage(img, 0, 0, n, n);
   const px = g.getImageData(0, 0, n, n).data;
-  const radius = (ox, oy) => {
-    let near = n;
-    for (let k = 0; k < 72 && near > 0; k++) {
-      const dx = Math.cos((2 * Math.PI * k) / 72);
-      const dy = Math.sin((2 * Math.PI * k) / 72);
-      let r = 0;
-      for (; r < near; r += 0.5) {
-        const x = Math.round(ox + r * dx);
-        const y = Math.round(oy + r * dy);
-        if (x < 0 || y < 0 || x >= n || y >= n || px[(y * n + x) * 4 + 3] > 40) break;
-      }
-      near = Math.min(near, r);
+  const K = 90;
+  const ray = (ox, oy, a) => {
+    const dx = Math.cos(a);
+    const dy = Math.sin(a);
+    let r = 0;
+    for (; r < n; r += 0.5) {
+      const x = Math.round(ox + r * dx);
+      const y = Math.round(oy + r * dy);
+      if (x < 0 || y < 0 || x >= n || y >= n || px[(y * n + x) * 4 + 3] > 40) break;
     }
-    return near;
+    return { r, x: ox + r * dx, y: oy + r * dy };
   };
+  const cast = (o) => Array.from({ length: K }, (_, k) => ray(o.x, o.y, (2 * Math.PI * k) / K));
   const mid = (n - 1) / 2;
-  let best = { r: radius(mid, mid), x: mid, y: mid };
-  for (const [step, span] of [[Math.max(1, Math.round(n / 64)), Math.round(n * 0.16)], [1, Math.max(2, Math.round(n / 64))]]) {
-    const { x: bx, y: by } = best;
-    for (let dy = -span; dy <= span; dy += step) {
-      for (let dx = -span; dx <= span; dx += step) {
-        const r = radius(bx + dx, by + dy);
-        if (r > best.r) best = { r, x: bx + dx, y: by + dy };
-      }
-    }
+  let o = { x: mid, y: mid };
+  for (let i = 0; i < 4; i++) {
+    const hits = cast(o);
+    const med = [...hits.map((h) => h.r)].sort((a, b) => a - b)[K >> 1];
+    const edge = hits.filter((h) => h.r > med * 0.8 && h.r < med * 1.2);
+    const f = edge.length >= K / 3 ? circleThrough(edge) : null;
+    if (!f || Math.hypot(f.x - mid, f.y - mid) > n * 0.2) break;
+    o = { x: f.x, y: f.y };
   }
+  const rs = cast(o)
+    .map((h) => h.r)
+    .sort((a, b) => a - b);
   const step = (v) => Math.round(v * 200) / 200;
   const lo = limits.holeAtMin ?? 0.5;
   const hi = limits.holeAtMax ?? 0.5;
-  const x = clamp(step((best.x + 0.5) / n), lo, hi);
-  const y = clamp(step((best.y + 0.5) / n), lo, hi);
-  const hole = clamp(Math.min(step(best.r / n), x, 1 - x, y, 1 - y), limits.holeMin, limits.holeMax);
+  const x = clamp(step((o.x + 0.5) / n), lo, hi);
+  const y = clamp(step((o.y + 0.5) / n), lo, hi);
+  const hole = clamp(Math.min(step(rs[Math.floor(K * 0.2)] / n), x, 1 - x, y, 1 - y), limits.holeMin, limits.holeMax);
   return { hole, x, y };
 }
 /** A third of each side, as the app's server starts a bubble's picture. */
@@ -570,6 +679,8 @@ function Editor({ item, kind, limits, convert, svga, onClose, onSaved }) {
       if (d.w < limits.motionPxMin || d.w > limits.motionPxMax) throw new Error(`Hareketli çerçeve ${limits.motionPxMin}–${limits.motionPxMax} piksel olmalı (bu ${d.w})`);
       setMotion(await upload('shopframe', file));
       setMotionShown(local);
+      // No still picture yet: the moving one's first frame becomes it (its hole measured from it).
+      if (!art) await pickArt(await stillOf(file));
     } catch (e) {
       alert(e.message);
     } finally {
@@ -657,14 +768,21 @@ function Editor({ item, kind, limits, convert, svga, onClose, onSaved }) {
     ${own &&
     kind === 'frame' &&
     html`<div class="row gap wrap" style="align-items:flex-start;margin-top:10px">
-      <${FramePreview} src=${motionShown ?? artShown} hole=${v.hole} at=${{ x: v.holeX, y: v.holeY }} size=${160} />
+      <${FramePreview}
+        src=${motionShown ?? artShown}
+        hole=${v.hole}
+        at=${{ x: v.holeX, y: v.holeY }}
+        size=${220}
+        limits=${limits}
+        onChange=${limits.holeAtMin ? (o) => setV((s) => ({ ...s, ...(o.hole !== undefined ? { hole: o.hole } : { holeX: o.x, holeY: o.y }) })) : undefined}
+      />
       <div class="stack" style="flex:1;min-width:220px">
         <label class="field"><span>Çerçeve resmi * (durağan; saydam, kare PNG ya da WebP, ${limits.framePxMin}–${limits.framePxMax} px)</span><input type="file" accept="image/png,image/webp" onChange=${(e) => pickArt(e.target.files[0])} /></label>
         ${limits.motionPxMin &&
         html`<label class="field"><span>Hareketli hali (isteğe bağlı): hareketli WebP, kare, ${limits.motionPxMin}–${limits.motionPxMax} px, en çok ${Math.round(limits.motionBytes / 1024 / 1024)} MB</span>
             <input type="file" accept="image/webp" onChange=${(e) => pickMotion(e.target.files[0])} /></label>
           ${motionShown && html`<div><${Button} kind="ghost" onClick=${() => (setMotion(null), setMotionShown(null))}>Hareketli halini kaldır</${Button}></div>`}
-          <small class="muted">Yeni APK hareketli halini oynatır. Eski APK'lar, Düşük veri modu ve listelerdeki küçük fotoğraflar durağan resmi gösterir; ikisi aynı çerçeve olmalı.</small>`}
+          <small class="muted">Yeni APK hareketli halini oynatır. Eski APK'lar, Düşük veri modu ve listelerdeki küçük fotoğraflar durağan resmi gösterir; ikisi aynı çerçeve olmalı. Durağan resim seçilmezse hareketlinin ilk karesi durağan resim olur.</small>`}
         <label class="field"><span>Fotoğraf alanı: resmin %${pct(v.hole * 2)}'i</span>
           <input type="range" min=${limits.holeMin} max=${limits.holeMax} step="0.005" value=${v.hole} onInput=${(e) => set('hole', Number(e.target.value))} /></label>
         ${limits.holeAtMin &&
@@ -673,7 +791,7 @@ function Editor({ item, kind, limits, convert, svga, onClose, onSaved }) {
           <label class="field"><span>Fotoğrafın yeri, dikey: %${pct(v.holeY)}</span>
             <input type="range" min=${limits.holeAtMin} max=${limits.holeAtMax} step="0.005" value=${v.holeY} onInput=${(e) => set('holeY', Number(e.target.value))} /></label>
           ${artShown && html`<div><${Button} kind="ghost" onClick=${() => measure(artShown).catch((e) => alert(e.message))}>Resimden yeniden ölç</${Button}></div>`}`}
-        <small class="muted">Resim seçilince fotoğrafın yeri ve büyüklüğü, resmin saydam halkasından ölçülür: halka resmin ortasında değilse (üstte taç, altta isim levhası) fotoğraf halkaya kayar. Kaydırıcılarla, örnek fotoğraf halkanın içini tam dolduracak yere getirin.</small>
+        <small class="muted">Resim seçilince fotoğrafın yeri ve büyüklüğü, resmin halkasından ölçülür: halka resmin ortasında değilse (üstte taç, altta isim levhası) fotoğraf halkaya kayar. Oturmadıysa fotoğrafı önizlemede fareyle sürükleyin; kenarındaki noktayla ya da fare tekerleğiyle büyütüp küçültün, ok tuşlarıyla ince ayar yapın. Kaydırıcılar da aynı işi görür.</small>
       </div>
     </div>`}
     ${own &&
@@ -820,12 +938,13 @@ const frameNameOf = (key) =>
     .slice(0, 24);
 /**
  * A picked file's frame and type: the name the still and the moving file of one frame share (without the preview
- * word, and without the combining dot a Turkish "İ" leaves when a name is lowered: "02_i̇mparator").
+ * word, and without the combining dot a Turkish "İ" leaves when a name is lowered: "02_i̇mparator"). File names are
+ * written in plain Latin letters ("02_Imparator", "18_Cyber_VIP"), so an "I" is lowered to "i", not to the Turkish "ı".
  */
 function frameFileOf(file) {
   const m = /^(.+)\.(png|webp|gif|svga)$/i.exec(file.name.normalize('NFC'));
   if (!m) return null;
-  const key = m[1].normalize('NFD').replace(/̇/g, '').normalize('NFC').toLocaleLowerCase('tr').replace(/[\s_-]*(onizleme|önizleme|preview|still)$/, '');
+  const key = m[1].normalize('NFD').replace(/̇/g, '').normalize('NFC').toLowerCase().replace(/[\s_-]*(onizleme|önizleme|preview|still)$/, '');
   return { key, ext: m[2].toLowerCase(), file };
 }
 /** A designer's folder as frames: each one's still picture and moving WebP, in their numbers' order; GIF and SVGA counted, not used. */
@@ -851,10 +970,16 @@ async function readyFrame(r, limits) {
   const out = { key: r.key, name: frameNameOf(r.key), on: true, hole: limits.holeDefault, at: { x: 0.5, y: 0.5 }, still: r.still, motion: r.motion, stillUrl: null, motionUrl: null, problem: null, state: null };
   const mb = (n) => `${Math.round((n / 1024 / 1024) * 10) / 10} MB`;
   try {
-    if (!r.still) throw new Error('Durağan resmi (PNG önizleme) yok: onu da seçin');
-    if (!typeOf('shopframe', r.still)) throw new Error('Durağan resim PNG ya da WebP olmalı');
-    if (r.still.size > limits.frameBytes) throw new Error(`Durağan resim en fazla ${mb(limits.frameBytes)} olabilir`);
-    out.stillUrl = URL.createObjectURL(r.still);
+    // A set of moving WebPs alone: each one's first frame becomes its still picture.
+    if (!r.still && r.motion) {
+      out.still = await stillOf(r.motion);
+      out.made = true;
+    }
+    const still = out.still;
+    if (!still) throw new Error('Durağan resmi (PNG önizleme) yok: onu da seçin');
+    if (!typeOf('shopframe', still)) throw new Error('Durağan resim PNG ya da WebP olmalı');
+    if (still.size > limits.frameBytes) throw new Error(`Durağan resim en fazla ${mb(limits.frameBytes)} olabilir`);
+    out.stillUrl = URL.createObjectURL(still);
     const d = await sizeOf(out.stillUrl);
     if (Math.abs(d.w - d.h) > Math.max(2, d.w * 0.02)) throw new Error(`Durağan resim kare olmalı (bu ${d.w} × ${d.h})`);
     if (d.w < limits.framePxMin || d.w > limits.framePxMax) throw new Error(`Durağan resim ${limits.framePxMin}–${limits.framePxMax} piksel olmalı (bu ${d.w})`);
@@ -962,7 +1087,7 @@ function BulkFrames({ limits, taken, onClose, onDone }) {
     onDone();
   };
   return html`<${Modal} title="Toplu çerçeve ekle" onClose=${busy ? () => {} : onClose} wide>
-    <p class="note">Tasarımcının klasörünü seçin. Her çerçevenin durağan PNG'si (önizleme) ve hareketli WebP'si adından eşleştirilir; fotoğraf alanı resmin saydam ortasından ölçülür. GIF ve SVGA kullanılmaz: hareketli WebP aynı çerçevedir ve telefon onu oynatır.</p>
+    <p class="note">Tasarımcının klasörünü seçin. Her çerçevenin durağan PNG'si (önizleme) ve hareketli WebP'si adından eşleştirilir; PNG'si olmayanın durağan resmi hareketli WebP'nin ilk karesinden yapılır. Fotoğraf alanı resmin saydam ortasından ölçülür. GIF ve SVGA kullanılmaz: hareketli WebP aynı çerçevedir ve telefon onu oynatır.</p>
     <div class="row gap wrap">
       <label class="field"><span>Klasör</span><input type="file" webkitdirectory multiple disabled=${!!busy} onChange=${(e) => pick(e.target.files)} /></label>
       <label class="field"><span>ya da dosyalar</span><input type="file" multiple accept=".png,.webp,image/png,image/webp" disabled=${!!busy} onChange=${(e) => pick(e.target.files)} /></label>
@@ -974,17 +1099,24 @@ function BulkFrames({ limits, taken, onClose, onDone }) {
         <label class="field"><span>VIP seviyesi (0 = herkes)</span><input type="number" min="0" max=${limits.vipMax} value=${common.minVip} onInput=${(e) => setAll('minVip', e.target.value)} /></label>
         <label class="field inline" style="align-self:end"><span>Satışta</span><input type="checkbox" checked=${common.enabled} onChange=${(e) => setAll('enabled', e.target.checked)} /></label>
       </div>
-      <small class="muted">${rows.length} çerçeve bulundu${skipped ? `; ${skipped} GIF ya da SVGA dosyası kullanılmadı` : ''}. Adları ve fotoğraf alanını tek tek düzeltebilirsiniz; işaretsizler eklenmez. İlk numara mağazada başta durur.</small>
+      <small class="muted">${rows.length} çerçeve bulundu${skipped ? `; ${skipped} GIF ya da SVGA dosyası kullanılmadı` : ''}. Adları tek tek düzeltebilirsiniz; fotoğraf oturmadıysa kartında fareyle sürükleyin, noktadan ya da tekerlekle büyütün. İşaretsizler eklenmez. İlk numara mağazada başta durur.</small>
       <div class="bulk-grid">
         ${rows.map(
           (r) => html`<div class=${`bulk-card${r.state === 'done' ? ' done' : ''}`} key=${r.key}>
-            <${FramePreview} src=${r.motionUrl ?? r.stillUrl} hole=${r.hole} at=${r.at} size=${110} />
+            <${FramePreview}
+              src=${r.motionUrl ?? r.stillUrl}
+              hole=${r.hole}
+              at=${r.at}
+              size=${140}
+              limits=${limits}
+              onChange=${!r.problem && r.state !== 'done' && !busy && limits.holeAtMin ? (o) => setRow(r.key, o.hole !== undefined ? { hole: o.hole } : { at: { x: o.x, y: o.y } }) : undefined}
+            />
             <label class="field inline"><span>Ekle</span><input type="checkbox" checked=${r.on} disabled=${!!r.problem || r.state === 'done' || !!busy} onChange=${(e) => setRow(r.key, { on: e.target.checked })} /></label>
             <input value=${r.name} maxlength=${limits.nameMax} aria-label="Ad" disabled=${r.state === 'done' || !!busy} onInput=${(e) => setRow(r.key, { name: e.target.value })} />
             ${!r.problem &&
             html`<label class="field"><span>Fotoğraf alanı: %${pct(r.hole * 2)}</span>
               <input type="range" min=${limits.holeMin} max=${limits.holeMax} step="0.005" value=${r.hole} disabled=${r.state === 'done' || !!busy} onInput=${(e) => setRow(r.key, { hole: Number(e.target.value) })} /></label>`}
-            <small class=${r.problem ? 'bad' : 'muted'}>${r.problem ?? (r.motion ? 'Hareketli ve durağan' : 'Yalnız durağan (hareketli WebP yok)')}</small>
+            <small class=${r.problem ? 'bad' : 'muted'}>${r.problem ?? (r.motion ? (r.made ? 'Hareketli; durağan resmi ilk karesinden' : 'Hareketli ve durağan') : 'Yalnız durağan (hareketli WebP yok)')}</small>
             ${r.on && !r.problem && r.state !== 'done' && clash(r) && html`<small class="bad">Bu ad zaten var: değiştirin</small>`}
             ${r.state && html`<small class=${r.state === 'done' ? 'good' : r.state.startsWith('Eklenmedi') ? 'bad' : 'muted'}>${r.state === 'done' ? '✓ Eklendi' : r.state}</small>`}
           </div>`,
