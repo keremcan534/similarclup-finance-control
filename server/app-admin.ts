@@ -58,6 +58,9 @@ export const APP_ROUTES: [string, string, Permission | Permission[]][] = [
   ['POST', '/api/admin/shop/order', 'app.shop'],
   // Seviyeler ve VIP (the app's levels-admin.mjs): every system's settings, the change preview, saving (a drop asks
   // for a confirm first), back to today's values, the level drops.
+  // Oda roketi (the app's room-rocket.mjs): on / off, the levels' goals and prizes, the last launches.
+  ['GET', '/api/admin/rocket', 'app.rocket'],
+  ['POST', '/api/admin/rocket/config', 'app.rocket'],
   ['GET', '/api/admin/levels', 'app.levels'],
   ['POST', '/api/admin/levels/preview', 'app.levels'],
   ['POST', '/api/admin/levels/save', 'app.levels'],

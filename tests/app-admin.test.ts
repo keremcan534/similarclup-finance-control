@@ -598,16 +598,16 @@ test('Seviyeler ve VIP: finans yöneticisinin yetkisiyle; kayıt ve sıfırlama 
 test('daha önce kurulmuş rollere yeni yetki bir kez eklenir', () => {
   const { db } = setup();
   const ADDED: Record<string, string[]> = {
-    finance_manager: ['app.gifts', 'app.emojis', 'app.shop', 'app.levels', 'app.withdrawals', 'app.payouts', 'app.refunds', 'app.lucky', 'app.settings', 'app.reports', 'app.agencies', 'app.agency_ledger'],
+    finance_manager: ['app.gifts', 'app.emojis', 'app.shop', 'app.levels', 'app.withdrawals', 'app.payouts', 'app.refunds', 'app.lucky', 'app.rocket', 'app.settings', 'app.reports', 'app.agencies', 'app.agency_ledger'],
     operations_manager: ['app.gifts', 'app.emojis', 'app.shop', 'app.reports', 'app.users', 'app.complaints', 'app.support', 'app.notices', 'app.events'],
   };
-  // A database made before 002–006, 008 and 009: the roles without the app permissions.
+  // A database made before 002–006, 008, 009 and 010: the roles without the app permissions.
   for (const [key, list] of Object.entries(ADDED)) {
     const perms: string[] = JSON.parse(db.value<string>('SELECT permissions FROM roles WHERE key = ?', key)!);
     db.run('UPDATE roles SET permissions = ? WHERE key = ?', JSON.stringify(perms.filter((p) => !list.includes(p))), key);
   }
   db.run(
-    "DELETE FROM schema_migrations WHERE name IN ('002_app_permissions.sql', '003_app_finance_permissions.sql', '004_app_operations_permissions.sql', '005_app_agency_permissions.sql', '006_app_emoji_permissions.sql', '008_app_levels_permissions.sql', '009_app_shop_permissions.sql')",
+    "DELETE FROM schema_migrations WHERE name IN ('002_app_permissions.sql', '003_app_finance_permissions.sql', '004_app_operations_permissions.sql', '005_app_agency_permissions.sql', '006_app_emoji_permissions.sql', '008_app_levels_permissions.sql', '009_app_shop_permissions.sql', '010_app_rocket_permissions.sql')",
   );
   db.migrate();
   db.migrate();
