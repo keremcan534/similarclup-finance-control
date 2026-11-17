@@ -534,7 +534,7 @@ test('Emojiler: kendi yetkisiyle; paketler, çıkartmalar, sıra, orijinale dön
   assert.equal((await fetch(`${base}/api/app/media/f/stickerart/u1/x.png`, { headers: ops })).status, 200);
 });
 
-test('Mağaza: kendi yetkisiyle; eşyalar, sıra, orijinale dönme, çerçeve resmi ve giriş efekti videosu yükleme', async () => {
+test('Mağaza: kendi yetkisiyle; eşyalar, sıra, orijinale dönme, çerçeve, balon ve dalga, resim ve giriş efekti videosu yükleme', async () => {
   env.as('operations_manager', 'ops@test.local');
   env.as('finance_manager', 'fin@test.local');
   env.as('read_only', 'ro@test.local');
@@ -548,6 +548,9 @@ test('Mağaza: kendi yetkisiyle; eşyalar, sıra, orijinale dönme, çerçeve re
     ['POST', '/api/app/shop/reset', { id: 'fr-neon' }],
     ['POST', '/api/app/shop/order', { kind: 'frame', ids: ['sf1', 'fr-neon'] }],
     ['POST', '/api/app/shop/delete', { id: 'sf1' }],
+    // A chat bubble with its picture's corners, and a voice wave: their look goes to the app as it is.
+    ['POST', '/api/app/shop', { kind: 'bubble', name: 'Taçlı', price: 900, days: 30, art: 'x', look: { colors: ['#B45309', '#F59E0B'], text: '#1F1300', slice: { t: 40, r: 60, b: 40, l: 60 } } }],
+    ['POST', '/api/app/shop/update', { id: 'sw2', art: null, look: { style: 'spin', colors: ['#00C2FF', '#0047FF', '#00FFB2'] } }],
   ] as const) {
     for (const h of [ops, fin]) assert.equal((await call(method, path, body, h)).status, 200, `${path}`);
     assert.equal(seen.at(-1)!.path, path.replace('/api/app/', '/api/admin/'));

@@ -1,10 +1,13 @@
-// Uygulama › Mağaza: the Similar Club app's shop frames and entry effects (the app's server/api/shop-items.mjs;
-// server/app-admin.ts passes the calls on as the signed-in panel user). The app's own items change (name, price, days,
-// VIP level, on the shelf, order) and go back to the app's values; the team adds its own:
+// Uygulama › Mağaza: the Similar Club app's shop frames, entry effects, chat bubbles and voice waves (the app's
+// server/api/shop-items.mjs; server/app-admin.ts passes the calls on as the signed-in panel user). The app's own items
+// change (name, price, days, VIP level, on the shelf, order) and go back to the app's values; the team adds its own:
 //   - a frame: a transparent square PNG/WebP drawn around the photo, with how big the photo's hole is;
 //   - an entry effect: a video (a ready stacked MP4, or a transparent WebM, ProRes .mov or SVGA the app's server converts,
 //     as a gift's) and its name plate: where the entering person's name is written over it, how wide it may be (a long
-//     name is drawn smaller), how big, which colour.
+//     name is drawn smaller), how big, which colour;
+//   - a chat bubble: two colours and the text's, or a picture (made at 3×) stretched round the message with its
+//     corners kept (how far in each corner goes is set here; the browser draws it the same way, border-image);
+//   - a voice wave: a style the app draws and its colours; the sparkle style's sparks may be a picture.
 // Phones read the shop from the server (a new APK); older APKs keep their compiled shop.
 import { Badge, Button, Card, Loading, Modal, Page, Tabs, act, html, num, post, searchable, useApi, useApp, useEffect, useRef, useState } from '../lib.js';
 import { Stage, typeOf, upload, videoKindOf } from './app-gifts.js';
@@ -12,7 +15,30 @@ import { Stage, typeOf, upload, videoKindOf } from './app-gifts.js';
 const KINDS = [
   ['entry', 'Giriş efektleri'],
   ['frame', 'Çerçeveler'],
+  ['bubble', 'Sohbet balonları'],
+  ['wave', 'Ses dalgaları'],
 ];
+const NEW_LABEL = { entry: 'Yeni giriş efekti', frame: 'Yeni çerçeve', bubble: 'Yeni sohbet balonu', wave: 'Yeni ses dalgası' };
+const KIND_HELP = {
+  entry: 'Sizin eklediğiniz giriş efektlerinde odaya girenin adı isim plakasına yazılır.',
+  frame: 'Çerçeve resmi saydam, kare PNG ya da WebP olmalı; fotoğraf ortadaki boşluğa oturur.',
+  bubble: 'Balon iki renkle ya da bir resimle olur. Resmin köşeleri bozulmaz, ortası mesaja göre uzar.',
+  wave: 'Dalga, konuşanın koltuğundaki halkadır; sese göre büyür. Stil ve renk seçilir; Parıltı stilinde dönen şekiller resim olabilir.',
+};
+/** The app's own bubbles and waves as the app draws them (app/src/data/catalog.ts, components/room/voice-wave.tsx): a preview only. */
+const APP_LOOKS = {
+  'bb-candy': { colors: ['#F472B6', '#FB7185'], text: '#FFFFFF' },
+  'bb-galaxy': { colors: ['#312E81', '#7C3AED'], text: '#FFFFFF' },
+  'bb-gold': { colors: ['#B45309', '#F59E0B'], text: '#FFFFFF' },
+  'wv-sparkle': { style: 'sparkle', colors: ['#FF5FA2', '#FFFFFF'] },
+  'wv-flame': { style: 'double', colors: ['#FF8A3D', '#FF3B30'] },
+  'wv-rainbow': { style: 'spin', colors: ['#FF3B30', '#FFD60A', '#13D9DF', '#3D9BFF'] },
+  'wv-gold': { style: 'ripple', colors: ['#F6BD60'] },
+};
+/** A bubble's picture is made at 3× (a phone's screen): the phone draws one of its pixels as a third of a point. */
+const BUBBLE_SCALE = 1 / 3;
+const SHORT = 'Merhaba 👋';
+const LONG = 'Bu akşam saat 9’da odada buluşuyoruz, herkes gelsin! 🎉';
 const FIELD_TR = { name: 'ad', price: 'fiyat', days: 'süre', minVip: 'VIP', enabled: 'rafta / kapalı' };
 const daysText = (d) => (d ? `${num(d)} gün` : 'süresiz');
 const pct = (x) => `${Math.round(x * 1000) / 10}`;
@@ -47,6 +73,43 @@ function FramePreview({ src, hole, size = 120 }) {
   return html`<div class="frame-preview" style=${`width:${size}px;height:${size}px`}>
     <div class="frame-photo" style=${`width:${photo}px;height:${photo}px`}>🙂</div>
     ${src && html`<img src=${src} alt="" width=${size} height=${size} />`}
+  </div>`;
+}
+
+/** A chat message in this bubble on the room's dark ground, as the phone draws it (its picture: border-image). */
+function BubbleSample({ look, src, text = SHORT }) {
+  const s = look?.slice;
+  if (src && s) {
+    const k = BUBBLE_SCALE;
+    return html`<div
+      class="shop-bubble art"
+      style=${`color:${look.text};border-width:${s.t * k}px ${s.r * k}px ${s.b * k}px ${s.l * k}px;border-image:url("${src}") ${s.t} ${s.r} ${s.b} ${s.l} fill / ${s.t * k}px ${s.r * k}px ${s.b * k}px ${s.l * k}px stretch`}
+    >${text}</div>`;
+  }
+  const c = look?.colors ?? ['#334155', '#334155'];
+  return html`<div class="shop-bubble" style=${`color:${look?.text ?? '#FFFFFF'};background:linear-gradient(90deg, ${c[0]}, ${c[1]})`}>${text}</div>`;
+}
+const bubbleStage = (look, src) => html`<div class="bubble-stage">
+  <${BubbleSample} look=${look} src=${src} />
+  <${BubbleSample} look=${look} src=${src} text=${LONG} />
+</div>`;
+
+/** A face talking with this wave: the ring and its style's motion, sized as on a seat (CSS: .wave-*). */
+function WaveSample({ look, src, size = 64 }) {
+  const c = look?.colors ?? ['#FFFFFF'];
+  const style = look?.style ?? 'ring';
+  const ring = (color, cls = '') => html`<i class=${`wave-ring ${cls}`} style=${`border-color:${color};box-shadow:0 0 8px ${color}`}></i>`;
+  const side = (i) => c[i % c.length];
+  return html`<div class="wave-sample" style=${`width:${size}px;height:${size}px`} aria-label="Ses dalgası önizlemesi">
+    ${style === 'spin' && html`<i class="wave-ring spin" style=${`border-color:${side(0)} ${side(1)} ${side(2)} ${side(3)};box-shadow:0 0 8px ${side(1)}`}></i>`}
+    ${style === 'double' && [ring(c[1], 'outer'), ring(c[0])]}
+    ${style === 'ripple' && [ring(c[0], 'ripple'), ring(c[0])]}
+    ${(style === 'ring' || style === 'sparkle') && ring(c[0])}
+    ${style === 'sparkle' &&
+    html`<span class="wave-sparks">${[0, 90, 180, 270].map(
+      (deg) => html`<span style=${`transform:rotate(${deg}deg)`}>${src ? html`<img src=${src} alt="" />` : html`<b style=${`background:${c[1]};box-shadow:0 0 6px ${c[1]}`}></b>`}</span>`,
+    )}</span>`}
+    <span class="wave-face">🙂</span>
   </div>`;
 }
 
@@ -85,8 +148,8 @@ export function AppShop() {
 
   return html`<${Page}
     title="Mağaza"
-    subtitle="Çerçeveler ve giriş efektleri: uygulamanın kendileri ve sizin eklediğiniz. Değişiklikler sunucuda hemen geçerli; yeni APK'da telefonlar mağazayı buradan gösterir."
-    actions=${editing && html`<${Button} kind="primary" onClick=${() => setEdit({ kind })}>${kind === 'entry' ? 'Yeni giriş efekti' : 'Yeni çerçeve'}</${Button}>`}
+    subtitle="Giriş efektleri, çerçeveler, sohbet balonları ve ses dalgaları: uygulamanın kendileri ve sizin eklediğiniz. Değişiklikler sunucuda hemen geçerli; yeni APK'da telefonlar mağazayı buradan gösterir."
+    actions=${editing && html`<${Button} kind="primary" onClick=${() => setEdit({ kind })}>${NEW_LABEL[kind]}</${Button}>`}
   >
     <${Loading} state=${list}>${(d) => {
       const w = searchable(q.trim());
@@ -97,7 +160,7 @@ export function AppShop() {
         <${Tabs} tabs=${KINDS.map(([k, l]) => [k, `${l} (${d.items.filter((x) => x.kind === k).length})`])} value=${kind} onChange=${setKind} />
         <div class="row gap wrap" style="margin:10px 0">
           <input type="search" class="list-search" style="margin-left:0" placeholder="Eşya ara: ad ya da kimlik" aria-label="Eşya ara" value=${q} onInput=${(e) => setQ(e.target.value)} />
-          <small class="muted">${kind === 'entry' ? 'Sizin eklediğiniz giriş efektlerinde odaya girenin adı isim plakasına yazılır.' : 'Çerçeve resmi saydam, kare PNG ya da WebP olmalı; fotoğraf ortadaki boşluğa oturur.'}</small>
+          <small class="muted">${KIND_HELP[kind]}</small>
         </div>
         ${!shown.length && html`<div class="empty">${q ? `“${q}” için eşya yok.` : 'Eşya yok.'}</div>`}
         <div class="shop-grid">${shown.map((x) => html`<${Card}
@@ -111,6 +174,8 @@ export function AppShop() {
         >
           <div class="row gap" style="align-items:flex-start">
             ${x.kind === 'frame' && x.art ? html`<${FramePreview} src=${x.art.url} hole=${x.art.hole} size=${88} />` : ''}
+            ${x.kind === 'bubble' && (x.look || APP_LOOKS[x.id]) ? html`<div class="bubble-stage small"><${BubbleSample} look=${x.look ?? APP_LOOKS[x.id]} src=${x.art?.url} /></div>` : ''}
+            ${x.kind === 'wave' && (x.look || APP_LOOKS[x.id]) ? html`<div class="bubble-stage small"><${WaveSample} look=${x.look ?? APP_LOOKS[x.id]} src=${x.art?.url} size=${48} /></div>` : ''}
             ${x.kind === 'entry' && x.video ? html`<${Button} onClick=${() => setPlay(x)}>▶ Oynat</${Button}>` : ''}
             <div class="stack" style="flex:1">
               <div>🪙 ${num(x.price)} · ${daysText(x.days)}${x.minVip ? ` · VIP ${x.minVip}+` : ''} · ${num(x.owners)} kişide</div>
@@ -135,9 +200,34 @@ export function AppShop() {
   </${Page}>`;
 }
 
+/** A picture's size in the browser (a picked file, before the app's server measures it). */
+async function sizeOf(src) {
+  const img = new Image();
+  img.src = src;
+  await img.decode();
+  return { w: img.naturalWidth, h: img.naturalHeight };
+}
+/** A third of each side, as the app's server starts a bubble's picture. */
+const thirds = ({ w, h }) => ({ t: Math.floor(h / 3), r: Math.floor(w / 3), b: Math.floor(h / 3), l: Math.floor(w / 3) });
+/** A wave's colours fitted to a style's count (more: the last ones go; fewer: the last is repeated). */
+function fitColors(colors, [lo, hi]) {
+  const out = colors.slice(0, hi);
+  while (out.length < lo) out.push(out.at(-1) ?? '#FFFFFF');
+  return out;
+}
+
 /** Adding or changing an item. The app's own: name, price, days, VIP and on/off only. */
 function Editor({ item, kind, limits, convert, svga, onClose, onSaved }) {
   const own = !item?.builtin;
+  const looks = kind === 'bubble' || kind === 'wave';
+  // A bubble's or wave's colours (and style); a bubble's picture's size and corners.
+  const [look, setLook] = useState(() => {
+    const l = item?.look ?? limits.lookDefault?.[kind] ?? null;
+    return l ? { ...l, colors: [...l.colors] } : null;
+  });
+  const [dims, setDims] = useState(() => (item?.look?.slice ? { w: item.look.slice.w, h: item.look.slice.h } : null));
+  const [slice, setSlice] = useState(() => (item?.look?.slice ? { t: item.look.slice.t, r: item.look.slice.r, b: item.look.slice.b, l: item.look.slice.l } : null));
+  const setColor = (i, c) => setLook((x) => ({ ...x, colors: x.colors.map((y, j) => (j === i ? c : y)) }));
   const [v, setV] = useState(() => ({
     name: item?.name ?? '',
     price: item?.price ?? '',
@@ -162,12 +252,21 @@ function Editor({ item, kind, limits, convert, svga, onClose, onSaved }) {
 
   const pickArt = async (file) => {
     if (!file) return;
-    if (!typeOf('shopframe', file)) return alert('Çerçeve resmi PNG ya da WebP olmalı');
-    if (file.size > limits.frameBytes) return alert(`Resim en fazla ${Math.round(limits.frameBytes / 1024 / 1024)} MB olabilir`);
+    if (!typeOf('shopframe', file)) return alert('Resim PNG ya da WebP olmalı');
+    const max = kind === 'bubble' ? limits.bubbleBytes : kind === 'wave' ? limits.sparkBytes : limits.frameBytes;
+    if (file.size > max) return alert(`Resim en fazla ${max >= 1024 * 1024 ? `${Math.round(max / 1024 / 1024)} MB` : `${Math.round(max / 1024)} KB`} olabilir`);
     setBusy('Resim yükleniyor…');
     try {
+      const local = URL.createObjectURL(file);
+      if (kind === 'bubble') {
+        const d = await sizeOf(local);
+        if (d.w < limits.bubblePxMin || d.h < limits.bubblePxMin || d.w > limits.bubblePxMax || d.h > limits.bubblePxMax)
+          throw new Error(`Balon resmi her yönde ${limits.bubblePxMin}–${limits.bubblePxMax} piksel olmalı (bu ${d.w} × ${d.h})`);
+        setDims(d);
+        setSlice(thirds(d));
+      }
       setArt(await upload('shopframe', file));
-      setArtShown(URL.createObjectURL(file));
+      setArtShown(local);
     } catch (e) {
       alert(e.message);
     } finally {
@@ -193,9 +292,21 @@ function Editor({ item, kind, limits, convert, svga, onClose, onSaved }) {
       setBusy(null);
     }
   };
+  const removeArt = () => {
+    setArt(null);
+    setArtShown(null);
+    setDims(null);
+    setSlice(null);
+  };
   const save = async () => {
     const body = { name: v.name, price: Number(v.price), days: Number(v.days), minVip: Number(v.minVip), enabled: v.enabled };
     if (own && kind === 'frame') Object.assign(body, { hole: Number(v.hole), ...(art && art !== item?.art?.url ? { art } : {}) });
+    if (own && looks) {
+      // The picture: a new one goes with its address; one taken away as null; the one in use isn't sent.
+      const artNow = art !== (item?.art?.url ?? null) ? { art } : {};
+      const sl = kind === 'bubble' && art && slice ? { slice: { t: Number(slice.t), r: Number(slice.r), b: Number(slice.b), l: Number(slice.l) } } : {};
+      Object.assign(body, { look: kind === 'bubble' ? { colors: look.colors, text: look.text, ...sl } : { style: look.style, colors: look.colors }, ...artNow });
+    }
     if (own && kind === 'entry') Object.assign(body, { plate: { ...v.plate, x: Number(v.plate.x), y: Number(v.plate.y), w: Number(v.plate.w), size: Number(v.plate.size) }, ...(video ? { video } : {}) });
     setBusy('Kaydediliyor…');
     const r = await act(
@@ -210,7 +321,7 @@ function Editor({ item, kind, limits, convert, svga, onClose, onSaved }) {
     <input type="range" min=${min} max=${max} step=${step} value=${v.plate[k]} onInput=${(e) => setPlate(k, Number(e.target.value))} />
   </label>`;
   const P = limits.plate;
-  return html`<${Modal} title=${item ? `${item.name} · düzenle` : kind === 'entry' ? 'Yeni giriş efekti' : 'Yeni çerçeve'} onClose=${onClose} wide>
+  return html`<${Modal} title=${item ? `${item.name} · düzenle` : NEW_LABEL[kind]} onClose=${onClose} wide>
     <div class="grid2" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:10px">
       <label class="field"><span>Ad *</span><input value=${v.name} maxlength=${limits.nameMax} onInput=${(e) => set('name', e.target.value)} /></label>
       <label class="field"><span>Fiyat (jeton) *</span><input type="number" min="1" value=${v.price} onInput=${(e) => set('price', e.target.value)} /></label>
@@ -218,7 +329,7 @@ function Editor({ item, kind, limits, convert, svga, onClose, onSaved }) {
       <label class="field"><span>VIP seviyesi (0 = herkes)</span><input type="number" min="0" max=${limits.vipMax} value=${v.minVip} onInput=${(e) => set('minVip', e.target.value)} /></label>
     </div>
     <label class="field inline" style="margin-top:6px"><span>Satışta</span><input type="checkbox" checked=${v.enabled} onChange=${(e) => set('enabled', e.target.checked)} /></label>
-    ${!own && html`<p class="note">Uygulamanın kendi eşyasının resmi ve animasyonu uygulamada. Yeni görselle bir eşya için "Yeni ${kind === 'entry' ? 'giriş efekti' : 'çerçeve'}" ekleyin.</p>`}
+    ${!own && html`<p class="note">Uygulamanın kendi eşyasının görünüşü uygulamada. Yeni görünüşle bir eşya için "${NEW_LABEL[kind]}" ekleyin.</p>`}
     ${own &&
     kind === 'frame' &&
     html`<div class="row gap wrap" style="align-items:flex-start;margin-top:10px">
@@ -251,10 +362,87 @@ function Editor({ item, kind, limits, convert, svga, onClose, onSaved }) {
         </div>
       </div>
     </div>`}
+    ${own && kind === 'bubble' && look && html`<${BubbleEditor} look=${look} setLook=${setLook} setColor=${setColor} src=${artShown} dims=${dims} slice=${slice} setSlice=${setSlice} pickArt=${pickArt} removeArt=${removeArt} limits=${limits} />`}
+    ${own && kind === 'wave' && look && html`<${WaveEditor} look=${look} setLook=${setLook} setColor=${setColor} src=${artShown} pickArt=${pickArt} removeArt=${removeArt} limits=${limits} />`}
     <div class="row gap end">
       ${busy && html`<small class="muted">${busy}</small>`}
       <${Button} onClick=${onClose}>Vazgeç</${Button}>
       <${Button} kind="primary" onClick=${save} disabled=${!!busy || (!item && own && ((kind === 'frame' && !art) || (kind === 'entry' && !video)))}>Kaydet</${Button}>
     </div>
   </${Modal}>`;
+}
+
+const colorInput = (label, value, onInput) => html`<label class="field inline"><span>${label}</span><input type="color" value=${value} onInput=${(e) => onInput(e.target.value.toUpperCase())} /></label>`;
+
+/** A bubble's colours, text colour and picture with its corners, and the bubble round a short and a long message. */
+function BubbleEditor({ look, setLook, setColor, src, dims, slice, setSlice, pickArt, removeArt, limits }) {
+  const shown = src && dims && slice ? { ...look, slice: { ...dims, ...slice } } : { ...look, slice: undefined };
+  const corner = (k, label, max) => html`<label class="field">
+    <span>${label}: ${slice[k]} px</span>
+    <input type="range" min="1" max=${max} step="1" value=${slice[k]} onInput=${(e) => setSlice((x) => ({ ...x, [k]: Number(e.target.value) }))} />
+  </label>`;
+  // The guide: the picture with the lines where the corners end (what lies between them stretches).
+  const scale = dims ? Math.min(1, 280 / dims.w, 160 / dims.h) : 1;
+  return html`<div class="row gap wrap" style="align-items:flex-start;margin-top:10px">
+    ${bubbleStage(shown, src)}
+    <div class="stack" style="flex:1;min-width:240px">
+      <div class="row gap wrap">
+        ${colorInput('1. renk', look.colors[0], (c) => setColor(0, c))}
+        ${colorInput('2. renk', look.colors[1], (c) => setColor(1, c))}
+        ${colorInput('Yazı rengi', look.text, (c) => setLook((x) => ({ ...x, text: c })))}
+      </div>
+      <small class="muted">Tek renk için iki rengi aynı seçin. Resim varsa renkler yalnız resim açılamazsa görünür.</small>
+      <label class="field"><span>Balon resmi (isteğe bağlı; PNG ya da WebP, her yönde ${limits.bubblePxMin}–${limits.bubblePxMax} px, telefon için 3 kat büyük hazırlayın)</span>
+        <input type="file" accept="image/png,image/webp" onChange=${(e) => pickArt(e.target.files[0])} /></label>
+      ${src && html`<div><${Button} kind="ghost" onClick=${removeArt}>Resmi kaldır (yalnız renkler)</${Button}></div>`}
+      ${src &&
+      dims &&
+      slice &&
+      html`<h3>Köşeler</h3>
+        <small class="muted">Çizgilerin dışındaki köşeler olduğu gibi kalır; aradaki kısım mesaja göre uzar ve mesaj ortaya yazılır. Süsleri köşelere koyun.</small>
+        <div class="slice-guide" style=${`width:${dims.w * scale}px;height:${dims.h * scale}px`}>
+          <img src=${src} alt="" />
+          <i class="h" style=${`top:${slice.t * scale}px`}></i>
+          <i class="h" style=${`top:${(dims.h - slice.b) * scale}px`}></i>
+          <i class="v" style=${`left:${slice.l * scale}px`}></i>
+          <i class="v" style=${`left:${(dims.w - slice.r) * scale}px`}></i>
+        </div>
+        ${corner('t', 'Üst', dims.h - slice.b - 2)}
+        ${corner('b', 'Alt', dims.h - slice.t - 2)}
+        ${corner('l', 'Sol', dims.w - slice.r - 2)}
+        ${corner('r', 'Sağ', dims.w - slice.l - 2)}`}
+    </div>
+  </div>`;
+}
+
+/** A wave's style and colours, its sparks' picture for the sparkle style, and a talking face with it. */
+function WaveEditor({ look, setLook, setColor, src, pickArt, removeArt, limits }) {
+  const styles = limits.waveStyles;
+  const [lo, hi] = styles[look.style].colors;
+  const setStyle = (style) => {
+    if (style !== 'sparkle' && src && !confirm('Resim yalnız Parıltı stilinde kullanılır. Resim kaldırılsın mı?')) return;
+    if (style !== 'sparkle' && src) removeArt();
+    setLook((x) => ({ style, colors: fitColors(x.colors, styles[style].colors) }));
+  };
+  return html`<div class="row gap wrap" style="align-items:flex-start;margin-top:10px">
+    <div class="bubble-stage wave"><${WaveSample} look=${look} src=${look.style === 'sparkle' ? src : null} size=${96} /></div>
+    <div class="stack" style="flex:1;min-width:240px">
+      <label class="field"><span>Stil</span>
+        <select value=${look.style} onChange=${(e) => setStyle(e.target.value)}>
+          ${Object.entries(styles).map(([k, x]) => html`<option value=${k}>${x.name}</option>`)}
+        </select></label>
+      <small class="muted">${
+        { ring: 'Halka: tek renk, sese göre büyür.', double: 'Çift halka: içteki 1. renk; dıştaki 2. renk sesle daha çok açılır.', spin: 'Dönen renkler: halka 2–4 renkle döner.', ripple: 'Yayılan halka: halkadan dışa doğru dalgalar yayılır.', sparkle: 'Parıltı: halkada dört şekil döner; 2. renk ya da resim.' }[look.style]
+      }</small>
+      <div class="row gap wrap">
+        ${look.colors.map((c, i) => colorInput(look.style === 'sparkle' ? (i ? 'Parıltı' : 'Halka') : `${i + 1}. renk`, c, (x) => setColor(i, x)))}
+        ${look.colors.length < hi && html`<${Button} kind="ghost" onClick=${() => setLook((x) => ({ ...x, colors: [...x.colors, x.colors.at(-1)] }))}>+ renk</${Button}>`}
+        ${look.colors.length > lo && html`<${Button} kind="ghost" onClick=${() => setLook((x) => ({ ...x, colors: x.colors.slice(0, -1) }))}>− renk</${Button}>`}
+      </div>
+      ${look.style === 'sparkle' &&
+      html`<label class="field"><span>Parıltı resmi (isteğe bağlı; saydam PNG ya da WebP, ${limits.sparkPxMin}–${limits.sparkPxMax} px: kalp, yıldız…)</span>
+          <input type="file" accept="image/png,image/webp" onChange=${(e) => pickArt(e.target.files[0])} /></label>
+        ${src && html`<div><${Button} kind="ghost" onClick=${removeArt}>Resmi kaldır (renkli noktalar)</${Button}></div>`}`}
+    </div>
+  </div>`;
 }

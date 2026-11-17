@@ -250,3 +250,30 @@ table.levels td { vertical-align: middle; }
 .frame-preview { position: relative; display: grid; place-items: center; flex: none; }
 .frame-preview .frame-photo { border-radius: 50%; display: grid; place-items: center; font-size: 26px; background: linear-gradient(135deg, #f9a8d4, #a78bfa); }
 .frame-preview img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: contain; }
+/* Mağaza: a chat bubble on the room's dark ground (its picture as border-image, as the phone stretches it), the
+   picture's corner guide, and a voice wave round a talking face (the app's styles, as CSS). */
+.bubble-stage { display: flex; flex-direction: column; align-items: flex-start; gap: 10px; flex: none; min-width: 260px; max-width: 320px; padding: 14px; border-radius: var(--radius); background: #0c1628; }
+.bubble-stage.small { min-width: 0; max-width: 200px; padding: 8px; }
+.bubble-stage.wave { align-items: center; justify-content: center; min-width: 200px; min-height: 170px; }
+.shop-bubble { max-width: 240px; padding: 7px 11px; border-radius: 14px 14px 14px 4px; font-size: 14px; line-height: 19px; overflow-wrap: anywhere; }
+.shop-bubble.art { border-style: solid; border-color: transparent; padding: 0; border-radius: 0; background: none; }
+.slice-guide { position: relative; flex: none; background: repeating-conic-gradient(#2a2233 0% 25%, #1c1724 0% 50%) 50% / 16px 16px; }
+.slice-guide img { display: block; width: 100%; height: 100%; }
+.slice-guide i { position: absolute; pointer-events: none; }
+.slice-guide i.h { left: 0; right: 0; border-top: 1px dashed #22d3ee; }
+.slice-guide i.v { top: 0; bottom: 0; border-left: 1px dashed #22d3ee; }
+.wave-sample { position: relative; display: grid; place-items: center; flex: none; }
+.wave-face { position: relative; z-index: 1; width: 100%; height: 100%; border-radius: 50%; display: grid; place-items: center; font-size: 26px; background: linear-gradient(135deg, #f9a8d4, #a78bfa); }
+.wave-ring { position: absolute; inset: -12%; border-radius: 50%; border: 3px solid; animation: wave-talk 0.45s ease-in-out infinite alternate; }
+.wave-ring.outer { border-width: 2px; animation-name: wave-talk-outer; }
+.wave-ring.ripple { border-width: 1.5px; animation: wave-ripple 1.3s linear infinite; }
+.wave-ring.spin { animation: wave-spin 3.2s linear infinite; }
+.wave-sparks { position: absolute; inset: -12%; animation: wave-spin 2.6s linear infinite; }
+.wave-sparks > span { position: absolute; inset: 0; display: flex; justify-content: center; }
+.wave-sparks b { width: 7px; height: 7px; margin-top: -2px; border-radius: 50%; }
+.wave-sparks img { width: 16px; height: 16px; margin-top: -6px; object-fit: contain; }
+@keyframes wave-talk { from { transform: scale(1); opacity: 0.6; } to { transform: scale(1.1); opacity: 1; } }
+@keyframes wave-talk-outer { from { transform: scale(1.05); opacity: 0.3; } to { transform: scale(1.28); opacity: 0.9; } }
+@keyframes wave-ripple { from { transform: scale(1); opacity: 0.85; } to { transform: scale(1.35); opacity: 0; } }
+@keyframes wave-spin { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) { .wave-sample * { animation: none !important; } }
