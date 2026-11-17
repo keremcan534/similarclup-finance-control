@@ -32,10 +32,10 @@ const KINDS = [
 const kindOk = (k, g) => k === 'all' || (k === 'app' && g.builtin) || (k === 'mine' && !g.builtin) || (k === 'changed' && g.builtin && g.changed?.length > 0);
 
 /** What a picked file is uploaded as (the app's upload kinds), or null when the app won't take it. */
-function typeOf(kind, file) {
+export function typeOf(kind, file) {
   const t = (file.type || '').toLowerCase();
   const e = ending(file.name);
-  if (kind === 'gifticon') return t === 'image/png' || e === 'png' ? 'image/png' : t === 'image/webp' || e === 'webp' ? 'image/webp' : null;
+  if (kind === 'gifticon' || kind === 'shopframe') return t === 'image/png' || e === 'png' ? 'image/png' : t === 'image/webp' || e === 'webp' ? 'image/webp' : null;
   if (kind === 'giftvideo') return t === 'video/mp4' || e === 'mp4' ? 'video/mp4' : null;
   if (e === 'svga') return 'application/x-svga';
   if (t === 'video/webm' || e === 'webm') return 'video/webm';
@@ -43,10 +43,10 @@ function typeOf(kind, file) {
   return null;
 }
 /** A picked video: a ready stacked MP4, a transparent source the app converts, or an SVGA. */
-const videoKindOf = (file) => (ending(file.name) === 'svga' ? 'svga' : typeOf('giftsource', file) ? 'source' : typeOf('giftvideo', file) ? 'stacked' : null);
+export const videoKindOf = (file) => (ending(file.name) === 'svga' ? 'svga' : typeOf('giftsource', file) ? 'source' : typeOf('giftvideo', file) ? 'stacked' : null);
 
 /** Uploads a picked file through this server to the app's storage; resolves with the address to save. */
-function upload(kind, file, onProgress) {
+export function upload(kind, file, onProgress) {
   return new Promise((resolve, reject) => {
     const type = typeOf(kind, file);
     if (!type) return reject(new Error('Bu dosya türü yüklenemez'));
@@ -207,7 +207,7 @@ export function AppGifts() {
 }
 
 /** A stacked video (colour on top, alpha below) drawn transparent over a stage, as the phones draw it. */
-function Stage({ src, onEnd }) {
+export function Stage({ src, onEnd }) {
   const canvas = useRef(null);
   const [blocked, setBlocked] = useState(false);
   useEffect(() => {

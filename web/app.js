@@ -14,6 +14,7 @@ import { Integrations, Users, Audit, Settings, Account } from './pages/admin.js'
 import { AppGifts } from './pages/app-gifts.js';
 import { AppEmojis } from './pages/app-emojis.js';
 import { AppLevels } from './pages/app-levels.js';
+import { AppShop } from './pages/app-shop.js';
 import { AppLucky, AppPayouts, AppRefunds, AppReports, AppSettings, AppWithdrawals } from './pages/app-finance.js';
 import { AppComplaints, AppEvents, AppNotices, AppSupport, AppUsers } from './pages/app-ops.js';
 import { AppAgencies } from './pages/app-agencies.js';
@@ -38,7 +39,8 @@ const NAV = [
   ['gifts', 'Hediye ve mağaza', '🎁', [
     ['app-gifts', 'Hediyeler', 'app.gifts', AppGifts, 'hediye video svga ikon animasyon raf fiyat'],
     ['app-emojis', 'Emojiler', 'app.emojis', AppEmojis, 'emoji çıkartma sticker paket lottie'],
-    ['app-economy', 'Mağaza eşyaları', 'app.economy', AppEconomy, 'mağaza eşya çerçeve vip giriş efekti binek balon ver geri al'],
+    ['app-shop', 'Mağaza', 'app.shop', AppShop, 'mağaza çerçeve giriş efekti ejderha video svga isim plakası fiyat satış'],
+    ['app-economy', 'Mağaza eşyaları (kişiye)', 'app.economy', AppEconomy, 'mağaza eşya çerçeve vip giriş efekti binek balon ver geri al kişi'],
     ['app-lucky', 'Şanslı hediye ayarı', 'app.lucky', AppLucky, 'şanslı lucky çanta olasılık ödül'],
   ]],
   ['levels', 'Seviye ve VIP', '⭐', [
