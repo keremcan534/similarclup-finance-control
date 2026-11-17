@@ -534,19 +534,51 @@ test('Emojiler: kendi yetkisiyle; paketler, çıkartmalar, sıra, orijinale dön
   assert.equal((await fetch(`${base}/api/app/media/f/stickerart/u1/x.png`, { headers: ops })).status, 200);
 });
 
+test('Seviyeler ve VIP: finans yöneticisinin yetkisiyle; kayıt ve sıfırlama denetim kaydına yazılır, önizleme yazılmaz', async () => {
+  env.as('finance_manager', 'fin@test.local');
+  env.as('operations_manager', 'ops@test.local');
+  env.as('read_only', 'ro@test.local');
+  const fin = await loginAs('fin@test.local');
+  const ops = await loginAs('ops@test.local');
+  const ro = await loginAs('ro@test.local');
+  for (const [method, path, body] of [
+    ['GET', '/api/app/levels', undefined],
+    ['POST', '/api/app/levels/preview', { system: 'vip', doc: { levels: [{ level: 1, points: 600000, name: 'Bronz' }] } }],
+    ['POST', '/api/app/levels/save', { system: 'noble', doc: { levels: [] }, rev: 3, confirm: true }],
+    ['POST', '/api/app/levels/reset', { system: 'wealth', rev: 4, confirm: true }],
+    ['GET', '/api/app/levels/drops?system=vip&limit=50', undefined],
+  ] as const) {
+    assert.equal((await call(method, path, body, fin)).status, 200, path);
+    assert.equal(seen.at(-1)!.path, path.replace('/api/app/', '/api/admin/'));
+    if (body) assert.deepEqual(JSON.parse(seen.at(-1)!.body), body);
+    for (const h of [ops, ro]) assert.equal((await call(method, path, body, h)).status, 403, `yetkisiz: ${path}`);
+  }
+  assert.ok(env.db.get("SELECT 1 FROM audit_logs WHERE action = 'app.levels.save'"));
+  assert.ok(env.db.get("SELECT 1 FROM audit_logs WHERE action = 'app.levels.reset'"));
+  assert.ok(!env.db.get("SELECT 1 FROM audit_logs WHERE action = 'app.levels.preview'"), 'önizleme bir şey değiştirmez');
+  // The app's refusal (a stale page, a confirm it asks for) comes back with its own sentence.
+  refuse = { status: 409, error: 'Bu ayarı az önce başkası değiştirdi; sayfayı yenileyip tekrar dene' };
+  try {
+    const r = await call('POST', '/api/app/levels/save', { system: 'vip', doc: {}, rev: 1 }, fin);
+    assert.deepEqual([r.status, r.json.error], [409, refuse.error]);
+  } finally {
+    refuse = null;
+  }
+});
+
 test('daha önce kurulmuş rollere yeni yetki bir kez eklenir', () => {
   const { db } = setup();
   const ADDED: Record<string, string[]> = {
-    finance_manager: ['app.gifts', 'app.emojis', 'app.withdrawals', 'app.payouts', 'app.refunds', 'app.lucky', 'app.settings', 'app.reports', 'app.agencies', 'app.agency_ledger'],
+    finance_manager: ['app.gifts', 'app.emojis', 'app.levels', 'app.withdrawals', 'app.payouts', 'app.refunds', 'app.lucky', 'app.settings', 'app.reports', 'app.agencies', 'app.agency_ledger'],
     operations_manager: ['app.gifts', 'app.emojis', 'app.reports', 'app.users', 'app.complaints', 'app.support', 'app.notices', 'app.events'],
   };
-  // A database made before 002–006: the roles without the app permissions.
+  // A database made before 002–006 and 008: the roles without the app permissions.
   for (const [key, list] of Object.entries(ADDED)) {
     const perms: string[] = JSON.parse(db.value<string>('SELECT permissions FROM roles WHERE key = ?', key)!);
     db.run('UPDATE roles SET permissions = ? WHERE key = ?', JSON.stringify(perms.filter((p) => !list.includes(p))), key);
   }
   db.run(
-    "DELETE FROM schema_migrations WHERE name IN ('002_app_permissions.sql', '003_app_finance_permissions.sql', '004_app_operations_permissions.sql', '005_app_agency_permissions.sql', '006_app_emoji_permissions.sql')",
+    "DELETE FROM schema_migrations WHERE name IN ('002_app_permissions.sql', '003_app_finance_permissions.sql', '004_app_operations_permissions.sql', '005_app_agency_permissions.sql', '006_app_emoji_permissions.sql', '008_app_levels_permissions.sql')",
   );
   db.migrate();
   db.migrate();
