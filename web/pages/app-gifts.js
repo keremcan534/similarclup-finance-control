@@ -206,14 +206,23 @@ export function AppGifts() {
   </${Page}>`;
 }
 
-/** A stacked video (colour on top, alpha below) drawn transparent over a stage, as the phones draw it. */
-export function Stage({ src, onEnd }) {
+/**
+ * A stacked video (colour on top, alpha below) drawn transparent over a stage, as the phones draw it. `loop` plays it
+ * again and again, `muted` starts it without sound, and `onVideo` hands the caller the video to play, pause, seek and
+ * time (null when it goes).
+ */
+export function Stage({ src, onEnd, loop = false, muted = false, onVideo }) {
   const canvas = useRef(null);
+  const video = useRef(null);
   const [blocked, setBlocked] = useState(false);
   useEffect(() => {
     const v = document.createElement('video');
     v.src = src;
     v.playsInline = true;
+    v.loop = loop;
+    v.muted = muted;
+    video.current = v;
+    onVideo?.(v);
     const c = canvas.current;
     const g = c.getContext('2d', { willReadFrequently: true });
     const off = document.createElement('canvas');
@@ -247,13 +256,21 @@ export function Stage({ src, onEnd }) {
     });
     raf = requestAnimationFrame(draw);
     return () => {
+      onVideo?.(null);
+      video.current = null;
       cancelAnimationFrame(raf);
       v.pause();
       v.removeAttribute('src');
       v.load();
     };
   }, [src]);
-  return html`<div class="alpha-stage"><canvas ref=${canvas} class="alpha-video"></canvas>${blocked && html`<small class="muted">Tarayıcı sesi kapattı</small>`}</div>`;
+  useEffect(() => {
+    if (video.current) video.current.loop = loop;
+  }, [loop]);
+  useEffect(() => {
+    if (video.current) video.current.muted = muted;
+  }, [muted]);
+  return html`<div class="alpha-stage"><canvas ref=${canvas} class="alpha-video"></canvas>${blocked && !muted && html`<small class="muted">Tarayıcı sesi kapattı</small>`}</div>`;
 }
 
 /** A file's size in words: KB under a megabyte. */

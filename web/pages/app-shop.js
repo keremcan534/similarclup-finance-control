@@ -3,8 +3,11 @@
 // change (name, price, days, VIP level, on the shelf, order) and go back to the app's values; the team adds its own:
 //   - a frame: a transparent square PNG/WebP drawn around the photo, with how big the photo's hole is;
 //   - an entry effect: a video (a ready stacked MP4, or a transparent WebM, ProRes .mov or SVGA the app's server converts,
-//     as a gift's) and its name plate: where the entering person's name is written over it, how wide it may be (a long
-//     name is drawn smaller), how big, which colour;
+//     as a gift's), its name plate: where the entering person's name is written over it (dragged on the preview, or
+//     the sliders), how wide it may be (a long name is drawn smaller), how big, which colour, and how it looks and when
+//     it shows (written or not, capitals, letter spacing, shadow or glow, outline, a band behind it, the seconds of
+//     the clip and how it comes in: the preview plays the video with its controls and times the name the same way),
+//     and an icon the shop shows for it;
 //   - a chat bubble: two colours and the text's, or a picture (made at 3×) stretched round the message with its
 //     corners kept (how far in each corner goes is set here; the browser draws it the same way, border-image);
 //   - a voice wave: a style the app draws and its colours; the sparkle style's sparks may be a picture.
@@ -43,27 +46,194 @@ const FIELD_TR = { name: 'ad', price: 'fiyat', days: 'süre', minVip: 'VIP', ena
 const daysText = (d) => (d ? `${num(d)} gün` : 'süresiz');
 const pct = (x) => `${Math.round(x * 1000) / 10}`;
 const SAMPLE = 'KaaN';
+const sec = (s) => (Math.round(s * 10) / 10).toLocaleString('tr-TR', { minimumFractionDigits: 1 });
+const ANIM_TR = { none: 'Hemen', fade: 'Solarak', zoom: 'Büyüyerek', rise: 'Yükselerek' };
+/** What a plate saved before its look and timing is read with, as the phones read it (app lib/shop-live-core PLATE_LOOK). */
+const PLATE_LOOK = { show: true, upper: false, spacing: 0, shadow: { color: '#000000', size: 0.1 }, outline: null, back: null, from: 0, to: 0, anim: 'none' };
+const plateIn = (p) => ({ ...PLATE_LOOK, ...p });
+/** What a switched-on shadow, outline or band starts as. */
+const PAINT_START = { shadow: { color: '#000000', size: 0.1 }, outline: { color: '#000000', size: 0.05 }, back: { color: '#000000', alpha: 0.45 } };
+/** How long the name takes to come in and go, as the phones draw it (app components/fx/video-fx PLATE_IN_MS). */
+const IN_S = 0.35;
+const OUT_S = 0.3;
+/** The eight ways round a letter the phones draw the outline (app components/fx/video-fx AROUND). */
+const AROUND = [[1, 0], [-1, 0], [0, 1], [0, -1], [0.71, 0.71], [-0.71, 0.71], [0.71, -0.71], [-0.71, -0.71]];
+/** The stage: the 540 × 960 frame the plate is set in, at half size. */
+const W = 270;
+const H = 480;
 
+/** Capitals the Turkish way (i → İ, ı → I), as the phones write them. */
+const trUpper = (s) => s.replace(/i/g, 'İ').replace(/ı/g, 'I').toUpperCase();
+/** How much of the name shows `t` seconds into the clip (0–1), timed as the phones time it. */
+function shownAt(plate, t) {
+  if (t < plate.from) return 0;
+  const k = plate.anim === 'none' ? 0 : 1;
+  if (plate.to && t >= plate.to) return k ? Math.max(0, 1 - (t - plate.to) / OUT_S) : 0;
+  return k ? Math.min(1, (t - plate.from) / IN_S) : 1;
+}
 /** The name as the phone writes it on the plate: the plate's size, smaller until it fits the plate's width (one line). */
-function plateFont(name, plate, H, W) {
+function plateFont(text, plate) {
   const c = plateFont.c ?? (plateFont.c = document.createElement('canvas').getContext('2d'));
   let px = plate.size * H;
   const fit = plate.w * W;
   c.font = `${plate.bold ? 800 : 500} ${px}px system-ui, sans-serif`;
-  const width = c.measureText(name).width;
+  const width = c.measureText(text).width + [...text].length * plate.spacing * px;
   if (width > fit) px = Math.max(8, (px * fit) / width);
   return px;
 }
+/** The outline (on top) and the shadow or glow round the letters, as the phones draw them in layers. */
+function plateShadow(plate, px) {
+  const out = [];
+  if (plate.outline) {
+    const d = Math.max(1, plate.outline.size * px);
+    for (const [x, y] of AROUND) out.push(`${(x * d).toFixed(2)}px ${(y * d).toFixed(2)}px 0 ${plate.outline.color}`);
+  }
+  if (plate.shadow) out.push(`0 0 ${(plate.shadow.size * px).toFixed(2)}px ${plate.shadow.color}`);
+  return out.length ? out.join(', ') : 'none';
+}
+const withAlpha = (hex, a) => `${hex}${Math.round(a * 255).toString(16).padStart(2, '0')}`;
+const round3 = (n) => Math.round(n * 1000) / 1000;
+const clamp = (n, lo, hi) => Math.min(hi, Math.max(lo, n));
 
-/** The video stage with the name plate over it, at the plate's place: what a phone shows when someone enters. */
-function PlateStage({ src, plate, name }) {
-  const W = 270;
-  const H = 480;
-  const px = plateFont(name || SAMPLE, plate, H, W);
-  return html`<div class="plate-stage" style=${`width:${W}px;height:${H}px`}>
-    ${src ? html`<${Stage} key=${src} src=${src} />` : html`<div class="plate-empty muted">Video çevrilince burada oynar</div>`}
-    <div class="plate-box" style=${`left:${plate.x * 100}%;top:${plate.y * 100}%;width:${plate.w * 100}%;height:${plate.size * H * 1.8}px`}></div>
-    <div class="plate-name" style=${`left:${plate.x * 100}%;top:${plate.y * 100}%;max-width:${plate.w * 100}%;font-size:${px}px;color:${plate.color};font-weight:${plate.bold ? 800 : 500}`}>${name || SAMPLE}</div>
+/**
+ * The video stage with the name over it at the plate's place, as a phone shows someone entering: the name's look, and
+ * its coming and going at the video's time. Under it, the video's controls (play and pause, from the start, loop,
+ * sound, the time bar). With `onPlate` (the editor) the name is placed by hand: dragged, put where the stage is
+ * clicked, nudged with the arrow keys (Shift: further), and the corner handle widens the plate and grows the letters;
+ * while the video stands still or the name is being moved, a name not on show at that moment is drawn faint so it can
+ * still be placed, and "görünsün" / "kaybolsun" set its seconds to the moment shown.
+ */
+function PlateStage({ src, plate, name, onPlate, limits }) {
+  const edit = !!onPlate;
+  const text = plate.upper ? trUpper(name || SAMPLE) : name || SAMPLE;
+  const px = plateFont(text, plate);
+  const stage = useRef(null);
+  const drag = useRef(null);
+  const vid = useRef(null);
+  const [t, setT] = useState(0);
+  const [dur, setDur] = useState(0);
+  const [paused, setPaused] = useState(false);
+  const [moving, setMoving] = useState(false);
+  const [loop, setLoop] = useState(edit);
+  const [muted, setMuted] = useState(edit);
+  // The video's time, every frame while the stage is up: it times the name and moves the bar.
+  useEffect(() => {
+    let raf = 0;
+    const tick = () => {
+      const v = vid.current;
+      if (v) {
+        setT(v.currentTime);
+        setPaused(v.paused);
+        if (Number.isFinite(v.duration)) setDur(v.duration);
+      }
+      raf = requestAnimationFrame(tick);
+    };
+    raf = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(raf);
+  }, []);
+  const play = () => {
+    const v = vid.current;
+    if (!v) return;
+    if (v.paused) v.play().catch(() => {});
+    else v.pause();
+  };
+  const again = () => {
+    const v = vid.current;
+    if (!v) return;
+    v.currentTime = 0;
+    v.play().catch(() => {});
+  };
+  const seek = (s) => vid.current && (vid.current.currentTime = s);
+
+  const P = limits?.plate;
+  const at = (e) => {
+    const r = stage.current.getBoundingClientRect();
+    return { x: (e.clientX - r.left) / r.width, y: (e.clientY - r.top) / r.height };
+  };
+  const grab = (mode) => (e) => {
+    if (!edit || e.button !== 0) return;
+    e.preventDefault();
+    e.stopPropagation();
+    const p0 = at(e);
+    const from = { x: plate.x, y: plate.y, w: plate.w, size: plate.size };
+    // A click on the stage puts the name there and goes on moving it.
+    if (mode === 'place') Object.assign(from, { x: clamp(p0.x, 0, 1), y: clamp(p0.y, 0, 1) });
+    if (mode === 'place') onPlate({ x: round3(from.x), y: round3(from.y) });
+    drag.current = { mode: mode === 'size' ? 'size' : 'move', p0, from };
+    stage.current.setPointerCapture(e.pointerId);
+    setMoving(true);
+  };
+  const move = (e) => {
+    const d = drag.current;
+    if (!d) return;
+    const p = at(e);
+    const dx = p.x - d.p0.x;
+    const dy = p.y - d.p0.y;
+    if (d.mode === 'move') onPlate({ x: round3(clamp(d.from.x + dx, 0, 1)), y: round3(clamp(d.from.y + dy, 0, 1)) });
+    // The handle is the box's corner: the box grows both ways from its centre, its height is 1.8 letters.
+    else onPlate({ w: round3(clamp(d.from.w + 2 * dx, P.wMin, P.wMax)), size: round3(clamp(d.from.size + (2 * dy) / 1.8, P.sizeMin, P.sizeMax)) });
+  };
+  const drop = () => {
+    drag.current = null;
+    setMoving(false);
+  };
+  const nudge = (e) => {
+    const k = { ArrowLeft: [-1, 0], ArrowRight: [1, 0], ArrowUp: [0, -1], ArrowDown: [0, 1] }[e.key];
+    if (!k) return;
+    e.preventDefault();
+    const step = e.shiftKey ? 0.025 : 0.005;
+    onPlate({ x: round3(clamp(plate.x + k[0] * step, 0, 1)), y: round3(clamp(plate.y + k[1] * step, 0, 1)) });
+  };
+
+  // As the phone shows it at this moment; in the editor, standing still or moving it, faint rather than gone.
+  const a = src ? shownAt(plate, t) : 1;
+  const real = !edit || (!paused && !moving);
+  const opacity = real ? a : Math.max(a, 0.35);
+  const motion = real && plate.anim === 'zoom' ? `scale(${0.5 + 0.5 * a})` : real && plate.anim === 'rise' ? `translateY(${(1 - a) * px}px)` : '';
+  const band = plate.back ? `background:${withAlpha(plate.back.color, plate.back.alpha)};padding:0.25em 0.5em;border-radius:999px;line-height:1;` : '';
+  return html`<div class="plate-side">
+    <div
+      ref=${stage}
+      class=${`plate-stage${edit ? ' edit' : ''}`}
+      style=${`width:${W}px;height:${H}px`}
+      onPointerDown=${edit ? grab('place') : undefined}
+      onPointerMove=${edit ? move : undefined}
+      onPointerUp=${edit ? drop : undefined}
+      onPointerCancel=${edit ? drop : undefined}
+    >
+      ${src ? html`<${Stage} key=${src} src=${src} loop=${loop} muted=${muted} onVideo=${(v) => (vid.current = v)} />` : html`<div class="plate-empty muted">Video çevrilince burada oynar</div>`}
+      ${plate.show &&
+      html`<div
+          class="plate-box"
+          tabindex=${edit ? 0 : undefined}
+          aria-label=${edit ? 'İsim plakası: sürükleyin ya da ok tuşlarıyla taşıyın' : undefined}
+          onPointerDown=${edit ? grab('move') : undefined}
+          onKeyDown=${edit ? nudge : undefined}
+          style=${`left:${plate.x * 100}%;top:${plate.y * 100}%;width:${plate.w * 100}%;height:${plate.size * H * 1.8}px`}
+        >
+          ${edit && html`<i class="plate-handle" title="Plakayı genişlet, yazıyı büyüt" onPointerDown=${grab('size')}></i>`}
+        </div>
+        <div
+          class="plate-name"
+          style=${`left:${plate.x * 100}%;top:${plate.y * 100}%;max-width:${plate.w * 100}%;font-size:${px}px;color:${plate.color};font-weight:${plate.bold ? 800 : 500};letter-spacing:${plate.spacing * px}px;text-shadow:${plateShadow(plate, px)};opacity:${opacity};transform:translate(-50%, -50%) ${motion};${band}`}
+        >${text}</div>`}
+    </div>
+    ${src &&
+    html`<div class="plate-controls">
+      <${Button} kind="ghost" onClick=${play}>${paused ? '▶ Oynat' : '⏸ Durdur'}</${Button}>
+      <${Button} kind="ghost" onClick=${again}>↻ Baştan</${Button}>
+      <label class="field inline"><span>Döngü</span><input type="checkbox" checked=${loop} onChange=${(e) => setLoop(e.target.checked)} /></label>
+      <label class="field inline"><span>Ses</span><input type="checkbox" checked=${!muted} onChange=${(e) => setMuted(!e.target.checked)} /></label>
+      <input type="range" min="0" max=${dur || 0} step="0.05" value=${t} onInput=${(e) => seek(Number(e.target.value))} aria-label="Videonun anı" />
+      <small class="muted">${sec(t)} / ${sec(dur)} sn${plate.show && a === 0 ? ' · ad şu an görünmüyor' : ''}</small>
+      ${edit &&
+      plate.show &&
+      html`<span class="row gap wrap">
+        <small class="muted">Ad bu anda:</small>
+        <${Button} kind="ghost" onClick=${() => onPlate({ from: Math.round(t * 10) / 10, ...(plate.to && plate.to < Math.round(t * 10) / 10 + 0.5 ? { to: 0 } : {}) })}>görünsün</${Button}>
+        <${Button} kind="ghost" onClick=${() => onPlate({ to: Math.round(t * 10) / 10 })}>kaybolsun</${Button}>
+      </span>`}
+    </div>`}
   </div>`;
 }
 
@@ -176,6 +346,7 @@ export function AppShop() {
             ${x.kind === 'frame' && x.art ? html`<${FramePreview} src=${x.art.url} hole=${x.art.hole} size=${88} />` : ''}
             ${x.kind === 'bubble' && (x.look || APP_LOOKS[x.id]) ? html`<div class="bubble-stage small"><${BubbleSample} look=${x.look ?? APP_LOOKS[x.id]} src=${x.art?.url} /></div>` : ''}
             ${x.kind === 'wave' && (x.look || APP_LOOKS[x.id]) ? html`<div class="bubble-stage small"><${WaveSample} look=${x.look ?? APP_LOOKS[x.id]} src=${x.art?.url} size=${48} /></div>` : ''}
+            ${x.kind === 'entry' && x.icon ? html`<img class="shop-icon" src=${x.icon.url} alt="" title="Mağazadaki ikonu" />` : ''}
             ${x.kind === 'entry' && x.video ? html`<${Button} onClick=${() => setPlay(x)}>▶ Oynat</${Button}>` : ''}
             <div class="stack" style="flex:1">
               <div>🪙 ${num(x.price)} · ${daysText(x.days)}${x.minVip ? ` · VIP ${x.minVip}+` : ''} · ${num(x.owners)} kişide</div>
@@ -194,7 +365,7 @@ export function AppShop() {
           </div>`}
         </${Card}>`)}</div>
         ${edit && html`<${Editor} item=${edit.id ? edit : null} kind=${edit.kind} limits=${d.limits} convert=${d.convert} svga=${d.svga} onClose=${() => setEdit(null)} onSaved=${() => (setEdit(null), done())} />`}
-        ${play && html`<${Modal} title=${play.name} onClose=${() => setPlay(null)}><${PlateStage} src=${play.video.url} plate=${play.plate ?? d.limits.plateDefault} name=${SAMPLE} /></${Modal}>`}
+        ${play && html`<${Modal} title=${play.name} onClose=${() => setPlay(null)}><${PlateStage} src=${play.video.url} plate=${plateIn(play.plate ?? d.limits.plateDefault)} name=${SAMPLE} /></${Modal}>`}
       `;
     }}</${Loading}>
   </${Page}>`;
@@ -235,8 +406,11 @@ function Editor({ item, kind, limits, convert, svga, onClose, onSaved }) {
     minVip: item?.minVip ?? 0,
     enabled: item?.enabled ?? true,
     hole: item?.art?.hole ?? limits.holeDefault,
-    plate: item?.plate ?? limits.plateDefault,
+    plate: plateIn(item?.plate ?? limits.plateDefault),
   }));
+  // An entry effect's icon: the address to save and what this page draws, as a frame's picture (`art`, `artShown`).
+  const [icon, setIcon] = useState(item?.icon?.url ?? null);
+  const [iconShown, setIconShown] = useState(item?.icon?.url ?? null);
   // `art`: the address to save (the app's, as the upload answered it); `artShown`: what this page draws (the panel's
   // copy of a saved one, or the picked file itself: the app's address is another origin, which the page doesn't load).
   const [art, setArt] = useState(item?.art?.url ?? null);
@@ -247,6 +421,7 @@ function Editor({ item, kind, limits, convert, svga, onClose, onSaved }) {
   const [busy, setBusy] = useState(null);
   const set = (k, x) => setV((s) => ({ ...s, [k]: x }));
   const setPlate = (k, x) => setV((s) => ({ ...s, plate: { ...s.plate, [k]: x } }));
+  const patchPlate = (o) => setV((s) => ({ ...s, plate: { ...s.plate, ...o } }));
   const localUrl = useRef(null);
   useEffect(() => () => localUrl.current && URL.revokeObjectURL(localUrl.current), []);
 
@@ -298,6 +473,24 @@ function Editor({ item, kind, limits, convert, svga, onClose, onSaved }) {
     setDims(null);
     setSlice(null);
   };
+  const pickIcon = async (file) => {
+    if (!file) return;
+    if (!typeOf('shopframe', file)) return alert('İkon PNG ya da WebP olmalı');
+    if (file.size > limits.iconBytes) return alert(`İkon en fazla ${Math.round(limits.iconBytes / 1024)} KB olabilir`);
+    setBusy('İkon yükleniyor…');
+    try {
+      const local = URL.createObjectURL(file);
+      const d = await sizeOf(local);
+      if (d.w < limits.iconPxMin || d.h < limits.iconPxMin || d.w > limits.iconPxMax || d.h > limits.iconPxMax)
+        throw new Error(`İkon her yönde ${limits.iconPxMin}–${limits.iconPxMax} piksel olmalı (bu ${d.w} × ${d.h})`);
+      setIcon(await upload('shopframe', file));
+      setIconShown(local);
+    } catch (e) {
+      alert(e.message);
+    } finally {
+      setBusy(null);
+    }
+  };
   const save = async () => {
     const body = { name: v.name, price: Number(v.price), days: Number(v.days), minVip: Number(v.minVip), enabled: v.enabled };
     if (own && kind === 'frame') Object.assign(body, { hole: Number(v.hole), ...(art && art !== item?.art?.url ? { art } : {}) });
@@ -307,7 +500,13 @@ function Editor({ item, kind, limits, convert, svga, onClose, onSaved }) {
       const sl = kind === 'bubble' && art && slice ? { slice: { t: Number(slice.t), r: Number(slice.r), b: Number(slice.b), l: Number(slice.l) } } : {};
       Object.assign(body, { look: kind === 'bubble' ? { colors: look.colors, text: look.text, ...sl } : { style: look.style, colors: look.colors }, ...artNow });
     }
-    if (own && kind === 'entry') Object.assign(body, { plate: { ...v.plate, x: Number(v.plate.x), y: Number(v.plate.y), w: Number(v.plate.w), size: Number(v.plate.size) }, ...(video ? { video } : {}) });
+    if (own && kind === 'entry') {
+      const p = v.plate;
+      const paint = (x, k) => x && { color: x.color, [k]: Number(x[k]) };
+      const plate = { ...p, x: Number(p.x), y: Number(p.y), w: Number(p.w), size: Number(p.size), spacing: Number(p.spacing), shadow: paint(p.shadow, 'size'), outline: paint(p.outline, 'size'), back: paint(p.back, 'alpha'), from: Number(p.from) || 0, to: Number(p.to) || 0 };
+      // The icon: a new one goes with its address; one taken away as null; the one in use isn't sent.
+      Object.assign(body, { plate, ...(video ? { video } : {}), ...(icon !== (item?.icon?.url ?? null) ? { icon } : {}) });
+    }
     setBusy('Kaydediliyor…');
     const r = await act(
       () => (item ? post('/api/app/shop/update', { id: item.id, ...body }) : post('/api/app/shop', { kind, ...body })),
@@ -320,7 +519,23 @@ function Editor({ item, kind, limits, convert, svga, onClose, onSaved }) {
     <span>${label}: %${pct(v.plate[k])}</span>
     <input type="range" min=${min} max=${max} step=${step} value=${v.plate[k]} onInput=${(e) => setPlate(k, Number(e.target.value))} />
   </label>`;
+  /** A shadow, an outline or a band behind the name: on or off, its colour, and how much of it. */
+  const paintRow = (k, label, amount, amountLabel, min, max) => {
+    const x = v.plate[k];
+    return html`<div class="stack" style="gap:4px">
+      <div class="row gap wrap" style="align-items:center">
+        <label class="field inline"><span>${label}</span><input type="checkbox" checked=${!!x} onChange=${(e) => setPlate(k, e.target.checked ? { ...PAINT_START[k] } : null)} /></label>
+        ${x && html`<label class="field inline"><span>Renk</span><input type="color" value=${x.color} onInput=${(e) => setPlate(k, { ...x, color: e.target.value.toUpperCase() })} /></label>`}
+      </div>
+      ${x &&
+      html`<label class="field"><span>${amountLabel}: %${pct(x[amount])}</span>
+        <input type="range" min=${min} max=${max} step="0.005" value=${x[amount]} onInput=${(e) => setPlate(k, { ...x, [amount]: Number(e.target.value) })} /></label>`}
+    </div>`;
+  };
   const P = limits.plate;
+  // What the app's server takes: an older one reads the plate's place, size, colour and boldness only, and no icon.
+  const rich = !!P.anims;
+  const icons = !!limits.iconPxMin;
   return html`<${Modal} title=${item ? `${item.name} · düzenle` : NEW_LABEL[kind]} onClose=${onClose} wide>
     <div class="grid2" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:10px">
       <label class="field"><span>Ad *</span><input value=${v.name} maxlength=${limits.nameMax} onInput=${(e) => set('name', e.target.value)} /></label>
@@ -344,22 +559,46 @@ function Editor({ item, kind, limits, convert, svga, onClose, onSaved }) {
     ${own &&
     kind === 'entry' &&
     html`<div class="row gap wrap" style="align-items:flex-start;margin-top:10px">
-      <${PlateStage} src=${preview} plate=${v.plate} name=${sample} />
+      <${PlateStage} src=${preview} plate=${v.plate} name=${sample} onPlate=${patchPlate} limits=${limits} />
       <div class="stack" style="flex:1;min-width:240px">
         <label class="field"><span>Video${item ? ' (değiştirmek için)' : ' *'}: hazır yığılmış MP4, saydam WebM, ProRes 4444 .mov ya da SVGA</span>
           <input type="file" accept=".mp4,.webm,.mov,.svga,video/mp4,video/webm,video/quicktime" onChange=${(e) => pickVideo(e.target.files[0])} /></label>
         ${video?.kind === 'source' && html`<small class="muted">Kaydedince uygulamanın sunucusu videoyu çevirir (birkaç dakika). Çevrilene kadar eskisi oynar.</small>`}
+        ${icons &&
+        html`<div class="row gap" style="align-items:center">
+          ${iconShown ? html`<img class="shop-icon" src=${iconShown} alt="İkon" />` : html`<span class="shop-icon empty" aria-hidden="true">✨</span>`}
+          <label class="field" style="flex:1"><span>İkon (isteğe bağlı): mağazada efektin bandının üstünde görünür. PNG ya da WebP, ${limits.iconPxMin}–${limits.iconPxMax} px; kare 192 px önerilir</span>
+            <input type="file" accept="image/png,image/webp" onChange=${(e) => pickIcon(e.target.files[0])} /></label>
+          ${iconShown && html`<${Button} kind="ghost" onClick=${() => (setIcon(null), setIconShown(null))}>İkonu kaldır</${Button}>`}
+        </div>`}
         <h3>İsim plakası</h3>
-        <small class="muted">Odaya girenin adı buraya yazılır. Animasyonda isim alanını boş bırakın; uzun adlar plakaya sığacak kadar küçülür.</small>
-        <label class="field"><span>Örnek ad</span><input value=${sample} maxlength="24" onInput=${(e) => setSample(e.target.value)} /></label>
-        ${slider('x', 'Yatay yer', 0, 1, 0.005)}
-        ${slider('y', 'Dikey yer', 0, 1, 0.005)}
-        ${slider('w', 'Plaka genişliği', P.wMin, P.wMax, 0.005)}
-        ${slider('size', 'Yazı boyu', P.sizeMin, P.sizeMax, 0.001)}
-        <div class="row gap">
-          <label class="field inline"><span>Renk</span><input type="color" value=${v.plate.color} onInput=${(e) => setPlate('color', e.target.value.toUpperCase())} /></label>
-          <label class="field inline"><span>Kalın</span><input type="checkbox" checked=${v.plate.bold} onChange=${(e) => setPlate('bold', e.target.checked)} /></label>
-        </div>
+        ${rich && html`<label class="field inline"><span>Odaya girenin adı videonun üstüne yazılsın</span><input type="checkbox" checked=${v.plate.show} onChange=${(e) => setPlate('show', e.target.checked)} /></label>`}
+        ${!v.plate.show && html`<small class="muted">Kapalı: telefonda yalnız video oynar. Plakanın ayarları saklanır; açınca aynı yerde çıkar. Eski APK'lar adı yine yazar.</small>`}
+        ${v.plate.show &&
+        html`<small class="muted">Adı önizlemede sürükleyin ya da videoda bir yere tıklayıp oraya koyun. Köşedeki tutamaç plakayı genişletir ve yazıyı büyütür; ok tuşları ince ayar yapar (Shift ile büyük adım). Animasyonda isim alanını boş bırakın; uzun adlar plakaya sığacak kadar küçülür.</small>
+          <label class="field"><span>Örnek ad</span><input value=${sample} maxlength="24" onInput=${(e) => setSample(e.target.value)} /></label>
+          ${slider('x', 'Yatay yer', 0, 1, 0.005)}
+          ${slider('y', 'Dikey yer', 0, 1, 0.005)}
+          ${slider('w', 'Plaka genişliği', P.wMin, P.wMax, 0.005)}
+          ${slider('size', 'Yazı boyu', P.sizeMin, P.sizeMax, 0.001)}
+          <div class="row gap wrap">
+            <label class="field inline"><span>Renk</span><input type="color" value=${v.plate.color} onInput=${(e) => setPlate('color', e.target.value.toUpperCase())} /></label>
+            <label class="field inline"><span>Kalın</span><input type="checkbox" checked=${v.plate.bold} onChange=${(e) => setPlate('bold', e.target.checked)} /></label>
+            ${rich && html`<label class="field inline"><span>Büyük harf</span><input type="checkbox" checked=${v.plate.upper} onChange=${(e) => setPlate('upper', e.target.checked)} /></label>`}
+          </div>
+          ${rich &&
+          html`${slider('spacing', 'Harf aralığı', 0, P.spacingMax, 0.01)}
+            ${paintRow('shadow', 'Gölge / parlama', 'size', 'Yayılma', P.shadowMin, P.shadowMax)}
+            ${paintRow('outline', 'Kontur', 'size', 'Kalınlık', P.outlineMin, P.outlineMax)}
+            ${paintRow('back', 'Arkasında bant', 'alpha', 'Koyuluk', P.backMin, 1)}
+            <h3>Zamanı</h3>
+            <div class="row gap wrap">
+              <label class="field"><span>Görünsün (sn)</span><input type="number" min="0" max=${P.secondsMax} step="0.1" value=${v.plate.from} onInput=${(e) => setPlate('from', Number(e.target.value) || 0)} /></label>
+              <label class="field"><span>Kaybolsun (sn; 0 = video bitene kadar)</span><input type="number" min="0" max=${P.secondsMax} step="0.1" value=${v.plate.to} onInput=${(e) => setPlate('to', Number(e.target.value) || 0)} /></label>
+              <label class="field"><span>Belirme</span>
+                <select value=${v.plate.anim} onChange=${(e) => setPlate('anim', e.target.value)}>${P.anims.map((k) => html`<option value=${k}>${ANIM_TR[k] ?? k}</option>`)}</select></label>
+            </div>
+            <small class="muted">Videoyu önizlemede istediğiniz anda durdurup "görünsün" ya da "kaybolsun"a basınca saniye o an olur.</small>`}`}
       </div>
     </div>`}
     ${own && kind === 'bubble' && look && html`<${BubbleEditor} look=${look} setLook=${setLook} setColor=${setColor} src=${artShown} dims=${dims} slice=${slice} setSlice=${setSlice} pickArt=${pickArt} removeArt=${removeArt} limits=${limits} />`}

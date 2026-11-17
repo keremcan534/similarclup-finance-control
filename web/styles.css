@@ -247,6 +247,18 @@ table.levels td { vertical-align: middle; }
 .plate-empty { position: absolute; inset: 0; display: grid; place-items: center; text-align: center; padding: 20px; color: #cbd5e1; }
 .plate-box { position: absolute; transform: translate(-50%, -50%); border: 1px dashed rgba(255, 255, 255, 0.6); border-radius: 6px; pointer-events: none; }
 .plate-name { position: absolute; transform: translate(-50%, -50%); white-space: nowrap; overflow: hidden; text-align: center; line-height: 1.1; text-shadow: 0 1px 3px rgba(0, 0, 0, 0.85); pointer-events: none; }
+/* The name fits the plate's width; a band's padding goes round it, as the phones draw the band behind the name. */
+.plate-stage .plate-name { box-sizing: content-box; overflow: visible; }
+/* The editor's stage: the name is dragged (or put where the stage is clicked), its corner handle sizes it. */
+.plate-side { position: sticky; top: 0; z-index: 1; align-self: flex-start; display: grid; gap: 6px; }
+.plate-stage.edit { cursor: crosshair; touch-action: none; user-select: none; }
+.plate-stage.edit .plate-box { pointer-events: auto; cursor: move; }
+.plate-stage.edit .plate-box:hover, .plate-stage.edit .plate-box:focus-visible { border-color: #38bdf8; outline: none; box-shadow: 0 0 0 1px #38bdf8; }
+.plate-handle { position: absolute; right: -7px; bottom: -7px; width: 14px; height: 14px; border-radius: 4px; background: #fff; border: 2px solid #38bdf8; cursor: nwse-resize; }
+.plate-controls { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 10px; width: 270px; }
+.plate-controls input[type='range'] { flex: 1 1 100%; margin: 0; }
+.shop-icon { width: 48px; height: 48px; flex: none; object-fit: contain; border-radius: 8px; background: #0c1628; }
+.shop-icon.empty { display: grid; place-items: center; font-size: 22px; opacity: 0.5; }
 .frame-preview { position: relative; display: grid; place-items: center; flex: none; }
 .frame-preview .frame-photo { border-radius: 50%; display: grid; place-items: center; font-size: 26px; background: linear-gradient(135deg, #f9a8d4, #a78bfa); }
 .frame-preview img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: contain; }
