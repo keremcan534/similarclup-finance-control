@@ -305,6 +305,7 @@ test('operasyon sayfaları: operasyon yöneticisi evet, finans yöneticisi ve sa
     ['/api/app/team/remove', { id: '9' }],
     ['/api/app/events/review', { id: 5, approve: false, reason: 'Saat uygun değil' }],
     ['/api/app/events/remove', { id: 5, reason: 'Kural ihlali' }],
+    ['/api/app/events/reward', { id: 5, sku: 'fr-neon', days: 7 }],
     ['/api/app/events/categories', { name: 'Gala', icon: 'sparkles', theme: 'sade', sort: 0, active: true }],
     ['/api/app/events/categories/remove', { id: 'gala' }],
   ] as const) {

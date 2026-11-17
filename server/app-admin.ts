@@ -119,6 +119,7 @@ export const APP_ROUTES: [string, string, Permission | Permission[]][] = [
   ['GET', '/api/admin/events', 'app.events'],
   ['POST', '/api/admin/events/review', 'app.events'],
   ['POST', '/api/admin/events/remove', 'app.events'],
+  ['POST', '/api/admin/events/reward', 'app.events'],
   ['GET', '/api/admin/events/categories', 'app.events'],
   ['POST', '/api/admin/events/categories', 'app.events'],
   ['POST', '/api/admin/events/categories/remove', 'app.events'],
