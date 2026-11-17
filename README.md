@@ -84,6 +84,8 @@ Menü konulara göre gruplu: Ana sayfa, Kullanıcılar ve güvenlik, Hediye ve m
 | Uygulama › Mağaza eşyaları | Bir kişinin mağaza eşyaları: eşya verme ve geri alma, iadeden sonra elinde kalan eşyalar. |
 | Uygulama › Jeton Noktası | Jeton Noktası hesaplarını açma ve kapama, dekont numarasıyla toptan jeton satışı. |
 
+**Sıralama** (Hediyeler, Emojiler, Mağaza): telefonlar listeyi panelin sırasıyla gösterir. Satır, kart ya da çıkartma fareyle tutulup başka birinin yerine bırakılır; oklar bir adım kaydırır; **Sırala** düğmeleri bir rafı, paket listesini ya da mağazanın bir türünü tek seferde dizer (ucuzdan pahalıya, pahalıdan ucuza, en çok gönderilen / alınan, VIP seviyesi, ada göre; önce sorar). Hediyelerde sıra raf içindedir (Tümü'nde her raf kendi içinde dizilir); başka rafın satırına bırakmak bir şey yapmaz.
+
 ## Similar Club'tan veri alma
 
 Similar Club sunucusu her finansal olayı **benzersiz bir anahtarla** gönderir:

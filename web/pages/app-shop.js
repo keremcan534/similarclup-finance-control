@@ -19,6 +19,7 @@
 // Phones read the shop from the server (a new APK); older APKs keep their compiled shop.
 import { Badge, Button, Card, Loading, Modal, Page, Tabs, act, html, num, post, searchable, toast, useApi, useApp, useEffect, useRef, useState } from '../lib.js';
 import { Stage, typeOf, upload, videoKindOf } from './app-gifts.js';
+import { SORTS, SortBar, sortedIds, useDragOrder } from '../order.js';
 
 const KINDS = [
   ['entry', 'Giriş efektleri'],
@@ -382,18 +383,21 @@ export function AppShop() {
   const [edit, setEdit] = useState(null);
   const [play, setPlay] = useState(null);
   const [bulk, setBulk] = useState(false);
+  // A kind's order (all of its items, as the server wants): the arrows, dragging a card onto another, or a quick sort.
+  const order = async (k, ids) => (await act(() => post('/api/app/shop/order', { kind: k, ids }), 'Sıra kaydedildi')) && list.reload();
+  const drag = useDragOrder(order);
   if (!meta.app_link)
     return html`<${Page} title="Mağaza"><div class="empty bad">Uygulama bağlantısı ayarlı değil: sunucuda FC_APP_API_URL ve FC_APP_API_KEY gerekli.</div></${Page}>`;
   const editing = can('app.shop');
   const done = () => list.reload();
 
-  const move = async (items, x, by) => {
+  const move = (items, x, by) => {
     const ids = items.map((y) => y.id);
     const i = ids.indexOf(x.id);
     const j = i + by;
     if (j < 0 || j >= ids.length) return;
     [ids[i], ids[j]] = [ids[j], ids[i]];
-    (await act(() => post('/api/app/shop/order', { kind, ids }), 'Sıra kaydedildi')) && done();
+    order(kind, ids);
   };
   const toggle = async (x) => {
     const kept = x.kind === 'seat' ? 'Alan odalar süresi bitene kadar kullanır.' : 'Alanlarda kalır ve kullanılır.';
@@ -431,10 +435,18 @@ export function AppShop() {
           <input type="search" class="list-search" style="margin-left:0" placeholder="Eşya ara: ad ya da kimlik" aria-label="Eşya ara" value=${q} onInput=${(e) => setQ(e.target.value)} />
           <small class="muted">${KIND_HELP[kind]}</small>
         </div>
+        ${editing && items.length > 1 && html`<${SortBar}
+          sorts=${[SORTS.cheap, SORTS.dear, SORTS.owned, ...(kind === 'seat' ? [] : [SORTS.vip]), SORTS.name]}
+          what=${KINDS.find(([k]) => k === kind)?.[1] ?? 'Eşyalar'}
+          onSort=${(s) => order(kind, sortedIds(items, s))}
+        />`}
         ${!shown.length && html`<div class="empty">${q ? `“${q}” için eşya yok.` : 'Eşya yok.'}</div>`}
-        <div class="shop-grid">${shown.map((x) => html`<${Card}
+        <div class="shop-grid">${shown.map((x) => {
+          const dragCard = editing ? drag(kind, items.map((y) => y.id), x.id) : {};
+          return html`<${Card}
           key=${x.id}
-          class="shop-card"
+          ...${dragCard}
+          class=${`shop-card ${dragCard.class ?? ''}`}
           title=${html`<span>${x.name}</span> ${x.builtin ? html`<${Badge} s="info" label="Uygulamanın" />` : html`<${Badge} s="active" label="Eklenen" />`}
             ${!x.enabled && html` <${Badge} s="passive" label="Satışta değil" />`}
             ${x.changed?.length > 0 && html` <${Badge} s="warning" label=${`Değiştirildi: ${x.changed.map((f) => FIELD_TR[f] ?? f).join(', ')}`} />`}
@@ -467,7 +479,8 @@ export function AppShop() {
             ${x.builtin && x.changed?.length > 0 && html`<${Button} kind="ghost" onClick=${() => reset(x)}>Orijinaline dön</${Button}>`}
             ${!x.builtin && x.owners === 0 && html`<${Button} kind="danger" onClick=${() => remove(x)}>Sil</${Button}>`}
           </div>`}
-        </${Card}>`)}</div>
+        </${Card}>`;
+        })}</div>
         ${edit && html`<${Editor} item=${edit.id ? edit : null} kind=${edit.kind} limits=${d.limits} convert=${d.convert} svga=${d.svga} onClose=${() => setEdit(null)} onSaved=${() => (setEdit(null), done())} />`}
         ${play && html`<${Modal} title=${play.name} onClose=${() => setPlay(null)}><${PlateStage} src=${play.video.url} plate=${plateIn(play.plate ?? d.limits.plateDefault)} name=${SAMPLE} /></${Modal}>`}
         ${bulk && html`<${BulkFrames} limits=${d.limits} taken=${d.items.filter((x) => x.kind === 'frame').flatMap((x) => [x.name, x.original?.name].filter(Boolean))} onClose=${() => setBulk(false)} onDone=${done} />`}

@@ -191,8 +191,9 @@ export const Badge = ({ s, label }) => {
 // ---- components ------------------------------------------------------------------------
 export const Button = ({ kind = 'secondary', children, ...p }) => html`<button type="button" class=${`btn ${kind}`} ...${p}>${children}</button>`;
 
-export function Card({ title, actions, children, class: cls = '' }) {
-  return html`<section class=${`card ${cls}`}>
+/** More props (e.g. drag-and-drop, order.js) go on the card's <section>. */
+export function Card({ title, actions, children, class: cls = '', ...more }) {
+  return html`<section ...${more} class=${`card ${cls}`}>
     ${(title || actions) && html`<header class="card-h"><h2>${title}</h2><div class="row gap">${actions}</div></header>`}
     ${children}
   </section>`;
@@ -217,19 +218,21 @@ export function Loading({ state, children }) {
 /**
  * columns: [{ key, label, render?(row), align?: 'right', money?: currencyKey|code }]
  */
-export function Table({ columns, rows, onRow, empty = 'Kayıt yok', dense }) {
+/** `rowProps(row)`: more props for a row's <tr> (its `class` is added to the row's own), e.g. drag-and-drop (order.js). */
+export function Table({ columns, rows, onRow, empty = 'Kayıt yok', dense, rowProps }) {
   if (!rows?.length) return html`<div class="empty">${empty}</div>`;
   return html`<div class="table-wrap"><table class=${dense ? 'dense' : ''}>
     <thead><tr>${columns.map((c) => html`<th class=${c.align === 'right' || c.money ? 'r' : ''}>${c.label}</th>`)}</tr></thead>
-    <tbody>${rows.map(
-      (r, i) => html`<tr key=${r.id ?? i} class=${onRow ? 'click' : ''} onClick=${onRow ? () => onRow(r) : undefined}>
+    <tbody>${rows.map((r, i) => {
+      const { class: more = '', ...extra } = rowProps?.(r) ?? {};
+      return html`<tr key=${r.id ?? i} ...${extra} class=${`${onRow ? 'click' : ''} ${more}`.trim()} onClick=${onRow ? () => onRow(r) : undefined}>
         ${columns.map((c) => {
           let v = c.render ? c.render(r) : r[c.key];
           if (c.money) v = money(r[c.key], r[c.money] ?? c.money);
           return html`<td class=${c.align === 'right' || c.money ? 'r num' : ''}>${v ?? '—'}</td>`;
         })}
-      </tr>`,
-    )}</tbody>
+      </tr>`;
+    })}</tbody>
   </table></div>`;
 }
 
