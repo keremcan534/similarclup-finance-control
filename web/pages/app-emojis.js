@@ -4,6 +4,7 @@
 // picture, on/off and order) and go back to the app's values ("Orijinale dön"); the team adds packs and stickers of its
 // own, with a transparent PNG/WebP or a Lottie animation as the picture. Each pack is a card with its stickers.
 import { Badge, Button, Card, Loading, Modal, Page, act, html, num, post, searchable, showError, toast, useApi, useApp, useState } from '../lib.js';
+import { SORTS, SortBar, sortedIds, useDragOrder } from '../order.js';
 
 const kb = (n) => `${Math.max(1, Math.round(n / 1024))} KB`;
 const ending = (name) => (/\.([A-Za-z0-9]{1,8})$/.exec(name ?? '')?.[1] ?? '').toLowerCase();
@@ -51,27 +52,30 @@ export function AppEmojis() {
   const [packEdit, setPackEdit] = useState(null);
   const [stickerEdit, setStickerEdit] = useState(null);
   const [q, setQ] = useState('');
+  const order = async (path, body) => (await act(() => post(path, body), 'Sıra kaydedildi')) && list.reload();
+  // Packs and a pack's stickers are dragged apart: the group is 'packs', or 'in:' and the pack's id.
+  const drag = useDragOrder((group, ids) => (group === 'packs' ? order('/api/app/emoji/packs/order', { ids }) : order('/api/app/emoji/stickers/order', { pack: group.slice(3), ids })));
 
   if (!meta.app_link)
     return html`<${Page} title="Uygulama emojileri"><div class="empty bad">Uygulama bağlantısı ayarlı değil: sunucuda FC_APP_API_URL ve FC_APP_API_KEY gerekli.</div></${Page}>`;
   const edit = can('app.emojis');
   const done = (text) => (toast(text), list.reload());
 
-  const movePack = async (packs, p, by) => {
+  const movePack = (packs, p, by) => {
     const ids = packs.map((x) => x.id);
     const i = ids.indexOf(p.id);
     const j = i + by;
     if (j < 0 || j >= ids.length) return;
     [ids[i], ids[j]] = [ids[j], ids[i]];
-    (await act(() => post('/api/app/emoji/packs/order', { ids }), 'Sıra kaydedildi')) && list.reload();
+    order('/api/app/emoji/packs/order', { ids });
   };
-  const moveSticker = async (p, s, by) => {
+  const moveSticker = (p, s, by) => {
     const ids = p.stickers.map((x) => x.id);
     const i = ids.indexOf(s.id);
     const j = i + by;
     if (j < 0 || j >= ids.length) return;
     [ids[i], ids[j]] = [ids[j], ids[i]];
-    (await act(() => post('/api/app/emoji/stickers/order', { pack: p.id, ids }), 'Sıra kaydedildi')) && list.reload();
+    order('/api/app/emoji/stickers/order', { pack: p.id, ids });
   };
   const togglePack = async (p) => {
     if (!confirm(p.enabled ? `“${p.name}” emoji panelinden ve mağazadan kalksın mı? Alanların gönderdiği çıkartmalar mesajlarda görünmeye devam eder.` : `“${p.name}” yeniden açılsın mı?`)) return;
@@ -97,6 +101,7 @@ export function AppEmojis() {
       <div class="row gap wrap" style="margin-bottom:10px">
         <input type="search" class="list-search" style="margin-left:0" placeholder="Paket ya da çıkartma ara: ad, emoji ya da kimlik" aria-label="Emoji ara" value=${q} onInput=${(e) => setQ(e.target.value)} />
       </div>
+      ${edit && d.packs.length > 1 && html`<${SortBar} sorts=${[SORTS.cheap, SORTS.dear, SORTS.owned, SORTS.name]} what="Paketler" onSort=${(s) => order('/api/app/emoji/packs/order', { ids: sortedIds(d.packs, s) })} />`}
       ${(() => {
         const w = searchable(q.trim());
         const hit = (...t) => t.some((x) => x && searchable(x).includes(w));
@@ -110,8 +115,11 @@ export function AppEmojis() {
         const matching = packHit ? p.stickers : p.stickers.filter((s) => hit(s.name, s.emoji, s.id));
         if (w && !packHit && !matching.length) return '';
         const shown = w ? matching : open.has(p.id) ? p.stickers : p.stickers.slice(0, PEEK);
+        const dragPack = edit ? drag('packs', d.packs.map((x) => x.id), p.id) : {};
         return html`<${Card}
           key=${p.id}
+          ...${dragPack}
+          class=${dragPack.class ?? ''}
           title=${html`<span>${p.name}</span> ${p.builtin ? html`<${Badge} s="info" label="Uygulamanın" />` : html`<${Badge} s="active" label="Eklenen" />`}
             ${!p.enabled && html` <${Badge} s="passive" label="Kapalı" />`}
             ${p.changed?.length > 0 && html` <${Badge} s="warning" label=${`Değiştirildi: ${listOf(p.changed, PACK_TR)}`} />`}
@@ -129,7 +137,9 @@ export function AppEmojis() {
           ${p.builtin && p.changed?.length > 0 && html`<p class="muted">Uygulamada: ${p.original.name} · ${packLine({ ...p, ...p.original })}${p.original.enabled ? '' : ' · kapalı'}</p>`}
           <div class="sticker-grid">
             ${shown.map(
-              (s, k) => html`<div class=${`sticker-tile ${s.enabled ? '' : 'off'}`} key=${s.id}>
+              (s, k) => {
+                const dragSticker = edit ? drag(`in:${p.id}`, p.stickers.map((x) => x.id), s.id) : {};
+                return html`<div key=${s.id} ...${dragSticker} class=${`sticker-tile ${s.enabled ? '' : 'off'} ${dragSticker.class ?? ''}`}>
                 <button class="sticker-face" title=${`${s.name} (${s.id})`} disabled=${!edit} onClick=${() => setStickerEdit({ sticker: s, pack: p })}><${Face} s=${s} /></button>
                 <small>${s.name}</small>
                 <span class="row gap">
@@ -142,7 +152,8 @@ export function AppEmojis() {
                   <button class="btn ghost" aria-label="Öne al" disabled=${k === 0} onClick=${() => moveSticker(p, s, -1)}>←</button>
                   <button class="btn ghost" aria-label="Arkaya al" disabled=${k === p.stickers.length - 1} onClick=${() => moveSticker(p, s, 1)}>→</button>
                 </span>`}
-              </div>`,
+              </div>`;
+              },
             )}
           </div>
           ${!w && (p.stickers.length > PEEK || (edit && p.stickers.length > 1))

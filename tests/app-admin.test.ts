@@ -305,6 +305,7 @@ test('operasyon sayfaları: operasyon yöneticisi evet, finans yöneticisi ve sa
     ['/api/app/team/remove', { id: '9' }],
     ['/api/app/events/review', { id: 5, approve: false, reason: 'Saat uygun değil' }],
     ['/api/app/events/remove', { id: 5, reason: 'Kural ihlali' }],
+    ['/api/app/events/reward', { id: 5, sku: 'fr-neon', days: 7 }],
     ['/api/app/events/categories', { name: 'Gala', icon: 'sparkles', theme: 'sade', sort: 0, active: true }],
     ['/api/app/events/categories/remove', { id: 'gala' }],
   ] as const) {
@@ -534,7 +535,7 @@ test('Emojiler: kendi yetkisiyle; paketler, çıkartmalar, sıra, orijinale dön
   assert.equal((await fetch(`${base}/api/app/media/f/stickerart/u1/x.png`, { headers: ops })).status, 200);
 });
 
-test('Mağaza: kendi yetkisiyle; eşyalar, sıra, orijinale dönme, çerçeve resmi ve giriş efekti videosu yükleme', async () => {
+test('Mağaza: kendi yetkisiyle; eşyalar, sıra, orijinale dönme, çerçeve, balon, dalga ve koltuk rengi, resim ve giriş efekti videosu yükleme', async () => {
   env.as('operations_manager', 'ops@test.local');
   env.as('finance_manager', 'fin@test.local');
   env.as('read_only', 'ro@test.local');
@@ -548,6 +549,12 @@ test('Mağaza: kendi yetkisiyle; eşyalar, sıra, orijinale dönme, çerçeve re
     ['POST', '/api/app/shop/reset', { id: 'fr-neon' }],
     ['POST', '/api/app/shop/order', { kind: 'frame', ids: ['sf1', 'fr-neon'] }],
     ['POST', '/api/app/shop/delete', { id: 'sf1' }],
+    // A chat bubble with its picture's corners, and a voice wave: their look goes to the app as it is.
+    ['POST', '/api/app/shop', { kind: 'bubble', name: 'Taçlı', price: 900, days: 30, art: 'x', look: { colors: ['#B45309', '#F59E0B'], text: '#1F1300', slice: { t: 40, r: 60, b: 40, l: 60 } } }],
+    ['POST', '/api/app/shop/update', { id: 'sw2', art: null, look: { style: 'spin', colors: ['#00C2FF', '#0047FF', '#00FFB2'] } }],
+    // A room's seat color: its color, price and days; the app's own colors change their color too.
+    ['POST', '/api/app/shop', { kind: 'seat', name: 'Lacivert', price: 2500, days: 30, enabled: true, look: { color: '#1F2A5A' } }],
+    ['POST', '/api/app/shop/update', { id: 'pembe', name: 'Açık Pembe', price: 2000, days: 0, enabled: true, look: { color: '#F4B6C8' } }],
   ] as const) {
     for (const h of [ops, fin]) assert.equal((await call(method, path, body, h)).status, 200, `${path}`);
     assert.equal(seen.at(-1)!.path, path.replace('/api/app/', '/api/admin/'));
@@ -593,6 +600,31 @@ test('Seviyeler ve VIP: finans yöneticisinin yetkisiyle; kayıt ve sıfırlama 
   } finally {
     refuse = null;
   }
+});
+
+test('Seviye ve görev ödülleri: Seviyeler ve VIP yetkisiyle; ekleme ve kaldırma denetim kaydına yazılır', async () => {
+  env.as('finance_manager', 'fin@test.local');
+  env.as('operations_manager', 'ops@test.local');
+  env.as('read_only', 'ro@test.local');
+  const fin = await loginAs('fin@test.local');
+  const ops = await loginAs('ops@test.local');
+  const ro = await loginAs('ro@test.local');
+  for (const [method, path, body] of [
+    ['GET', '/api/app/level-rewards', undefined],
+    ['POST', '/api/app/level-rewards', { system: 'vip', level: 5, sku: 'fr-neon', days: 30 }],
+    ['POST', '/api/app/level-rewards/delete', { id: 7 }],
+    ['GET', '/api/app/task-rewards', undefined],
+    ['POST', '/api/app/task-rewards', { task: 'call', sku: 'bb-candy', days: 1 }],
+    ['POST', '/api/app/task-rewards/delete', { id: 3 }],
+  ] as const) {
+    assert.equal((await call(method, path, body, fin)).status, 200, path);
+    assert.equal(seen.at(-1)!.path, path.replace('/api/app/', '/api/admin/'));
+    if (body) assert.deepEqual(JSON.parse(seen.at(-1)!.body), body);
+    for (const h of [ops, ro]) assert.equal((await call(method, path, body, h)).status, 403, `yetkisiz: ${path}`);
+  }
+  assert.ok(env.db.get("SELECT 1 FROM audit_logs WHERE action = 'app.level-rewards'"));
+  assert.ok(env.db.get("SELECT 1 FROM audit_logs WHERE action = 'app.level-rewards.delete'"));
+  assert.ok(env.db.get("SELECT 1 FROM audit_logs WHERE action = 'app.task-rewards'"));
 });
 
 test('daha önce kurulmuş rollere yeni yetki bir kez eklenir', () => {

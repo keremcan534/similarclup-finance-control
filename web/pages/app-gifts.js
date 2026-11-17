@@ -6,6 +6,7 @@
 // server to the app's storage; the app checks them when the gift is saved and converts a WebM / MOV / SVGA itself.
 // Nothing removes a background: the editor says so before a file is picked.
 import { Badge, Button, Loading, Modal, Page, Table, act, dateTimeTr, get, html, num, post, searchable, showError, toast, useApi, useApp, useEffect, useRef, useState } from '../lib.js';
+import { SORTS, SortBar, sortedIds, useDragOrder } from '../order.js';
 
 const CATS = [
   ['hot', 'Popüler'],
@@ -103,19 +104,25 @@ export function AppGifts() {
     const t = setInterval(list.reload, 4000);
     return () => clearInterval(t);
   }, [processing]);
+  // The order is a shelf's: the arrows, dragging a row onto another of its shelf, or a quick sort of the shelf (of every
+  // shelf, each in itself, under Tümü).
+  const order = async (shelves) => (await act(async () => { for (const ids of shelves) await post('/api/app/gifts/order', { ids }); return true; }, 'Sıra kaydedildi')) && list.reload();
+  const shelfIds = (gifts, cat) => gifts.filter((x) => x.cat === cat).map((x) => x.id);
+  const drag = useDragOrder((cat, ids) => order([ids]));
 
   if (!meta.app_link)
     return html`<${Page} title="Uygulama hediyeleri"><div class="empty bad">Uygulama bağlantısı ayarlı değil: sunucuda FC_APP_API_URL ve FC_APP_API_KEY gerekli.</div></${Page}>`;
 
-  const move = async (gifts, g, by) => {
-    const row = gifts.filter((x) => x.cat === g.cat);
-    const i = row.findIndex((x) => x.id === g.id);
+  const move = (gifts, g, by) => {
+    const ids = shelfIds(gifts, g.cat);
+    const i = ids.indexOf(g.id);
     const j = i + by;
-    if (j < 0 || j >= row.length) return;
-    const ids = row.map((x) => x.id);
+    if (j < 0 || j >= ids.length) return;
     [ids[i], ids[j]] = [ids[j], ids[i]];
-    (await act(() => post('/api/app/gifts/order', { ids }), 'Sıra kaydedildi')) && list.reload();
+    order([ids]);
   };
+  const sortShelves = (gifts, sort) =>
+    order((shelf === 'all' ? CATS.map(([c]) => c) : [shelf]).map((c) => sortedIds(gifts.filter((x) => x.cat === c), sort)).filter((ids) => ids.length > 1));
   const toggle = async (g) => {
     const off = g.builtin
       ? `“${g.name}” raflardan kalksın mı? Hediye panelinde görünmez; çantasında olan (ya da eski bir telefon) yine gönderebilir. Burada kalır ve yeniden rafa konabilir.`
@@ -147,7 +154,9 @@ export function AppGifts() {
     </div>
     <${Loading} state=${list}>${(d) => html`
       ${!d.storage && html`<div class="empty bad">Uygulamanın dosya deposu açık değil: ikon ve video yüklenemez, yeni hediye eklenemez.</div>`}
+      ${can('app.gifts') && html`<${SortBar} sorts=${[SORTS.cheap, SORTS.dear, SORTS.sent, SORTS.name]} what=${shelf === 'all' ? 'Her raf kendi içinde' : `${CAT[shelf]} rafı`} onSort=${(s) => sortShelves(d.gifts, s)} />`}
       <${Table}
+        rowProps=${can('app.gifts') ? (g) => drag(g.cat, shelfIds(d.gifts, g.cat), g.id) : undefined}
         empty="Bu süzgeçte hediye yok."
         columns=${[
           { key: 'icon', label: '', render: (g) => (g.icon ? html`<img class="gift-icon" src=${g.icon} alt="" loading="lazy" />` : html`<span class="gift-emoji">${g.emoji}</span>`) },
@@ -206,14 +215,23 @@ export function AppGifts() {
   </${Page}>`;
 }
 
-/** A stacked video (colour on top, alpha below) drawn transparent over a stage, as the phones draw it. */
-export function Stage({ src, onEnd }) {
+/**
+ * A stacked video (colour on top, alpha below) drawn transparent over a stage, as the phones draw it. `loop` plays it
+ * again and again, `muted` starts it without sound, and `onVideo` hands the caller the video to play, pause, seek and
+ * time (null when it goes).
+ */
+export function Stage({ src, onEnd, loop = false, muted = false, onVideo }) {
   const canvas = useRef(null);
+  const video = useRef(null);
   const [blocked, setBlocked] = useState(false);
   useEffect(() => {
     const v = document.createElement('video');
     v.src = src;
     v.playsInline = true;
+    v.loop = loop;
+    v.muted = muted;
+    video.current = v;
+    onVideo?.(v);
     const c = canvas.current;
     const g = c.getContext('2d', { willReadFrequently: true });
     const off = document.createElement('canvas');
@@ -247,13 +265,21 @@ export function Stage({ src, onEnd }) {
     });
     raf = requestAnimationFrame(draw);
     return () => {
+      onVideo?.(null);
+      video.current = null;
       cancelAnimationFrame(raf);
       v.pause();
       v.removeAttribute('src');
       v.load();
     };
   }, [src]);
-  return html`<div class="alpha-stage"><canvas ref=${canvas} class="alpha-video"></canvas>${blocked && html`<small class="muted">Tarayıcı sesi kapattı</small>`}</div>`;
+  useEffect(() => {
+    if (video.current) video.current.loop = loop;
+  }, [loop]);
+  useEffect(() => {
+    if (video.current) video.current.muted = muted;
+  }, [muted]);
+  return html`<div class="alpha-stage"><canvas ref=${canvas} class="alpha-video"></canvas>${blocked && !muted && html`<small class="muted">Tarayıcı sesi kapattı</small>`}</div>`;
 }
 
 /** A file's size in words: KB under a megabyte. */

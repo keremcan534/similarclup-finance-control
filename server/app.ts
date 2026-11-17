@@ -19,7 +19,8 @@ const VENDOR: Record<string, string> = {
   '/vendor/hooks.mjs': 'node_modules/preact/hooks/dist/hooks.module.js',
   '/vendor/htm.mjs': 'node_modules/htm/dist/htm.module.js',
 };
-const TYPES: Record<string, string> = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.mjs': 'text/javascript; charset=utf-8', '.css': 'text/css; charset=utf-8', '.svg': 'image/svg+xml', '.ico': 'image/x-icon' };
+// .png: the seat pictures' layers (web/img, Uygulama › Mağaza › Koltuk renkleri).
+const TYPES: Record<string, string> = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.mjs': 'text/javascript; charset=utf-8', '.css': 'text/css; charset=utf-8', '.svg': 'image/svg+xml', '.ico': 'image/x-icon', '.png': 'image/png' };
 const SECURITY_HEADERS = {
   // blob: for a picked file's preview (Uygulama › Hediyeler: an icon, a video) before it is uploaded.
   'content-security-policy': "default-src 'self'; img-src 'self' data: blob:; media-src 'self' blob:; style-src 'self' 'unsafe-inline'; script-src 'self'; connect-src 'self'; frame-ancestors 'none'; base-uri 'none'; form-action 'self'",

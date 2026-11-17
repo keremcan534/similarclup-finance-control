@@ -247,6 +247,75 @@ table.levels td { vertical-align: middle; }
 .plate-empty { position: absolute; inset: 0; display: grid; place-items: center; text-align: center; padding: 20px; color: #cbd5e1; }
 .plate-box { position: absolute; transform: translate(-50%, -50%); border: 1px dashed rgba(255, 255, 255, 0.6); border-radius: 6px; pointer-events: none; }
 .plate-name { position: absolute; transform: translate(-50%, -50%); white-space: nowrap; overflow: hidden; text-align: center; line-height: 1.1; text-shadow: 0 1px 3px rgba(0, 0, 0, 0.85); pointer-events: none; }
+/* The name fits the plate's width; a band's padding goes round it, as the phones draw the band behind the name. */
+.plate-stage .plate-name { box-sizing: content-box; overflow: visible; }
+/* The editor's stage: the name is dragged (or put where the stage is clicked), its corner handle sizes it. */
+.plate-side { position: sticky; top: 0; z-index: 1; align-self: flex-start; display: grid; gap: 6px; }
+.plate-stage.edit { cursor: crosshair; touch-action: none; user-select: none; }
+.plate-stage.edit .plate-box { pointer-events: auto; cursor: move; }
+.plate-stage.edit .plate-box:hover, .plate-stage.edit .plate-box:focus-visible { border-color: #38bdf8; outline: none; box-shadow: 0 0 0 1px #38bdf8; }
+.plate-handle { position: absolute; right: -7px; bottom: -7px; width: 14px; height: 14px; border-radius: 4px; background: #fff; border: 2px solid #38bdf8; cursor: nwse-resize; }
+.plate-controls { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 10px; width: 270px; }
+.plate-controls input[type='range'] { flex: 1 1 100%; margin: 0; }
+.shop-icon { width: 48px; height: 48px; flex: none; object-fit: contain; border-radius: 8px; background: #0c1628; }
+/* Toplu çerçeve ekle: a card per frame of the designer's set. */
+.bulk-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(170px, 1fr)); gap: 10px; margin-top: 10px; }
+.bulk-card { display: grid; gap: 6px; justify-items: stretch; padding: 10px; border: 1px solid var(--border); border-radius: var(--radius); background: var(--surface-2); }
+.bulk-card .frame-preview { justify-self: center; }
+.bulk-card.done { opacity: 0.6; }
+.bulk-card .bad { color: var(--bad); }
+.bulk-card .good { color: var(--ok); font-weight: 600; }
+.shop-icon.empty { display: grid; place-items: center; font-size: 22px; opacity: 0.5; }
 .frame-preview { position: relative; display: grid; place-items: center; flex: none; }
 .frame-preview .frame-photo { border-radius: 50%; display: grid; place-items: center; font-size: 26px; background: linear-gradient(135deg, #f9a8d4, #a78bfa); }
 .frame-preview img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: contain; }
+/* Placing the photo by hand: the frame's picture lets the pointer through; a dashed circle and a dot on its rim. */
+.frame-preview.edit { cursor: crosshair; touch-action: none; user-select: none; border-radius: 8px; }
+.frame-preview.edit:focus-visible { outline: 2px solid #38bdf8; outline-offset: 2px; }
+.frame-preview.edit img { pointer-events: none; }
+.frame-guide { position: absolute; border-radius: 50%; border: 1px dashed rgba(255, 255, 255, 0.85); box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.35); cursor: move; }
+.frame-handle { position: absolute; width: 12px; height: 12px; border-radius: 50%; background: #fff; border: 2px solid #38bdf8; cursor: nwse-resize; }
+/* Mağaza: a chat bubble on the room's dark ground (its picture as border-image, as the phone stretches it), the
+   picture's corner guide, and a voice wave round a talking face (the app's styles, as CSS). */
+.bubble-stage { display: flex; flex-direction: column; align-items: flex-start; gap: 10px; flex: none; min-width: 260px; max-width: 320px; padding: 14px; border-radius: var(--radius); background: #0c1628; }
+.bubble-stage.small { min-width: 0; max-width: 200px; padding: 8px; }
+.bubble-stage.wave { align-items: center; justify-content: center; min-width: 200px; min-height: 170px; }
+.shop-bubble { max-width: 240px; padding: 7px 11px; border-radius: 14px 14px 14px 4px; font-size: 14px; line-height: 19px; overflow-wrap: anywhere; }
+.shop-bubble.art { border-style: solid; border-color: transparent; padding: 0; border-radius: 0; background: none; }
+.slice-guide { position: relative; flex: none; background: repeating-conic-gradient(#2a2233 0% 25%, #1c1724 0% 50%) 50% / 16px 16px; }
+.slice-guide img { display: block; width: 100%; height: 100%; }
+.slice-guide i { position: absolute; pointer-events: none; }
+.slice-guide i.h { left: 0; right: 0; border-top: 1px dashed #22d3ee; }
+.slice-guide i.v { top: 0; bottom: 0; border-left: 1px dashed #22d3ee; }
+.wave-sample { position: relative; display: grid; place-items: center; flex: none; }
+.wave-face { position: relative; z-index: 1; width: 100%; height: 100%; border-radius: 50%; display: grid; place-items: center; font-size: 26px; background: linear-gradient(135deg, #f9a8d4, #a78bfa); }
+.wave-ring { position: absolute; inset: -12%; border-radius: 50%; border: 3px solid; animation: wave-talk 0.45s ease-in-out infinite alternate; }
+.wave-ring.outer { border-width: 2px; animation-name: wave-talk-outer; }
+.wave-ring.ripple { border-width: 1.5px; animation: wave-ripple 1.3s linear infinite; }
+.wave-ring.spin { animation: wave-spin 3.2s linear infinite; }
+.wave-sparks { position: absolute; inset: -12%; animation: wave-spin 2.6s linear infinite; }
+.wave-sparks > span { position: absolute; inset: 0; display: flex; justify-content: center; }
+.wave-sparks b { width: 7px; height: 7px; margin-top: -2px; border-radius: 50%; }
+.wave-sparks img { width: 16px; height: 16px; margin-top: -6px; object-fit: contain; }
+@keyframes wave-talk { from { transform: scale(1); opacity: 0.6; } to { transform: scale(1.1); opacity: 1; } }
+@keyframes wave-talk-outer { from { transform: scale(1.05); opacity: 0.3; } to { transform: scale(1.28); opacity: 0.9; } }
+@keyframes wave-ripple { from { transform: scale(1); opacity: 0.85; } to { transform: scale(1.35); opacity: 0; } }
+@keyframes wave-spin { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) { .wave-sample * { animation: none !important; } }
+/* Koltuk renkleri: the pouf drawn as the app draws it (its cushion tinted through a mask, its shading and gold over it), on the room's dark. */
+.seat-preview { position: relative; flex: none; border-radius: 10px; background: #1c1422; }
+.seat-preview > * { position: absolute; inset: 0; width: 100%; height: 100%; }
+.seat-preview > i { -webkit-mask-size: contain; mask-size: contain; -webkit-mask-repeat: no-repeat; mask-repeat: no-repeat; -webkit-mask-position: center; mask-position: center; }
+.seat-preview > img { object-fit: contain; }
+.seat-stage { display: flex; gap: 10px; flex: none; padding: 12px; border-radius: var(--radius); background: #1c1422; }
+.swatches { display: flex; flex-wrap: wrap; gap: 6px; }
+.swatch { width: 26px; height: 26px; border-radius: 50%; border: 2px solid var(--border); cursor: pointer; padding: 0; }
+.swatch.on { outline: 2px solid #38bdf8; outline-offset: 2px; }
+
+/* Ordering (order.js): what can be dragged, the one being dragged, where it would go. */
+.sort-bar { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin: 0 0 10px; }
+[draggable="true"] { cursor: grab; }
+[draggable="true"]:active { cursor: grabbing; }
+.dragging { opacity: 0.4; }
+.card.drop-here, .sticker-tile.drop-here { outline: 2px dashed var(--brand-2); outline-offset: 2px; }
+tr.drop-here > td { background: var(--info-bg); border-top: 2px dashed var(--brand-2); border-bottom: 2px dashed var(--brand-2); }

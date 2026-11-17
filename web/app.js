@@ -14,6 +14,7 @@ import { Integrations, Users, Audit, Settings, Account } from './pages/admin.js'
 import { AppGifts } from './pages/app-gifts.js';
 import { AppEmojis } from './pages/app-emojis.js';
 import { AppLevels } from './pages/app-levels.js';
+import { AppLevelRewards } from './pages/app-level-rewards.js';
 import { AppShop } from './pages/app-shop.js';
 import { AppLucky, AppPayouts, AppRefunds, AppReports, AppSettings, AppWithdrawals } from './pages/app-finance.js';
 import { AppComplaints, AppEvents, AppNotices, AppSupport, AppUsers } from './pages/app-ops.js';
@@ -45,6 +46,7 @@ const NAV = [
   ]],
   ['levels', 'Seviye ve VIP', '⭐', [
     ['app-levels', 'Seviyeler ve VIP', 'app.levels', AppLevels, 'seviye vip svip rütbe kademe cömertlik yankı cazibe abonelik eşik puan atış hak ödül çerçeve giriş efekti düşme gizle sessiz ziyaret'],
+    ['app-level-rewards', 'Seviye ve görev ödülleri', 'app.levels', AppLevelRewards, 'seviye vip cömertlik yankı görev arama ödül çanta çantam çerçeve giriş efekti binek sohbet balonu ses dalgası hediye kazan'],
   ]],
   ['news', 'Duyuru ve etkinlik', '📣', [
     ['app-notices', 'Duyurular', 'app.notices', AppNotices, 'duyuru banner bildirim ekip mesaj'],

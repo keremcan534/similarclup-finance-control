@@ -483,6 +483,22 @@ function EventList() {
     const v = await ask('Etkinliği yayından kaldır', { text: `“${e.title}” ${e.state === 'live' ? 'hemen biter ve ' : ''}yayından kalkar; yer ayıranlara ve oda sahibine neden bildirilir.`, label: 'Neden (3–300)', ok: 'Kaldır' });
     if (v && (await act(() => post('/api/app/events/remove', { id: e.id, reason: v.reason })))) (toast('Etkinlik yayından kaldırıldı'), list.reload());
   };
+  // A reward for everyone who comes (the app's events.mjs; docs/CANTA.md there): given when the event ends.
+  const setReward = async (e, items) => {
+    const shopDays = items.find((x) => x.sku === e.reward?.sku)?.days;
+    const v = await ask(`Katılım ödülü: ${e.title}`, {
+      text: 'Etkinlik bitince, etkinlik sürerken odaya giren herkes bu eşyayı Çantam’ında bulur (bir kez, ücretsiz). Yayından kaldırılan ya da hiç başlamayan etkinlik ödül vermez.',
+      fields: [
+        { name: 'sku', label: 'Eşya (boş: ödül yok)', type: 'select', options: items.map((x) => [x.sku, `${x.name} · ${x.kindName}${x.days === null ? ' · süresiz' : ` · mağazada ${x.days} gün`}`]), def: e.reward?.sku ?? '', wide: true },
+        { name: 'days', label: 'Gün', type: 'number', hint: 'Boş: mağazadaki süresi. Süresiz eşyaya gün verilmez.', def: e.reward?.days && e.reward.days !== shopDays ? String(e.reward.days) : '' },
+      ],
+      ok: 'Kaydet',
+    });
+    if (!v) return;
+    const days = v.days === '' || v.days === undefined ? undefined : Number(v.days);
+    const r = await act(() => post('/api/app/events/reward', { id: e.id, sku: v.sku || null, ...(v.sku && days ? { days } : {}) }));
+    if (r) (toast(v.sku ? 'Katılım ödülü kaydedildi' : 'Katılım ödülü kaldırıldı'), list.reload());
+  };
   return html`
     ${prompt}
     <div class="row gap wrap" style="margin:10px 0">
@@ -501,12 +517,21 @@ function EventList() {
         { key: 'state', label: 'Durum', render: (e) => html`<${Badge} s=${E_BADGE[e.state] ?? 'pending'} label=${e.stateLabel} />${e.rejectReason ? html`<br /><small class="muted">${cut(e.rejectReason, 120)}</small>` : ''}` },
         { key: 'reserved', label: 'Yer', align: 'right', render: (e) => `${num(e.reserved)}${e.capacity ? ` / ${num(e.capacity)}` : ''}${e.came ? ` · geldi ${num(e.came)}` : ''}` },
         {
+          key: 'reward',
+          label: 'Katılım ödülü',
+          render: (e) =>
+            e.reward
+              ? html`${e.reward.name}<br /><small class="muted">${e.reward.days === null ? 'süresiz' : `${e.reward.days} gün`}${e.reward.given !== undefined ? ` · ${num(e.reward.given)} kişiye verildi` : ''}</small>`
+              : html`<span class="muted">—</span>`,
+        },
+        {
           key: 'a',
           label: '',
           render: (e) =>
             can('app.events') &&
             html`<span class="row gap">
               ${e.state === 'review' && html`<${Button} kind="primary" onClick=${() => decide(e, true)}>Onayla</${Button}><${Button} kind="danger" onClick=${() => decide(e, false)}>Reddet</${Button}>`}
+              ${d.rewardItems && ['draft', 'review', 'upcoming', 'live'].includes(e.state) && html`<${Button} onClick=${() => setReward(e, d.rewardItems)}>Ödül</${Button}>`}
               ${(e.state === 'upcoming' || e.state === 'live') && html`<${Button} kind="danger" onClick=${() => remove(e)}>Yayından kaldır</${Button}>`}
             </span>`,
         },
