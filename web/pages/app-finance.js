@@ -2,7 +2,7 @@
 // each call on as the signed-in panel user; the app checks and records every one). Para çekme and Ajans ödemeleri
 // never send money: the money goes from the bank, the page records it. İadeler takes back a store purchase's coins;
 // Şanslı hediyeler and Canlı ayarlar change what the app does at once, for everyone.
-import { Badge, Button, Card, Kpi, Loading, Modal, Page, Table, Tabs, act, dateTimeTr, html, num, post, showError, toast, useApi, useApp, usePrompt, useState } from '../lib.js';
+import { Badge, Button, Card, ID_HINT, Kpi, Loading, Modal, Page, Table, Tabs, act, dateTimeTr, html, num, personOf, post, showError, toast, useApi, useApp, usePrompt, useState } from '../lib.js';
 
 const usd = (n) => `$${num(n, 2)}`;
 /** A row of filter chips: [value, label] pairs, one on. */
@@ -136,6 +136,11 @@ export function AppRefunds() {
   const [user, setUser] = useState('');
   const list = useApi(tab === 'purchases' ? `/api/app/purchases${search ? `?q=${encodeURIComponent(search)}` : ''}` : null);
   const audit = useApi(tab === 'wallet' && user ? `/api/app/wallet/audit?user=${encodeURIComponent(user)}` : null);
+  const showWallet = async (e) => {
+    e.preventDefault();
+    const p = await act(() => personOf(who));
+    if (p) setUser(p.id);
+  };
   const refund = async (p) => {
     if (!confirm(`${p.user.name} · ${num(p.coins)}${p.bonus ? ` + ${num(p.bonus)}` : ''} jeton${p.priceTl ? ` · ${num(p.priceTl, 2)} TL` : ''}\n\nHarcanmamış jetonlar ve bunlardan gelen, kilidi açılmamış elmaslar geri alınır; ajans komisyonu da düşülür. Para iadesini mağaza yapar. Geri alınamaz.`)) return;
     try {
@@ -160,7 +165,7 @@ export function AppRefunds() {
     <${Tabs} tabs=${[['purchases', 'Mağaza alımları'], ['wallet', 'Cüzdan denetimi']]} value=${tab} onChange=${setTab} />
     ${tab === 'purchases' && html`
       <form class="row gap" style="margin:10px 0" onSubmit=${(e) => (e.preventDefault(), setSearch(text.trim()))}>
-        <input value=${text} onInput=${(e) => setText(e.target.value)} placeholder="Alım no, mağaza sipariş no ya da hesap kimliği" style="min-width:320px" />
+        <input value=${text} onInput=${(e) => setText(e.target.value)} placeholder="Alım no, mağaza sipariş no ya da kişinin ID’si" title=${ID_HINT} style="min-width:320px" />
         <button class="btn" type="submit">Ara</button>
         ${search && html`<${Button} kind="ghost" onClick=${() => (setText(''), setSearch(''))}>Temizle</${Button}>`}
       </form>
@@ -182,13 +187,13 @@ export function AppRefunds() {
           rows=${d.purchases}
         />`}</${Loading}>`}
     ${tab === 'wallet' && html`
-      <form class="row gap" style="margin:10px 0" onSubmit=${(e) => (e.preventDefault(), setUser(who.trim()))}>
-        <input value=${who} onInput=${(e) => setWho(e.target.value)} placeholder="Hesap kimliği (uygulama: Ayarlar › Sunucu hesabı)" style="min-width:360px" />
+      <form class="row gap" style="margin:10px 0" onSubmit=${showWallet}>
+        <input value=${who} onInput=${(e) => setWho(e.target.value)} placeholder="Kişinin ID’si" title=${ID_HINT} style="min-width:360px" />
         <button class="btn" type="submit">Göster</button>
       </form>
       ${user && html`<${Loading} state=${audit}>${(a) => html`
         <div class="kpis">
-          <${Kpi} label="Hesap" value=${a.user.name} sub=${a.user.id} />
+          <${Kpi} label="Hesap" value=${a.user.name} sub=${a.user.publicNo ? `ID ${a.user.publicNo}` : a.user.id} />
           <${Kpi} label="Jeton" value=${num(a.user.coins)} sub=${`partilerde ${num(a.user.coinsInLots)}`} />
           <${Kpi} label="Elmas" value=${num(a.user.diamonds)} sub=${`çekilebilir ${num(a.user.withdrawable)} · kilitli ${num(a.user.locked)}`} />
         </div>

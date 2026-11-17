@@ -4,7 +4,7 @@
 // button shows only when the app would accept it. Kişi (search, a person's record, devices, applying, lifting,
 // evidence), Onay bekleyenler (a second person approves a heavy sanction), İtirazlar, Kurallar (the automatic steps,
 // who may give what), all of it as the app's Yönetim had it.
-import { Button, Card, Loading, Modal, Page, Table, Tabs, act, dateTimeTr, get, html, num, post, toast, useApi, usePrompt, useState } from '../lib.js';
+import { Button, Card, ID_HINT, Loading, Modal, Page, Table, Tabs, act, dateTimeTr, get, html, num, personOf, post, toast, useApi, usePrompt, useState } from '../lib.js';
 
 /** A coloured label in the panel's badge styles (ok, warn, bad, info, muted). */
 const Tag = ({ c, label }) => html`<span class=${`badge ${c}`}>${label}</span>`;
@@ -97,13 +97,13 @@ function Person({ meta, perms }) {
   const found = useApi(q ? `/api/app/sanctions/search?q=${encodeURIComponent(q)}` : null);
   return html`<div>
     <form class="row gap" style="margin:10px 0" onSubmit=${(e) => (e.preventDefault(), setQ(text.trim()))}>
-      <input value=${text} onInput=${(e) => setText(e.target.value)} placeholder="Ad, telefon, hesap kimliği, yaptırım ya da cihaz no (#123)" style="min-width:380px" />
+      <input value=${text} onInput=${(e) => setText(e.target.value)} placeholder="Ad, telefon, kişinin ID’si, yaptırım ya da cihaz no (#123)" title=${ID_HINT} style="min-width:380px" />
       <button class="btn" type="submit">Ara</button>
     </form>
     ${q && html`<${Loading} state=${found}>${(x) => html`<${Table}
       empty="Bu aramayla kimse bulunamadı"
       columns=${[
-        { key: 'name', label: 'Kişi', render: (u) => html`<strong>${u.name}</strong>${u.deleted ? html` <${Tag} c="muted" label="Silinmiş" />` : ''}` },
+        { key: 'name', label: 'Kişi', render: (u) => html`<strong>${u.name}</strong>${u.deleted ? html` <${Tag} c="muted" label="Silinmiş" />` : ''}${u.publicNo ? html`<br /><small class="muted num">ID ${u.publicNo}</small>` : ''}` },
         { key: 'phone', label: 'Telefon', render: (u) => u.phone ?? '—' },
         { key: 'role', label: 'Rol', render: (u) => ROLE[u.role] ?? u.role },
         { key: 'live', label: 'Etkin', render: (u) => (u.liveSanctions ? html`<${Tag} c="bad" label=${`${u.liveSanctions} etkin`} />` : '—') },
@@ -397,16 +397,22 @@ function PolicyEditor({ meta, reason, steps, onClose, onSaved }) {
 
 function StaffPerms({ meta }) {
   const [id, setId] = useState('');
+  // The account the ID named when it was fetched: a change goes to that one even if the field was edited since.
+  const [uid, setUid] = useState('');
   const [who, setWho] = useState(null);
-  const load = async (uid) => setWho(await act(() => get(`/api/app/sanction-permissions?user=${encodeURIComponent(uid)}`)));
+  const load = async (u) => setWho(await act(() => get(`/api/app/sanction-permissions?user=${encodeURIComponent(u)}`)));
+  const open = async () => {
+    const p = await act(() => personOf(id));
+    if (p) (setUid(p.id), load(p.id));
+  };
   const toggle = async (perm, grant) => {
-    const r = await act(() => post('/api/app/sanction-permissions', { user: id.trim(), permission: perm, grant }));
-    if (r) (toast(grant ? 'Yetki verildi' : 'Yetki geri alındı'), load(id.trim()));
+    const r = await act(() => post('/api/app/sanction-permissions', { user: uid, permission: perm, grant }));
+    if (r) (toast(grant ? 'Yetki verildi' : 'Yetki geri alındı'), load(uid));
   };
   return html`<${Card} title="Yaptırım yetkileri (uygulamadaki yetkililer)">
     <p class="muted">Uygulamada moderatör ya da yönetici olan bir hesabın yaptırım yetkileri. Bu siteyi kullananların yetkisi buradaki rollerden gelir (Yönetim › Kullanıcılar ve roller).</p>
-    <form class="row gap" onSubmit=${(e) => (e.preventDefault(), id.trim() && load(id.trim()))}>
-      <input value=${id} onInput=${(e) => setId(e.target.value)} placeholder="Yetkilinin hesap kimliği" style="min-width:340px" />
+    <form class="row gap" onSubmit=${(e) => (e.preventDefault(), id.trim() && open())}>
+      <input value=${id} onInput=${(e) => setId(e.target.value)} placeholder="Yetkilinin ID’si" title=${ID_HINT} style="min-width:340px" />
       <button class="btn" type="submit">Getir</button>
     </form>
     ${who && html`<p>Rol: <strong>${who.role}</strong></p>

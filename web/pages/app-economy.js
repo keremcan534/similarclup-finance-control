@@ -3,7 +3,7 @@
 // item (support, a lost purchase, a prize: price 0, the reason in the app's audit), taking one back, the items a store
 // refund left for staff to look at. Jeton Noktası (app.jeton, critical): an account made a bank or back, selling a bank
 // its stock for a receipt.
-import { Button, Card, Loading, Page, Table, Tabs, act, dateTimeTr, html, num, post, toast, useApi, useApp, usePrompt, useState } from '../lib.js';
+import { Button, Card, ID_HINT, Loading, Page, Table, Tabs, act, dateTimeTr, html, num, personOf, personText, post, toast, useApi, useApp, usePrompt, useState } from '../lib.js';
 
 const Tag = ({ c, label }) => html`<span class=${`badge ${c}`}>${label}</span>`;
 /** economy.mjs stateOf. */
@@ -14,32 +14,34 @@ const KIND = { frame: 'Çerçeve', entry: 'Giriş efekti', ride: 'Binek', bubble
 const SOURCE = { buy: 'Satın aldı', bridge: 'Satın aldı (eski uygulama)', migrate: 'Önceki sürümden', admin: 'Yönetim verdi', event: 'Etkinlik ödülü', task: 'Görev ödülü', level: 'Seviye ödülü' };
 /** A request id for the app's once-only rule (REF: 8–64 of [A-Za-z0-9_-]). */
 const ref = () => `fc${Date.now().toString(36)}${Math.random().toString(36).slice(2, 10)}`;
-const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+/** What the app takes as someone's ID (lib.js personOf): an account id, or digits with an optional "ID". */
+const ACCOUNT = /^([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}|(ID\s*:?\s*)?[\d\s.-]{1,20})$/i;
 
-/** A person by account id, or (with app.users) by a search of the app's accounts. */
+/** A person by the ID on their profile (or an account id), or (with app.users) by a search of the app's accounts. */
 function FindPerson({ onPick }) {
   const { can } = useApp();
   const [text, setText] = useState('');
   const [q, setQ] = useState('');
   const found = useApi(q && can('app.users') ? `/api/app/users?q=${encodeURIComponent(q)}` : null);
-  const go = (e) => {
+  const go = async (e) => {
     e.preventDefault();
     const v = text.trim();
-    if (UUID.test(v)) return onPick({ id: v, name: v });
-    setQ(v);
+    if (!ACCOUNT.test(v)) return setQ(v);
+    const p = await act(() => personOf(v));
+    if (p) onPick({ id: p.id, name: p.name ?? p.id });
   };
   return html`<div>
     <form class="row gap" style="margin:10px 0" onSubmit=${go}>
-      <input value=${text} onInput=${(e) => setText(e.target.value)} placeholder=${can('app.users') ? 'Ad, kullanıcı adı ya da hesap kimliği' : 'Hesap kimliği'} style="min-width:360px" />
+      <input value=${text} onInput=${(e) => setText(e.target.value)} placeholder=${can('app.users') ? 'Ad, kullanıcı adı ya da kişinin ID’si' : 'Kişinin ID’si'} title=${ID_HINT} style="min-width:360px" />
       <button class="btn" type="submit">${can('app.users') ? 'Ara' : 'Aç'}</button>
     </form>
-    ${q && !UUID.test(q) && !can('app.users') && html`<p class="muted">Arama için Kullanıcılar yetkisi gerekir; hesap kimliğini yapıştır.</p>`}
+    ${q && !can('app.users') && html`<p class="muted">Adla arama için Kullanıcılar yetkisi gerekir; kişinin profilindeki ID’yi yaz.</p>`}
     ${q && can('app.users') && html`<${Loading} state=${found}>${(x) => html`<${Table}
       dense
       empty="Bu aramayla kimse bulunamadı"
       columns=${[
         { key: 'name', label: 'Kişi', render: (u) => html`<strong>${u.name}</strong>${u.username ? html` <span class="muted">@${u.username}</span>` : ''}` },
-        { key: 'id', label: 'Hesap kimliği', render: (u) => html`<span class="num muted">${u.id}</span>` },
+        { key: 'publicNo', label: 'ID', render: (u) => (u.publicNo ? html`<span class="num">${u.publicNo}</span>` : html`<span class="num muted">${u.id}</span>`) },
         { key: 'a', label: '', render: (u) => html`<${Button} onClick=${() => onPick(u)}>Aç</${Button}>` },
       ]}
       rows=${x.users}
@@ -139,18 +141,20 @@ export function AppJeton() {
   const bank = async (enabled) => {
     const v = await ask(enabled ? 'Jeton Noktası hesabı aç' : 'Jeton Noktası hesabını kapat', {
       text: enabled ? 'Hesap Jeton Noktası olur: başkalarına jeton satabilir, elmas bozdurabilir. Yalnız güvendiğiniz işletmeler.' : 'Hesap sıradan hesaba döner; elindeki jetonlar kalır.',
-      fields: [{ name: 'user', label: 'Hesap kimliği', type: 'text', required: true, wide: true }],
+      fields: [{ name: 'user', label: 'Kişinin ID’si', type: 'text', required: true, wide: true, hint: ID_HINT }],
       ok: enabled ? 'Aç' : 'Kapat',
     });
     if (!v) return;
-    const r = await act(() => post('/api/app/jeton/bank', { user: v.user.trim(), enabled }));
-    if (r) toast(enabled ? 'Jeton Noktası hesabı açıldı' : 'Jeton Noktası hesabı kapatıldı');
+    const who = await act(() => personOf(v.user));
+    if (!who) return;
+    const r = await act(() => post('/api/app/jeton/bank', { user: who.id, enabled }));
+    if (r) toast(`${personText(who)}: ${enabled ? 'Jeton Noktası hesabı açıldı' : 'Jeton Noktası hesabı kapatıldı'}`);
   };
   const wholesale = async () => {
     const v = await ask('Toptan jeton satışı', {
       text: 'Jeton Noktası\'na stok: jetonlar hesabına geçer, finans paneline satış olarak gider. Dekont numarası zorunlu.',
       fields: [
-        { name: 'bank', label: 'Jeton Noktası hesap kimliği', type: 'text', required: true, wide: true },
+        { name: 'bank', label: 'Jeton Noktası’nın ID’si', type: 'text', required: true, wide: true, hint: ID_HINT },
         { name: 'coins', label: 'Jeton', type: 'number', required: true },
         { name: 'paymentRef', label: 'Dekont / ödeme no', type: 'text', required: true },
         { name: 'note', label: 'Not', type: 'text', wide: true },
@@ -158,8 +162,11 @@ export function AppJeton() {
       ok: 'Sat',
     });
     if (!v) return;
-    if (!confirm(`${num(Number(v.coins))} jeton bu Jeton Noktası'na geçecek. Emin misin?`)) return;
-    const r = await act(() => post('/api/app/jeton/wholesale', { bank: v.bank.trim(), coins: Number(v.coins), paymentRef: v.paymentRef.trim(), note: v.note ?? '', ref: ref() }));
+    // Who gets the coins, by name, before they move: a mistyped ID is someone else.
+    const bank = await act(() => personOf(v.bank));
+    if (!bank) return;
+    if (!confirm(`${num(Number(v.coins))} jeton ${bank.name ? `${personText(bank)} Jeton Noktası'na` : "bu Jeton Noktası'na"} geçecek. Emin misin?`)) return;
+    const r = await act(() => post('/api/app/jeton/wholesale', { bank: bank.id, coins: Number(v.coins), paymentRef: v.paymentRef.trim(), note: v.note ?? '', ref: ref() }));
     if (r) (setLast(r), toast(`${num(Number(v.coins))} jeton satıldı`));
   };
   return html`<${Page} title="Jeton Noktası" subtitle="Jeton Noktası hesapları ve onlara toptan jeton satışı. Her işlem uygulamada senin adınla kaydedilir; satış finans paneline de gelir.">

@@ -4,7 +4,7 @@
 // parent, a streamer's agency, transition commission, a new agency), Başvurular, Transferler, Performans, Rapor,
 // Simülasyon, Denetim and, with its own permission, the commission ledger and the network's rules. Staff roles and
 // permissions, BD assignment, operations score, violations, appeals and the background jobs stay in the app.
-import { Badge, Button, Card, DateRange, Form, Kpi, Loading, Modal, Page, Table, Tabs, act, dateTimeTr, dateTr, html, monthStart, num, post, showError, toast, today, useApi, useApp, useEffect, usePrompt, useState } from '../lib.js';
+import { Badge, Button, Card, DateRange, Form, ID_HINT, Kpi, Loading, Modal, Page, Table, Tabs, accountOf, act, dateTimeTr, dateTr, html, monthStart, num, post, showError, toast, today, useApi, useApp, useEffect, usePrompt, useState } from '../lib.js';
 import { Chips } from './app-finance.js';
 
 // The app's words (app/src/lib/agency-net.ts).
@@ -186,10 +186,10 @@ function AgencyDetail({ a, nodes, s, onClose, onChanged }) {
   const assign = async (link) => {
     const v = await ask(link ? 'Yayıncıyı bu ajansa bağla' : 'Yayıncıyı ajansından çıkar', {
       text: link ? 'Yayıncı bulunduğu ajanstan çıkıp bu ajansa bağlanır (merkez kararı; transfer ücreti yok).' : 'Yayıncı bağlı olduğu ajanstan çıkar ve ajanssız kalır.',
-      fields: [{ name: 'streamer', label: 'Yayıncının hesap kimliği', type: 'text', required: true, wide: true }, reason],
+      fields: [{ name: 'streamer', label: 'Yayıncının ID’si', type: 'text', required: true, wide: true, hint: ID_HINT }, reason],
       ok: link ? 'Bağla' : 'Çıkar',
     });
-    if (v) done(link ? 'Yayıncı bu ajansa bağlandı' : 'Yayıncı ajansından çıktı')(await act(() => post('/api/app/agency/assign', { streamer: v.streamer.trim(), ...(link ? { agencyId: a.id } : {}), reason: v.reason })));
+    if (v) done(link ? 'Yayıncı bu ajansa bağlandı' : 'Yayıncı ajansından çıktı')(await act(async () => post('/api/app/agency/assign', { streamer: await accountOf(v.streamer), ...(link ? { agencyId: a.id } : {}), reason: v.reason })));
   };
   const transition = async () => {
     const v = await ask('Geçiş komisyonu', {
@@ -264,7 +264,7 @@ function CreateAgency({ nodes, onClose, onSaved }) {
       fields=${[
         { name: 'name', label: 'Ajans adı (2–60)', required: true },
         { name: 'parentId', label: 'Üst ajans (boş: üst ajans olarak)', type: 'select', options: tops.map((t) => [t.id, `${t.name} (${t.code})`]) },
-        { name: 'owner', label: 'Yönetici hesap kimliği (isteğe bağlı)' },
+        { name: 'owner', label: 'Yöneticinin ID’si (isteğe bağlı)', hint: ID_HINT },
         { name: 'country', label: 'Ülke' },
         { name: 'region', label: 'Bölge' },
         { name: 'contactName', label: 'Yetkili adı' },
@@ -276,7 +276,7 @@ function CreateAgency({ nodes, onClose, onSaved }) {
       onSubmit=${async (v) => {
         const body = Object.fromEntries(Object.entries(v).filter(([, x]) => x !== ''));
         if (body.expectedStreamers !== undefined) body.expectedStreamers = Number(body.expectedStreamers);
-        if (await act(() => post('/api/app/agency/create', body))) onSaved();
+        if (await act(async () => post('/api/app/agency/create', { ...body, ...(body.owner ? { owner: await accountOf(body.owner) } : {}) }))) onSaved();
       }}
     />
   </${Modal}>`;
@@ -580,12 +580,12 @@ function Ledger({ settings }) {
         <${Form}
           submitLabel="Kaydet"
           fields=${[
-            { name: 'streamer', label: 'Yayıncının hesap kimliği', required: true, wide: true },
+            { name: 'streamer', label: 'Yayıncının ID’si', required: true, wide: true, hint: ID_HINT },
             { name: 'type', label: 'Gelir türü', type: 'select', required: true, def: 'bonus', options: Object.entries(INCOME_TEXT) },
             { name: 'diamonds', label: 'Elmas (iade: eksi)', type: 'number', required: true },
           ]}
           onSubmit=${async (v, setV) => {
-            const r = await act(() => post('/api/app/agency/income', { streamer: v.streamer.trim(), type: v.type, diamonds: Number(v.diamonds), ref: refOf() }));
+            const r = await act(async () => post('/api/app/agency/income', { streamer: await accountOf(v.streamer), type: v.type, diamonds: Number(v.diamonds), ref: refOf() }));
             if (r) (toast(r.commission ? `Gelir kaydedildi; komisyon ${pct(r.commission.totalRate)} (${dia(r.commission.agencyAmount)} elmas ajansa)` : 'Gelir kaydedildi'), setV({ streamer: '', type: v.type, diamonds: '' }));
           }}
         />

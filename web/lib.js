@@ -98,6 +98,28 @@ export async function act(fn, ok) {
   }
 }
 
+// ---- the app's accounts ----------------------------------------------------------------
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+/** What an account field asks for: the ID the person's profile shows in the app (their room's ID is the same). */
+export const ID_HINT = 'Uygulamada kişinin profilinde ve odasında görünen ID (12 hane; özel ID de olur)';
+/**
+ * The app account a staff member typed into an account field: the ID on the person's profile (their own number; a
+ * special ID or an open room's older 8-digit ID too) is looked up in the app (GET /api/app/lookup); an account id
+ * (uuid) is taken as it is, without a name. null for an empty field; the app's sentence when nobody has the number.
+ */
+export async function personOf(text) {
+  const t = String(text ?? '').trim();
+  if (!t) return null;
+  if (UUID.test(t)) return { id: t.toLowerCase(), name: null, publicNo: null };
+  const no = t.replace(/^ID\s*:?\s*/i, '').replace(/[\s.-]/g, '');
+  if (!/^\d{1,12}$/.test(no)) throw new ApiError('Kişinin profilindeki ID’yi yazın (yalnızca rakamlar)', 400);
+  return (await get(`/api/app/lookup${qs({ no })}`)).user;
+}
+/** personOf's account id; '' for an empty field. */
+export const accountOf = async (text) => (await personOf(text))?.id ?? '';
+/** A person as staff see them: name and profile ID ('bu hesap' for a bare account id). */
+export const personText = (p) => (p?.name ? `${p.name}${p.publicNo ? ` (ID ${p.publicNo})` : ''}` : 'bu hesap');
+
 // ---- formatting ------------------------------------------------------------------------
 let currencies = {};
 export const setCurrencies = (list) => (currencies = Object.fromEntries(list.map((c) => [c.code, c])));
