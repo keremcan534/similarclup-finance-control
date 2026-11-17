@@ -452,6 +452,20 @@ test('Yönetim\'in kalanı: yaptırımlar, ajans personeli, mağaza eşyaları, 
   for (const p of ['/api/app/sanctions/meta', '/api/app/agency/roles', '/api/app/economy/reviews']) assert.equal(await get(p, ro), 403, `ro ${p}`);
 });
 
+test('kişinin ID’si: hesap alanı olan her sayfanın yetkisiyle uygulamada aranır (moderatör de); salt okunur hayır', async () => {
+  env.as('finance_manager', 'fin@test.local');
+  env.as('operations_manager', 'ops@test.local');
+  env.as('moderator', 'mod@test.local');
+  env.as('read_only', 'ro@test.local');
+  const [fin, ops, mod, ro] = await Promise.all(['fin@test.local', 'ops@test.local', 'mod@test.local', 'ro@test.local'].map(loginAs));
+  for (const who of [fin, ops, mod]) {
+    const r = await call('GET', '/api/app/lookup?no=104829301457', undefined, who);
+    assert.equal(r.status, 200, JSON.stringify(r.json));
+    assert.equal(seen.at(-1)!.path, '/api/admin/lookup?no=104829301457', 'uygulamanın yolu, numara olduğu gibi');
+  }
+  assert.equal((await call('GET', '/api/app/lookup?no=104829301457', undefined, ro)).status, 403);
+});
+
 test('bağlantıdan dosya: uygulama indirir; kaydedilecek adres olduğu gibi, önizlemesi bu sunucudan; yetki, denetim, ret', async () => {
   env.as('operations_manager', 'ops@test.local');
   env.as('read_only', 'ro@test.local');

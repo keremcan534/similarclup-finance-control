@@ -2,7 +2,7 @@
 // API (server/app-admin.ts, permission app.agency_staff; the app's agency-admin.mjs checks and records each one):
 // who on the platform staff holds which centre role, the roles and their permissions (platform and agency ones), an
 // agency's BD, operations score and violation points, agencies' appeals, the network's background jobs run now.
-import { Button, Card, Loading, Modal, Page, Table, Tabs, act, dateTimeTr, html, num, post, toast, useApi, usePrompt, useState } from '../lib.js';
+import { Button, Card, ID_HINT, Loading, Modal, Page, Table, Tabs, accountOf, act, dateTimeTr, html, num, post, toast, useApi, usePrompt, useState } from '../lib.js';
 
 const Tag = ({ c, label }) => html`<span class=${`badge ${c}`}>${label}</span>`;
 const SCOPE = { platform: 'Merkez', agency: 'Ajans' };
@@ -39,15 +39,15 @@ function Staff() {
   const platformRoles = (roles.data?.roles ?? []).filter((r) => r.scope === 'platform' && !r.archived);
   const set = async (s) => {
     const v = await ask(s ? `${s.user.name}: rol` : 'Personel ekle', {
-      text: s ? '' : 'Uygulamadaki hesabın kimliğini yapıştır (Kullanıcılar sayfasında görünür).',
+      text: s ? '' : 'Kişinin uygulamadaki profilinde görünen ID’sini yaz.',
       fields: [
-        ...(s ? [] : [{ name: 'user', label: 'Hesap kimliği', type: 'text', required: true, wide: true }]),
+        ...(s ? [] : [{ name: 'user', label: 'Kişinin ID’si', type: 'text', required: true, wide: true, hint: ID_HINT }]),
         { name: 'roleId', label: 'Rol', type: 'select', required: true, options: platformRoles.map((r) => [String(r.id), r.name]), def: s?.roleId ? String(s.roleId) : String(platformRoles[0]?.id ?? '') },
       ],
       ok: 'Kaydet',
     });
     if (!v) return;
-    const r = await act(() => post('/api/app/agency/staff/set', { user: s ? s.user.id : v.user.trim(), roleId: Number(v.roleId), extra: s?.extra ?? [], denied: s?.denied ?? [] }));
+    const r = await act(async () => post('/api/app/agency/staff/set', { user: s ? s.user.id : await accountOf(v.user), roleId: Number(v.roleId), extra: s?.extra ?? [], denied: s?.denied ?? [] }));
     if (r) (toast('Personel kaydedildi'), staff.reload());
   };
   const remove = async (s) => {
@@ -149,8 +149,8 @@ function AgencyActions() {
   const [ask, prompt] = usePrompt();
   const done = (t) => (r) => r && (toast(t), list.reload());
   const bd = async (a) => {
-    const v = await ask(`${a.name}: BD`, { text: 'Ajansın BD sorumlusu: uygulamadaki hesabın kimliği. Boş bırakırsan ajansın BD\'si kalkar.', fields: [{ name: 'bd', label: 'BD hesap kimliği', type: 'text', wide: true, def: a.bd?.id ?? '' }], ok: 'Kaydet' });
-    if (v) done('BD kaydedildi')(await act(() => post('/api/app/agency/bd', { agencyId: a.id, bd: v.bd?.trim() || null })));
+    const v = await ask(`${a.name}: BD`, { text: 'Ajansın BD sorumlusu: kişinin uygulamadaki profilinde görünen ID’si. Boş bırakırsan ajansın BD\'si kalkar.', fields: [{ name: 'bd', label: 'BD’nin ID’si', type: 'text', wide: true, def: a.bd?.id ?? '', hint: ID_HINT }], ok: 'Kaydet' });
+    if (v) done('BD kaydedildi')(await act(async () => post('/api/app/agency/bd', { agencyId: a.id, bd: (await accountOf(v.bd)) || null })));
   };
   const score = async (a) => {
     const v = await ask(`${a.name}: operasyon puanı`, {

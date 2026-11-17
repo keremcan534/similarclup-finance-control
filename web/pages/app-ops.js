@@ -2,7 +2,7 @@
 // (server/app-admin.ts passes each call on as the signed-in panel user; the app checks and records every one).
 // Kullanıcılar, Şikâyetler (with a reported room's own pictures), Destek, Duyurular, Etkinlikler. The full sanction
 // system (evidence, approvals, appeals, staff permissions) is Uygulama › Yaptırımlar (app-sanctions.js).
-import { Badge, Button, Card, Kpi, Loading, Modal, Page, Table, Tabs, act, dateTimeTr, html, num, post, showError, toast, useApi, useApp, usePrompt, useState } from '../lib.js';
+import { Badge, Button, Card, ID_HINT, Kpi, Loading, Modal, Page, Table, Tabs, accountOf, act, dateTimeTr, html, num, post, showError, toast, useApi, useApp, usePrompt, useState } from '../lib.js';
 import { Chips } from './app-finance.js';
 
 /** The app's ban lengths (admin-format.ts BAN_OPTIONS); 'Süresiz' is a lifetime ban. */
@@ -88,12 +88,12 @@ export function AppUsers() {
   const d = list.data;
   return html`<${Page}
     title="Kullanıcılar"
-    subtitle="Uygulamanın hesapları: ad, kullanıcı adı, hesap kimliği, e-posta ya da 8 haneli oda ID'siyle arama; askıya alma, oda seviyesi, davet ödülünü geri alma, hesap silme. Yetkili hesapları (yönetici, moderatör) buradan değiştirilemez."
+    subtitle="Uygulamanın hesapları: ad, kullanıcı adı, e-posta ya da ID ile arama (kişinin profilindeki ID, odasının ID'si de aynı; özel ID ve eski 8 haneli oda ID'si de bulunur); askıya alma, oda seviyesi, davet ödülünü geri alma, hesap silme. Yetkili hesapları (yönetici, moderatör) buradan değiştirilemez."
     actions=${can('app.users') && d?.tests > 0 && html`<${Button} kind="danger" onClick=${() => removeTests(d.tests)}>Deneme hesaplarını sil (${num(d.tests)})</${Button}>`}
   >
     ${prompt}
     <form class="row gap" style="margin-bottom:10px" onSubmit=${(e) => (e.preventDefault(), setOffset(0), setSearch(text.trim()))}>
-      <input value=${text} onInput=${(e) => setText(e.target.value)} placeholder="Ad, kullanıcı adı, hesap kimliği, e-posta ya da oda ID" style="min-width:360px" />
+      <input value=${text} onInput=${(e) => setText(e.target.value)} placeholder="Ad, kullanıcı adı, e-posta ya da ID" title=${ID_HINT} style="min-width:360px" />
       <button class="btn" type="submit">Ara</button>
       ${search && html`<${Button} kind="ghost" onClick=${() => (setText(''), setSearch(''), setOffset(0))}>Temizle</${Button}>`}
     </form>
@@ -102,7 +102,7 @@ export function AppUsers() {
       <${Table}
         empty=${search ? 'Bu aramayla kimse bulunamadı' : 'Henüz kayıtlı hesap yok'}
         columns=${[
-          { key: 'name', label: 'Kişi', render: (u) => html`<strong>${u.name}</strong>${u.username ? html` <span class="muted">@${u.username}</span>` : ''}${u.test ? html` <${Badge} s="warning" label="Deneme" />` : ''}<br /><small class="muted num">${u.id}</small>` },
+          { key: 'name', label: 'Kişi', render: (u) => html`<strong>${u.name}</strong>${u.username ? html` <span class="muted">@${u.username}</span>` : ''}${u.test ? html` <${Badge} s="warning" label="Deneme" />` : ''}<br /><small class="muted num">${u.publicNo ? `ID ${u.publicNo}` : u.id}</small>` },
           { key: 'role', label: 'Rol', render: (u) => (STAFF(u.role) ? html`<${Badge} s="info" label=${ROLE[u.role]} />` : ROLE[u.role] ?? u.role) },
           { key: 'signIn', label: 'Giriş', render: (u) => u.signIn.map((p) => SIGN_IN[p] ?? p).join(', ') || 'Cihaz (deneme girişi)' },
           { key: 'room', label: 'Oda', render: (u) => (u.room ? html`<span class="num">${u.room.code}</span> · Lv.${u.roomLevel}` : `Lv.${u.roomLevel ?? 1}`) },
@@ -384,6 +384,8 @@ function NoticeEditor({ onClose, onSaved }) {
   const save = async () => {
     setBusy(true);
     try {
+      // The person first: a mistyped ID stops here, before the picture is stored.
+      const target = await accountOf(n.target);
       let imageUrl = null;
       if (image) {
         const r = await fetch('/api/app/upload?kind=notice', { method: 'POST', headers: { 'content-type': image.file.type }, body: image.file });
@@ -398,7 +400,7 @@ function NoticeEditor({ onClose, onSaved }) {
         body: n.body.trim(),
         ...(imageUrl ? { imageUrl } : {}),
         ...(n.link.trim() ? { link: n.link.trim() } : {}),
-        ...(n.target.trim() ? { target: n.target.trim() } : {}),
+        ...(target ? { target } : {}),
         ...(days ? { bannerDays: days } : {}),
       });
       onSaved();
@@ -416,7 +418,7 @@ function NoticeEditor({ onClose, onSaved }) {
       <label class="field"><span>Görsel (JPEG, PNG, WebP; en çok 5 MB)</span><input type="file" accept="image/jpeg,image/png,image/webp" onChange=${pick} /></label>
       <div>${image && html`<img src=${image.preview} alt="" style="max-width:160px;max-height:120px;border-radius:8px" />`}</div>
       <label class="field"><span>Uygulama içi bağlantı (ör. /siralama)</span><input value=${n.link} maxlength="120" onInput=${(e) => set({ link: e.target.value })} /></label>
-      <label class="field"><span>Tek kişiye (hesap kimliği; boşsa herkese)</span><input value=${n.target} onInput=${(e) => set({ target: e.target.value })} /></label>
+      <label class="field"><span>Tek kişiye (kişinin ID’si; boşsa herkese)</span><input value=${n.target} title=${ID_HINT} onInput=${(e) => set({ target: e.target.value })} /></label>
       <label class="field"><span>Odalarda banner (gün, 0: yok; kişiye özelde olmaz)</span><select value=${n.bannerDays} disabled=${!!n.target.trim()} onChange=${(e) => set({ bannerDays: e.target.value })}>${['0', '1', '3', '7', '14', '30'].map((x) => html`<option value=${x}>${x === '0' ? 'Yok' : `${x} gün`}</option>`)}</select></label>
     </div></div>
     <div class="row gap end"><${Button} onClick=${onClose}>Vazgeç</${Button}><${Button} kind="primary" disabled=${busy || n.title.trim().length < 2} onClick=${save}>${busy ? 'Yayınlanıyor…' : 'Yayınla'}</${Button}></div>

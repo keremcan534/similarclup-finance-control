@@ -100,6 +100,8 @@ export const APP_ROUTES: [string, string, Permission | Permission[]][] = [
   ['GET', '/api/admin/money-check', 'app.reports'],
   // Kullanıcılar: search, ban (and lifting it), room level, deleting, an invite's coins back
   ['GET', '/api/admin/users', 'app.users'],
+  // An account by the ID on the person's profile in the app (their own number): every page's account fields
+  ['GET', '/api/admin/lookup', ['app.users', 'app.refunds', 'app.notices', 'app.agencies', 'app.agency_ledger', 'app.agency_staff', 'app.sanctions', 'app.sanctions_full', 'app.economy', 'app.jeton']],
   ['POST', '/api/admin/users/delete', 'app.users'],
   ['POST', '/api/admin/users/room-level', 'app.users'],
   ['POST', '/api/admin/ban', 'app.users'],

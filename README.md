@@ -167,6 +167,13 @@ Hangi panel kullanıcısının hangi sayfayı kullanacağını bu panelin roller
 | `app.economy` | Uygulama › Mağaza eşyaları | Süper yönetici, operasyon yöneticisi |
 | `app.jeton` | Uygulama › Jeton Noktası | Süper yönetici, finans yöneticisi |
 
+**Kişinin ID'si:** bir hesap isteyen her alan, kişinin uygulamada profilinde görünen 12 haneli ID'sini alır.
+Bu alanlar şunlar: yayıncı, ajans yöneticisi, BD, personel, Jeton Noktası, cüzdan denetimi, duyuru hedefi ve yaptırım
+yetkileri. Odanın ID'si de sahibinin ID'sidir, özel ID de olur. Panel numarayı uygulamaya sorar (`/api/app/lookup`,
+hesap alanı olan her sayfanın yetkisiyle) ve işlemi bulunan hesapla yapar. Hesap kimliği (uuid) de çalışmaya devam
+eder. Toptan jeton satışı, jetonlar geçmeden önce Jeton Noktası'nın adını ve ID'sini gösterir. Ayrıntı: uygulama
+deposunda `docs/KIMLIK_NUMARASI.md`.
+
 Panelden yapılan her işlem uygulamada tek bir hesaptan (Finance Control) yapılmış sayılır; kimin yaptığı iki tarafın
 denetim kaydında da yazar. Bunun bir sonucu: ajans ödemelerinde **iki kişili onay** açıksa, panelden onaylanan bir
 ödemenin "Ödendi" işaretini uygulamadaki Yönetim'den başka bir yönetici koymalıdır (uygulama onaylayanla ödeyeni
