@@ -63,6 +63,11 @@ export const APP_ROUTES: [string, string, Permission | Permission[]][] = [
   ['POST', '/api/admin/levels/save', 'app.levels'],
   ['POST', '/api/admin/levels/reset', 'app.levels'],
   ['GET', '/api/admin/levels/drops', 'app.levels'],
+  // Seviye ödülleri (the app's level-rewards.mjs): an item that goes into the bag of whoever reaches a VIP, Cömertlik
+  // or Yankı level; adding one, taking one off (given items stay where they are).
+  ['GET', '/api/admin/level-rewards', 'app.levels'],
+  ['POST', '/api/admin/level-rewards', 'app.levels'],
+  ['POST', '/api/admin/level-rewards/delete', 'app.levels'],
   // Para çekme
   ['GET', '/api/admin/withdrawals', 'app.withdrawals'],
   ['POST', '/api/admin/withdrawals/decide', 'app.withdrawals'],

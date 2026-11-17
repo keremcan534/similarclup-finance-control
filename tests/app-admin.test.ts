@@ -601,6 +601,27 @@ test('Seviyeler ve VIP: finans yöneticisinin yetkisiyle; kayıt ve sıfırlama 
   }
 });
 
+test('Seviye ödülleri: Seviyeler ve VIP yetkisiyle; ekleme ve kaldırma denetim kaydına yazılır', async () => {
+  env.as('finance_manager', 'fin@test.local');
+  env.as('operations_manager', 'ops@test.local');
+  env.as('read_only', 'ro@test.local');
+  const fin = await loginAs('fin@test.local');
+  const ops = await loginAs('ops@test.local');
+  const ro = await loginAs('ro@test.local');
+  for (const [method, path, body] of [
+    ['GET', '/api/app/level-rewards', undefined],
+    ['POST', '/api/app/level-rewards', { system: 'vip', level: 5, sku: 'fr-neon', days: 30 }],
+    ['POST', '/api/app/level-rewards/delete', { id: 7 }],
+  ] as const) {
+    assert.equal((await call(method, path, body, fin)).status, 200, path);
+    assert.equal(seen.at(-1)!.path, path.replace('/api/app/', '/api/admin/'));
+    if (body) assert.deepEqual(JSON.parse(seen.at(-1)!.body), body);
+    for (const h of [ops, ro]) assert.equal((await call(method, path, body, h)).status, 403, `yetkisiz: ${path}`);
+  }
+  assert.ok(env.db.get("SELECT 1 FROM audit_logs WHERE action = 'app.level-rewards'"));
+  assert.ok(env.db.get("SELECT 1 FROM audit_logs WHERE action = 'app.level-rewards.delete'"));
+});
+
 test('daha önce kurulmuş rollere yeni yetki bir kez eklenir', () => {
   const { db } = setup();
   const ADDED: Record<string, string[]> = {

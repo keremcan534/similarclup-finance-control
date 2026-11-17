@@ -10,8 +10,8 @@ const Tag = ({ c, label }) => html`<span class=${`badge ${c}`}>${label}</span>`;
 const STATE = { live: ['ok', 'Kullanımda'], ended: ['muted', 'Süresi doldu'], revoked: ['muted', 'Geri alındı'], upcoming: ['info', 'Başlayacak'] };
 /** catalog.mjs SHOP kinds and a sticker pack. */
 const KIND = { frame: 'Çerçeve', entry: 'Giriş efekti', ride: 'Binek', bubble: 'Sohbet balonu', specialId: 'Özel ID', wave: 'Ses dalgası', sticker: 'Çıkartma paketi', micfx: 'Mikrofon efekti', noble: 'Rütbe' };
-/** entitlements.source (020_economy.sql). */
-const SOURCE = { buy: 'Satın aldı', bridge: 'Satın aldı (eski uygulama)', migrate: 'Önceki sürümden', admin: 'Yönetim verdi' };
+/** entitlements.source (020_economy.sql, 085_bag_rewards.sql); a reward's `origin` says which ("VIP 5", an event's title). */
+const SOURCE = { buy: 'Satın aldı', bridge: 'Satın aldı (eski uygulama)', migrate: 'Önceki sürümden', admin: 'Yönetim verdi', event: 'Etkinlik ödülü', task: 'Görev ödülü', level: 'Seviye ödülü' };
 /** A request id for the app's once-only rule (REF: 8–64 of [A-Za-z0-9_-]). */
 const ref = () => `fc${Date.now().toString(36)}${Math.random().toString(36).slice(2, 10)}`;
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -105,7 +105,7 @@ function Owned({ id, onBack }) {
           { key: 'state', label: 'Durum', render: (e) => html`<${Tag} c=${STATE[e.state]?.[0] ?? 'muted'} label=${STATE[e.state]?.[1] ?? e.state} />` },
           { key: 'time', label: 'Süre', render: (e) => (e.endsAt ? `${dateTimeTr(e.startsAt)} → ${dateTimeTr(e.endsAt)}` : 'Süresiz') },
           { key: 'price', label: 'Ödenen', render: (e) => (e.price ? `${num(e.price)} jeton` : 'Ücretsiz') },
-          { key: 'source', label: 'Nereden', render: (e) => SOURCE[e.source] ?? e.source ?? '—' },
+          { key: 'source', label: 'Nereden', render: (e) => `${SOURCE[e.source] ?? e.source ?? '—'}${e.origin ? ` · ${e.origin}` : ''}` },
           { key: 'a', label: '', render: (e) => e.state !== 'revoked' && html`<${Button} kind="ghost" onClick=${() => revoke(e)}>Geri al</${Button}>` },
         ]}
         rows=${x.items}
