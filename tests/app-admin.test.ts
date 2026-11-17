@@ -534,7 +534,7 @@ test('Emojiler: kendi yetkisiyle; paketler, çıkartmalar, sıra, orijinale dön
   assert.equal((await fetch(`${base}/api/app/media/f/stickerart/u1/x.png`, { headers: ops })).status, 200);
 });
 
-test('Mağaza: kendi yetkisiyle; eşyalar, sıra, orijinale dönme, çerçeve, balon ve dalga, resim ve giriş efekti videosu yükleme', async () => {
+test('Mağaza: kendi yetkisiyle; eşyalar, sıra, orijinale dönme, çerçeve, balon, dalga ve koltuk rengi, resim ve giriş efekti videosu yükleme', async () => {
   env.as('operations_manager', 'ops@test.local');
   env.as('finance_manager', 'fin@test.local');
   env.as('read_only', 'ro@test.local');
@@ -551,6 +551,9 @@ test('Mağaza: kendi yetkisiyle; eşyalar, sıra, orijinale dönme, çerçeve, b
     // A chat bubble with its picture's corners, and a voice wave: their look goes to the app as it is.
     ['POST', '/api/app/shop', { kind: 'bubble', name: 'Taçlı', price: 900, days: 30, art: 'x', look: { colors: ['#B45309', '#F59E0B'], text: '#1F1300', slice: { t: 40, r: 60, b: 40, l: 60 } } }],
     ['POST', '/api/app/shop/update', { id: 'sw2', art: null, look: { style: 'spin', colors: ['#00C2FF', '#0047FF', '#00FFB2'] } }],
+    // A room's seat color: its color, price and days; the app's own colors change their color too.
+    ['POST', '/api/app/shop', { kind: 'seat', name: 'Lacivert', price: 2500, days: 30, enabled: true, look: { color: '#1F2A5A' } }],
+    ['POST', '/api/app/shop/update', { id: 'pembe', name: 'Açık Pembe', price: 2000, days: 0, enabled: true, look: { color: '#F4B6C8' } }],
   ] as const) {
     for (const h of [ops, fin]) assert.equal((await call(method, path, body, h)).status, 200, `${path}`);
     assert.equal(seen.at(-1)!.path, path.replace('/api/app/', '/api/admin/'));

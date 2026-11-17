@@ -12,7 +12,10 @@
 //     and an icon the shop shows for it;
 //   - a chat bubble: two colours and the text's, or a picture (made at 3×) stretched round the message with its
 //     corners kept (how far in each corner goes is set here; the browser draws it the same way, border-image);
-//   - a voice wave: a style the app draws and its colours; the sparkle style's sparks may be a picture.
+//   - a voice wave: a style the app draws and its colours; the sparkle style's sparks may be a picture;
+//   - a seat color (Koltuk renkleri): the colour of a room's empty mics, which a room's owner buys for the room for its
+//     days. The app tints one pouf picture with it (its gold kept), so any colour works; this page draws it the same
+//     way (web/img, a CSS mask). The default (silver) is every room's, free: its name and colour change, nothing else.
 // Phones read the shop from the server (a new APK); older APKs keep their compiled shop.
 import { Badge, Button, Card, Loading, Modal, Page, Tabs, act, html, num, post, searchable, toast, useApi, useApp, useEffect, useRef, useState } from '../lib.js';
 import { Stage, typeOf, upload, videoKindOf } from './app-gifts.js';
@@ -22,14 +25,18 @@ const KINDS = [
   ['frame', 'Çerçeveler'],
   ['bubble', 'Sohbet balonları'],
   ['wave', 'Ses dalgaları'],
+  ['seat', 'Koltuk renkleri'],
 ];
-const NEW_LABEL = { entry: 'Yeni giriş efekti', frame: 'Yeni çerçeve', bubble: 'Yeni sohbet balonu', wave: 'Yeni ses dalgası' };
+const NEW_LABEL = { entry: 'Yeni giriş efekti', frame: 'Yeni çerçeve', bubble: 'Yeni sohbet balonu', wave: 'Yeni ses dalgası', seat: 'Yeni koltuk rengi' };
 const KIND_HELP = {
   entry: 'Sizin eklediğiniz giriş efektlerinde odaya girenin adı isim plakasına yazılır.',
   frame: 'Çerçeve resmi saydam, kare PNG ya da WebP olmalı; fotoğraf ortadaki boşluğa oturur.',
   bubble: 'Balon iki renkle ya da bir resimle olur. Resmin köşeleri bozulmaz, ortası mesaja göre uzar.',
   wave: 'Dalga, konuşanın koltuğundaki halkadır; sese göre büyür. Stil ve renk seçilir; Parıltı stilinde dönen şekiller resim olabilir.',
+  seat: 'Odadaki boş mikrofonların rengi. Oda sahibi rengi odası için alır; süresi bitince oda varsayılan renge döner. Varsayılan renk her odanın, ücretsiz.',
 };
+/** Soft colours to start from (the app's own seat colours and a few more in the same tone). */
+const SEAT_SWATCHES = ['#D5DAE1', '#F4B6C8', '#D2453F', '#EE9447', '#9C9A6A', '#46B3B0', '#8FA7C8', '#B7A2D6', '#C9A27E', '#7A8C6E', '#5E6B8A', '#E3C77A'];
 /** The app's own bubbles and waves as the app draws them (app/src/data/catalog.ts, components/room/voice-wave.tsx): a preview only. */
 const APP_LOOKS = {
   'bb-candy': { colors: ['#F472B6', '#FB7185'], text: '#FFFFFF' },
@@ -44,7 +51,7 @@ const APP_LOOKS = {
 const BUBBLE_SCALE = 1 / 3;
 const SHORT = 'Merhaba 👋';
 const LONG = 'Bu akşam saat 9’da odada buluşuyoruz, herkes gelsin! 🎉';
-const FIELD_TR = { name: 'ad', price: 'fiyat', days: 'süre', minVip: 'VIP', enabled: 'rafta / kapalı' };
+const FIELD_TR = { name: 'ad', price: 'fiyat', days: 'süre', minVip: 'VIP', enabled: 'rafta / kapalı', look: 'renk' };
 const daysText = (d) => (d ? `${num(d)} gün` : 'süresiz');
 const pct = (x) => `${Math.round(x * 1000) / 10}`;
 const SAMPLE = 'KaaN';
@@ -353,6 +360,20 @@ function WaveSample({ look, src, size = 64 }) {
   </div>`;
 }
 
+/**
+ * An empty (or locked) mic seat in a colour as the app draws it (app components/room/seat-pouf): the pouf's cushion in
+ * the colour (its shape as a mask), its light and shade over it, its gold as it is.
+ */
+function SeatPreview({ color, size = 64, locked = false }) {
+  const s = locked ? 'kilitli' : 'bos';
+  const mask = `url(/img/koltuk-${s}-renk.png)`;
+  return html`<div class="seat-preview" style=${`width:${size}px;height:${size}px`} aria-label="Koltuk önizlemesi">
+    <i style=${`background:${color};-webkit-mask-image:${mask};mask-image:${mask}`}></i>
+    <img src=${`/img/koltuk-${s}-isik.png`} alt="" />
+    <img src=${`/img/koltuk-${s}-altin.png`} alt="" />
+  </div>`;
+}
+
 export function AppShop() {
   const { can, meta } = useApp();
   const list = useApi(meta.app_link ? '/api/app/shop' : null);
@@ -375,7 +396,8 @@ export function AppShop() {
     (await act(() => post('/api/app/shop/order', { kind, ids }), 'Sıra kaydedildi')) && done();
   };
   const toggle = async (x) => {
-    if (!confirm(x.enabled ? `“${x.name}” satıştan kaldırılsın mı? Alanlarda kalır ve kullanılır.` : `“${x.name}” yeniden satışa çıksın mı?`)) return;
+    const kept = x.kind === 'seat' ? 'Alan odalar süresi bitene kadar kullanır.' : 'Alanlarda kalır ve kullanılır.';
+    if (!confirm(x.enabled ? `“${x.name}” satıştan kaldırılsın mı? ${kept}` : `“${x.name}” yeniden satışa çıksın mı?`)) return;
     (await act(() => post('/api/app/shop/update', { id: x.id, enabled: !x.enabled }), x.enabled ? 'Satıştan kaldırıldı' : 'Satışa çıktı')) && done();
   };
   const reset = async (x) => {
@@ -389,7 +411,7 @@ export function AppShop() {
 
   return html`<${Page}
     title="Mağaza"
-    subtitle="Giriş efektleri, çerçeveler, sohbet balonları ve ses dalgaları: uygulamanın kendileri ve sizin eklediğiniz. Değişiklikler sunucuda hemen geçerli; yeni APK'da telefonlar mağazayı buradan gösterir."
+    subtitle="Giriş efektleri, çerçeveler, sohbet balonları, ses dalgaları ve koltuk renkleri: uygulamanın kendileri ve sizin eklediğiniz. Değişiklikler sunucuda hemen geçerli; yeni APK'da telefonlar mağazayı buradan gösterir."
     actions=${editing &&
     html`${kind === 'frame' && list.data?.limits?.motionPxMin && html`<${Button} onClick=${() => setBulk(true)}>Toplu çerçeve ekle</${Button}>`}
       <${Button} kind="primary" onClick=${() => setEdit({ kind })}>${NEW_LABEL[kind]}</${Button}>`}
@@ -400,7 +422,11 @@ export function AppShop() {
       const shown = items.filter((x) => !w || searchable(`${x.name} ${x.id}`).includes(w));
       return html`
         ${!d.storage && html`<div class="empty bad">Uygulamanın dosya deposu açık değil: resim ve video yüklenemez.</div>`}
-        <${Tabs} tabs=${KINDS.map(([k, l]) => [k, `${l} (${d.items.filter((x) => x.kind === k).length})`])} value=${kind} onChange=${setKind} />
+        <${Tabs}
+          tabs=${KINDS.filter(([k]) => k !== 'seat' || d.limits.seatDefault).map(([k, l]) => [k, `${l} (${d.items.filter((x) => x.kind === k).length})`])}
+          value=${kind}
+          onChange=${setKind}
+        />
         <div class="row gap wrap" style="margin:10px 0">
           <input type="search" class="list-search" style="margin-left:0" placeholder="Eşya ara: ad ya da kimlik" aria-label="Eşya ara" value=${q} onInput=${(e) => setQ(e.target.value)} />
           <small class="muted">${KIND_HELP[kind]}</small>
@@ -422,16 +448,20 @@ export function AppShop() {
             ${x.kind === 'wave' && (x.look || APP_LOOKS[x.id]) ? html`<div class="bubble-stage small"><${WaveSample} look=${x.look ?? APP_LOOKS[x.id]} src=${x.art?.url} size=${48} /></div>` : ''}
             ${x.kind === 'entry' && x.icon ? html`<img class="shop-icon" src=${x.icon.url} alt="" title="Mağazadaki ikonu" />` : ''}
             ${x.kind === 'entry' && x.video ? html`<${Button} onClick=${() => setPlay(x)}>▶ Oynat</${Button}>` : ''}
+            ${x.kind === 'seat' && x.look ? html`<${SeatPreview} color=${x.look.color} size=${64} />` : ''}
             <div class="stack" style="flex:1">
-              <div>🪙 ${num(x.price)} · ${daysText(x.days)}${x.minVip ? ` · VIP ${x.minVip}+` : ''} · ${num(x.owners)} kişide</div>
+              ${x.kind === 'seat'
+                ? html`<div>${x.default ? 'Ücretsiz · her odanın rengi' : `🪙 ${num(x.price)} · ${daysText(x.days)} · ${num(x.owners)} odada`}</div>`
+                : html`<div>🪙 ${num(x.price)} · ${daysText(x.days)}${x.minVip ? ` · VIP ${x.minVip}+` : ''} · ${num(x.owners)} kişide</div>`}
               ${x.job?.status === 'failed' && html`<small class="bad">${x.job.error}</small>`}
-              ${x.builtin && html`<small class="muted">Resmi ve animasyonu uygulamada; burada adı, fiyatı, süresi, VIP seviyesi ve satışta olup olmadığı değişir.</small>`}
+              ${x.kind === 'seat' && x.default && html`<small class="muted">Her odanın varsayılan rengi: adı ve rengi değişir; fiyatı ve süresi olmaz, satıştan kalkmaz.</small>`}
+              ${x.kind !== 'seat' && x.builtin && html`<small class="muted">Resmi ve animasyonu uygulamada; burada adı, fiyatı, süresi, VIP seviyesi ve satışta olup olmadığı değişir.</small>`}
             </div>
           </div>
           ${editing &&
           html`<div class="row gap wrap" style="margin-top:8px">
             <${Button} onClick=${() => setEdit(x)}>Düzenle</${Button}>
-            <${Button} onClick=${() => toggle(x)}>${x.enabled ? 'Satıştan kaldır' : 'Satışa çıkar'}</${Button}>
+            ${!x.default && html`<${Button} onClick=${() => toggle(x)}>${x.enabled ? 'Satıştan kaldır' : 'Satışa çıkar'}</${Button}>`}
             <${Button} kind="ghost" onClick=${() => move(items, x, -1)} aria-label="Yukarı">↑</${Button}>
             <${Button} kind="ghost" onClick=${() => move(items, x, 1)} aria-label="Aşağı">↓</${Button}>
             ${x.builtin && x.changed?.length > 0 && html`<${Button} kind="ghost" onClick=${() => reset(x)}>Orijinaline dön</${Button}>`}
@@ -566,10 +596,16 @@ function fitColors(colors, [lo, hi]) {
   return out;
 }
 
-/** Adding or changing an item. The app's own: name, price, days, VIP and on/off only. */
+/**
+ * Adding or changing an item. The app's own: name, price, days, VIP and on/off only (a seat color its color too; the
+ * default seat color its name and color alone).
+ */
 function Editor({ item, kind, limits, convert, svga, onClose, onSaved }) {
   const own = !item?.builtin;
   const looks = kind === 'bubble' || kind === 'wave';
+  const seat = kind === 'seat';
+  const isDefault = seat && !!item?.default;
+  const [seatColor, setSeatColor] = useState(() => item?.look?.color ?? limits.lookDefault?.seat?.color ?? '#D5DAE1');
   // A bubble's or wave's colours (and style); a bubble's picture's size and corners.
   const [look, setLook] = useState(() => {
     const l = item?.look ?? limits.lookDefault?.[kind] ?? null;
@@ -706,7 +742,10 @@ function Editor({ item, kind, limits, convert, svga, onClose, onSaved }) {
     }
   };
   const save = async () => {
-    const body = { name: v.name, price: Number(v.price), days: Number(v.days), minVip: Number(v.minVip), enabled: v.enabled };
+    // A seat color has no VIP level; the default one only its name and color. Its color goes when it changed.
+    const body = seat
+      ? { name: v.name, ...(isDefault ? {} : { price: Number(v.price), days: Number(v.days), enabled: v.enabled }), ...(seatColor !== item?.look?.color ? { look: { color: seatColor } } : {}) }
+      : { name: v.name, price: Number(v.price), days: Number(v.days), minVip: Number(v.minVip), enabled: v.enabled };
     if (own && kind === 'frame')
       Object.assign(body, {
         hole: Number(v.hole),
@@ -759,12 +798,32 @@ function Editor({ item, kind, limits, convert, svga, onClose, onSaved }) {
   return html`<${Modal} title=${item ? `${item.name} · düzenle` : NEW_LABEL[kind]} onClose=${onClose} wide>
     <div class="grid2" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:10px">
       <label class="field"><span>Ad *</span><input value=${v.name} maxlength=${limits.nameMax} onInput=${(e) => set('name', e.target.value)} /></label>
-      <label class="field"><span>Fiyat (jeton) *</span><input type="number" min="1" value=${v.price} onInput=${(e) => set('price', e.target.value)} /></label>
-      <label class="field"><span>Süre (gün; 0 = süresiz)</span><input type="number" min="0" max=${limits.daysMax} value=${v.days} onInput=${(e) => set('days', e.target.value)} /></label>
-      <label class="field"><span>VIP seviyesi (0 = herkes)</span><input type="number" min="0" max=${limits.vipMax} value=${v.minVip} onInput=${(e) => set('minVip', e.target.value)} /></label>
+      <label class="field"><span>Fiyat (jeton) *</span><input type="number" min="1" value=${v.price} disabled=${isDefault} onInput=${(e) => set('price', e.target.value)} /></label>
+      <label class="field"><span>Süre (gün; 0 = süresiz)</span><input type="number" min="0" max=${limits.daysMax} value=${v.days} disabled=${isDefault} onInput=${(e) => set('days', e.target.value)} /></label>
+      ${!seat && html`<label class="field"><span>VIP seviyesi (0 = herkes)</span><input type="number" min="0" max=${limits.vipMax} value=${v.minVip} onInput=${(e) => set('minVip', e.target.value)} /></label>`}
     </div>
-    <label class="field inline" style="margin-top:6px"><span>Satışta</span><input type="checkbox" checked=${v.enabled} onChange=${(e) => set('enabled', e.target.checked)} /></label>
-    ${!own && html`<p class="note">Uygulamanın kendi eşyasının görünüşü uygulamada. Yeni görünüşle bir eşya için "${NEW_LABEL[kind]}" ekleyin.</p>`}
+    ${!isDefault && html`<label class="field inline" style="margin-top:6px"><span>Satışta</span><input type="checkbox" checked=${v.enabled} onChange=${(e) => set('enabled', e.target.checked)} /></label>`}
+    ${isDefault && html`<p class="note">Her odanın ücretsiz, varsayılan rengi: fiyatı ve süresi olmaz, satıştan kalkmaz. Adı ve rengi değişir.</p>`}
+    ${seat && !isDefault && html`<p class="note">Oda sahibi bu rengi odası için alır; süre bitince oda varsayılan renge döner (0 gün: süresiz). Fiyatı ya da süreyi değiştirmek önceden alanları etkilemez.</p>`}
+    ${!own && !seat && html`<p class="note">Uygulamanın kendi eşyasının görünüşü uygulamada. Yeni görünüşle bir eşya için "${NEW_LABEL[kind]}" ekleyin.</p>`}
+    ${seat &&
+    html`<div class="row gap wrap" style="align-items:flex-start;margin-top:10px">
+      <div class="seat-stage">
+        <${SeatPreview} color=${seatColor} size=${96} />
+        <${SeatPreview} color=${seatColor} size=${96} locked />
+      </div>
+      <div class="stack" style="flex:1;min-width:240px">
+        <div class="row gap wrap" style="align-items:center">
+          ${colorInput('Renk', seatColor, setSeatColor)}
+          <code>${seatColor}</code>
+          ${item?.original?.look && seatColor !== item.original.look.color && html`<${Button} kind="ghost" onClick=${() => setSeatColor(item.original.look.color)}>Uygulamadaki rengi</${Button}>`}
+        </div>
+        <div class="swatches">
+          ${SEAT_SWATCHES.map((c) => html`<button type="button" class=${c === seatColor ? 'swatch on' : 'swatch'} style=${`background:${c}`} title=${c} aria-label=${`Renk ${c}`} onClick=${() => setSeatColor(c)}></button>`)}
+        </div>
+        <small class="muted">Koltuğun minderi bu renge boyanır; altın kenarı, ayakları ve kilidi olduğu gibi kalır. Yumuşak tonlar odada daha iyi durur; çok açık renkte "+" gölgesiyle görünür.</small>
+      </div>
+    </div>`}
     ${own &&
     kind === 'frame' &&
     html`<div class="row gap wrap" style="align-items:flex-start;margin-top:10px">

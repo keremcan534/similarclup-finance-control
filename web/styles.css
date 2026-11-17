@@ -302,3 +302,12 @@ table.levels td { vertical-align: middle; }
 @keyframes wave-ripple { from { transform: scale(1); opacity: 0.85; } to { transform: scale(1.35); opacity: 0; } }
 @keyframes wave-spin { to { transform: rotate(360deg); } }
 @media (prefers-reduced-motion: reduce) { .wave-sample * { animation: none !important; } }
+/* Koltuk renkleri: the pouf drawn as the app draws it (its cushion tinted through a mask, its shading and gold over it), on the room's dark. */
+.seat-preview { position: relative; flex: none; border-radius: 10px; background: #1c1422; }
+.seat-preview > * { position: absolute; inset: 0; width: 100%; height: 100%; }
+.seat-preview > i { -webkit-mask-size: contain; mask-size: contain; -webkit-mask-repeat: no-repeat; mask-repeat: no-repeat; -webkit-mask-position: center; mask-position: center; }
+.seat-preview > img { object-fit: contain; }
+.seat-stage { display: flex; gap: 10px; flex: none; padding: 12px; border-radius: var(--radius); background: #1c1422; }
+.swatches { display: flex; flex-wrap: wrap; gap: 6px; }
+.swatch { width: 26px; height: 26px; border-radius: 50%; border: 2px solid var(--border); cursor: pointer; padding: 0; }
+.swatch.on { outline: 2px solid #38bdf8; outline-offset: 2px; }
