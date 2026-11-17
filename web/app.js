@@ -16,6 +16,7 @@ import { AppEmojis } from './pages/app-emojis.js';
 import { AppLevels } from './pages/app-levels.js';
 import { AppLevelRewards } from './pages/app-level-rewards.js';
 import { AppShop } from './pages/app-shop.js';
+import { AppRocket } from './pages/app-rocket.js';
 import { AppLucky, AppPayouts, AppRefunds, AppReports, AppSettings, AppWithdrawals } from './pages/app-finance.js';
 import { AppComplaints, AppEvents, AppNotices, AppSupport, AppUsers } from './pages/app-ops.js';
 import { AppAgencies } from './pages/app-agencies.js';
@@ -43,6 +44,7 @@ const NAV = [
     ['app-shop', 'Mağaza', 'app.shop', AppShop, 'mağaza çerçeve giriş efekti ejderha video svga isim plakası fiyat satış'],
     ['app-economy', 'Mağaza eşyaları (kişiye)', 'app.economy', AppEconomy, 'mağaza eşya çerçeve vip giriş efekti binek balon ver geri al kişi'],
     ['app-lucky', 'Şanslı hediye ayarı', 'app.lucky', AppLucky, 'şanslı lucky çanta olasılık ödül'],
+    ['app-rocket', 'Oda roketi', 'app.rocket', AppRocket, 'roket oda hediye seviye hedef ödül kalkış çekiliş jeton'],
   ]],
   ['levels', 'Seviye ve VIP', '⭐', [
     ['app-levels', 'Seviyeler ve VIP', 'app.levels', AppLevels, 'seviye vip svip rütbe kademe cömertlik yankı cazibe abonelik eşik puan atış hak ödül çerçeve giriş efekti düşme gizle sessiz ziyaret'],

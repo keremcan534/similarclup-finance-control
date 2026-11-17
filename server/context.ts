@@ -43,6 +43,7 @@ export const PERMISSIONS = {
   'app.payouts': 'Uygulama: ajans ödemelerini onayla, ödendi işaretle, reddet (kritik)',
   'app.refunds': 'Uygulama: mağaza iadesi ve cüzdan denetimi',
   'app.lucky': 'Uygulama: Şanslı hediye paketleri, olasılıklar ve limit',
+  'app.rocket': 'Uygulama: Oda roketi (açık/kapalı, seviye hedefleri, şansla dağıtılan ödüller)',
   'app.settings': 'Uygulama: Canlı ayarlar (kur, kampanya, paketler, fiyatlar, acil durum)',
   'app.reports': 'Uygulama: Oyun Salonu raporu ve sunucu durumu',
   'app.users': 'Uygulama: kullanıcı arama, askıya alma, oda seviyesi, hesap silme (kritik)',
