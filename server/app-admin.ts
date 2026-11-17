@@ -48,6 +48,13 @@ export const APP_ROUTES: [string, string, Permission | Permission[]][] = [
   ['POST', '/api/admin/emoji/stickers/reset', 'app.emojis'],
   ['POST', '/api/admin/emoji/stickers/delete', 'app.emojis'],
   ['POST', '/api/admin/emoji/stickers/order', 'app.emojis'],
+  // Seviyeler ve VIP (the app's levels-admin.mjs): every system's settings, the change preview, saving (a drop asks
+  // for a confirm first), back to today's values, the level drops.
+  ['GET', '/api/admin/levels', 'app.levels'],
+  ['POST', '/api/admin/levels/preview', 'app.levels'],
+  ['POST', '/api/admin/levels/save', 'app.levels'],
+  ['POST', '/api/admin/levels/reset', 'app.levels'],
+  ['GET', '/api/admin/levels/drops', 'app.levels'],
   // Para çekme
   ['GET', '/api/admin/withdrawals', 'app.withdrawals'],
   ['POST', '/api/admin/withdrawals/decide', 'app.withdrawals'],
@@ -172,7 +179,7 @@ export const APP_ROUTES: [string, string, Permission | Permission[]][] = [
   ['POST', '/api/admin/jeton/wholesale', 'app.jeton'],
 ];
 /** POSTs that only compute (nothing changes in the app): no row in this panel's audit log. */
-const COMPUTE_ONLY = new Set(['/api/admin/agency/simulate']);
+const COMPUTE_ONLY = new Set(['/api/admin/agency/simulate', '/api/admin/levels/preview']);
 export const localPath = (appPath: string) => `/api/app${appPath.slice('/api/admin'.length)}`;
 /** Upload kinds and the permission each needs (the app's media.mjs kinds). */
 const UPLOADS: Record<string, Permission> = { gifticon: 'app.gifts', giftvideo: 'app.gifts', giftsource: 'app.gifts', stickerart: 'app.emojis', notice: 'app.notices' };

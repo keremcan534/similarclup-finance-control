@@ -37,6 +37,7 @@ export const SYSTEM_ROLES: { key: string; name: string; scope: 'platform' | 'age
       'audit.view',
       'app.gifts',
       'app.emojis',
+      'app.levels',
       'app.withdrawals',
       'app.payouts',
       'app.refunds',

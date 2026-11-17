@@ -13,6 +13,7 @@ import { Alerts } from './pages/alerts.js';
 import { Integrations, Users, Audit, Settings, Account } from './pages/admin.js';
 import { AppGifts } from './pages/app-gifts.js';
 import { AppEmojis } from './pages/app-emojis.js';
+import { AppLevels } from './pages/app-levels.js';
 import { AppLucky, AppPayouts, AppRefunds, AppReports, AppSettings, AppWithdrawals } from './pages/app-finance.js';
 import { AppComplaints, AppEvents, AppNotices, AppSupport, AppUsers } from './pages/app-ops.js';
 import { AppAgencies } from './pages/app-agencies.js';
@@ -39,6 +40,9 @@ const NAV = [
     ['app-emojis', 'Emojiler', 'app.emojis', AppEmojis, 'emoji çıkartma sticker paket lottie'],
     ['app-economy', 'Mağaza eşyaları', 'app.economy', AppEconomy, 'mağaza eşya çerçeve vip giriş efekti binek balon ver geri al'],
     ['app-lucky', 'Şanslı hediye ayarı', 'app.lucky', AppLucky, 'şanslı lucky çanta olasılık ödül'],
+  ]],
+  ['levels', 'Seviye ve VIP', '⭐', [
+    ['app-levels', 'Seviyeler ve VIP', 'app.levels', AppLevels, 'seviye vip svip rütbe kademe cömertlik yankı cazibe abonelik eşik puan atış hak ödül çerçeve giriş efekti düşme gizle sessiz ziyaret'],
   ]],
   ['news', 'Duyuru ve etkinlik', '📣', [
     ['app-notices', 'Duyurular', 'app.notices', AppNotices, 'duyuru banner bildirim ekip mesaj'],

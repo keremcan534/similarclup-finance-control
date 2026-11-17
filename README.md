@@ -65,6 +65,7 @@ Menü konulara göre gruplu: Ana sayfa, Kullanıcılar ve güvenlik, Hediye ve m
 | Panel ayarları | Raporlama para birimi, çift onay, döviz kurları, jeton/elmas değerleri, vergi parametreleri, finansal dönem kapatma ve yedek alma. |
 | Uygulama › Hediyeler | Similar Club uygulamasının hediyeleri: ekleme, düzenleme (ad, fiyat, raf, VIP, emoji), raftan kaldırma, silme, sıralama; uygulamanın kendi hediyelerinin de her alanını değiştirme ve **Orijinale dön**; ikon, hazır saydam video, WebM/MOV ya da SVGA yükleme (uygulamanın sunucusu çevirir) ya da her dosya için kendi sitenizdeki bağlantıyı yapıştırma (uygulamanın sunucusu bir kez indirir, aynı denetimden geçirir; "Bağlantıdan yeniden çek" ile yenilenir) ve önizleme. Uygulama güncellemesi olmadan herkesin hediye panelinde görünür. Ayrıntı: [Similar Club'ı yönetme](#similar-clubı-yönetme). |
 | Uygulama › Emojiler | Emoji panelinin çıkartma paketleri: uygulamanın kendi paketleri (ad, fiyat, VIP, açık/kapalı, sıra) ve çıkartmaları (ad, emoji, resim, paket, açık/kapalı, sıra) değişir ve orijinaline döner; yeni paket ve çıkartma eklenir (saydam PNG/WebP ya da Lottie animasyonu, bilgisayardan ya da bağlantıdan). Uygulama güncellemesi olmadan telefonlara gider. |
+| Uygulama › Seviyeler ve VIP | VIP, Rütbe, Cömertlik, Yankı ve Abonelik: seviye puanları ve adları (Cömertlik ve Yankı için Lv.0–50, eğriyle doldurma yardımıyla), Rütbe kademelerinin adı, fiyatı ve günü, seviye grupları, hangi hakkın hangi seviyede açıldığı (hazır olanlar; "henüz yapılmadı" olanlar görünür ama açılmaz), hareket etmeyenin seviye düşmesi (VIP, Cömertlik, Yankı; başlangıçta kapalı) ve Abonelik paketlerinin uygulamada görünüşü. Kaydetmeden önce kaç kişinin yükseleceği ve düşeceği gösterilir; biri düşecekse onay ister. Seviye düşüşleri listesi. Sunucunun denetimleri hemen, telefonlar bir dakika içinde yeni ayarı izler. |
 | Uygulama › Para çekme | Yayıncıların elmas → para talepleri: hesap bilgisi, tutar; bankadan gönderildikten sonra "Ödendi" işareti ya da nedenli ret (elmaslar geri döner). Para bu panelden gönderilmez. |
 | Uygulama › Ajans ödemeleri | Ajans komisyon talepleri: onay, dekont numarasıyla "Ödendi", ret, iptal. |
 | Uygulama › İadeler ve cüzdan | Mağaza alımlarını arama ve iade etme (harcanmamış jeton ve kilitli elmas geri alınır), Google Play iadelerini okuma, bir hesabın cüzdan dökümü. |
@@ -141,6 +142,7 @@ Hangi panel kullanıcısının hangi sayfayı kullanacağını bu panelin roller
 | --- | --- | --- |
 | `app.gifts` | Uygulama › Hediyeler | Süper yönetici, finans yöneticisi, operasyon yöneticisi |
 | `app.emojis` | Uygulama › Emojiler | Süper yönetici, finans yöneticisi, operasyon yöneticisi |
+| `app.levels` | Uygulama › Seviyeler ve VIP (kritik: Rütbe fiyatı, seviye düşmesi) | Süper yönetici, finans yöneticisi |
 | `app.withdrawals` | Uygulama › Para çekme | Süper yönetici, finans yöneticisi |
 | `app.payouts` | Uygulama › Ajans ödemeleri | Süper yönetici, finans yöneticisi |
 | `app.refunds` | Uygulama › İadeler ve cüzdan | Süper yönetici, finans yöneticisi |
