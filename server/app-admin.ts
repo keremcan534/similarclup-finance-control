@@ -68,6 +68,10 @@ export const APP_ROUTES: [string, string, Permission | Permission[]][] = [
   ['GET', '/api/admin/level-rewards', 'app.levels'],
   ['POST', '/api/admin/level-rewards', 'app.levels'],
   ['POST', '/api/admin/level-rewards/delete', 'app.levels'],
+  // Görev ödülleri (the app's task-rewards.mjs): an item that goes into the bag of whoever takes a task's reward.
+  ['GET', '/api/admin/task-rewards', 'app.levels'],
+  ['POST', '/api/admin/task-rewards', 'app.levels'],
+  ['POST', '/api/admin/task-rewards/delete', 'app.levels'],
   // Para çekme
   ['GET', '/api/admin/withdrawals', 'app.withdrawals'],
   ['POST', '/api/admin/withdrawals/decide', 'app.withdrawals'],

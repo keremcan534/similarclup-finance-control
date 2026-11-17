@@ -602,7 +602,7 @@ test('Seviyeler ve VIP: finans yöneticisinin yetkisiyle; kayıt ve sıfırlama 
   }
 });
 
-test('Seviye ödülleri: Seviyeler ve VIP yetkisiyle; ekleme ve kaldırma denetim kaydına yazılır', async () => {
+test('Seviye ve görev ödülleri: Seviyeler ve VIP yetkisiyle; ekleme ve kaldırma denetim kaydına yazılır', async () => {
   env.as('finance_manager', 'fin@test.local');
   env.as('operations_manager', 'ops@test.local');
   env.as('read_only', 'ro@test.local');
@@ -613,6 +613,9 @@ test('Seviye ödülleri: Seviyeler ve VIP yetkisiyle; ekleme ve kaldırma deneti
     ['GET', '/api/app/level-rewards', undefined],
     ['POST', '/api/app/level-rewards', { system: 'vip', level: 5, sku: 'fr-neon', days: 30 }],
     ['POST', '/api/app/level-rewards/delete', { id: 7 }],
+    ['GET', '/api/app/task-rewards', undefined],
+    ['POST', '/api/app/task-rewards', { task: 'call', sku: 'bb-candy', days: 1 }],
+    ['POST', '/api/app/task-rewards/delete', { id: 3 }],
   ] as const) {
     assert.equal((await call(method, path, body, fin)).status, 200, path);
     assert.equal(seen.at(-1)!.path, path.replace('/api/app/', '/api/admin/'));
@@ -621,6 +624,7 @@ test('Seviye ödülleri: Seviyeler ve VIP yetkisiyle; ekleme ve kaldırma deneti
   }
   assert.ok(env.db.get("SELECT 1 FROM audit_logs WHERE action = 'app.level-rewards'"));
   assert.ok(env.db.get("SELECT 1 FROM audit_logs WHERE action = 'app.level-rewards.delete'"));
+  assert.ok(env.db.get("SELECT 1 FROM audit_logs WHERE action = 'app.task-rewards'"));
 });
 
 test('daha önce kurulmuş rollere yeni yetki bir kez eklenir', () => {

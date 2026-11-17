@@ -46,7 +46,7 @@ const NAV = [
   ]],
   ['levels', 'Seviye ve VIP', '⭐', [
     ['app-levels', 'Seviyeler ve VIP', 'app.levels', AppLevels, 'seviye vip svip rütbe kademe cömertlik yankı cazibe abonelik eşik puan atış hak ödül çerçeve giriş efekti düşme gizle sessiz ziyaret'],
-    ['app-level-rewards', 'Seviye ödülleri', 'app.levels', AppLevelRewards, 'seviye vip cömertlik yankı ödül çanta çantam çerçeve giriş efekti binek sohbet balonu ses dalgası hediye kazan'],
+    ['app-level-rewards', 'Seviye ve görev ödülleri', 'app.levels', AppLevelRewards, 'seviye vip cömertlik yankı görev arama ödül çanta çantam çerçeve giriş efekti binek sohbet balonu ses dalgası hediye kazan'],
   ]],
   ['news', 'Duyuru ve etkinlik', '📣', [
     ['app-notices', 'Duyurular', 'app.notices', AppNotices, 'duyuru banner bildirim ekip mesaj'],
