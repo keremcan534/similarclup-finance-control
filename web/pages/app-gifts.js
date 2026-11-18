@@ -11,10 +11,13 @@ import { SORTS, SortBar, sortedIds, useDragOrder } from '../order.js';
 const CATS = [
   ['hot', 'Popüler'],
   ['couple', 'İkili'],
+  ['family', 'Aile ve Dost'],
   ['gameplay', 'Kutlama'],
   ['privilege', 'Özel'],
 ];
 const CAT = Object.fromEntries(CATS);
+/** A bond gift (Aile ve Dost): its price comes from the Bağlar rule and it stays on its shelf; its name, icon and video change here. */
+const isBondGift = (g) => !!g?.id?.startsWith('bag-');
 const FILLS = { 0.45: 'Küçük', 0.6: 'Orta', 0.8: 'Büyük', 1: 'Tam ekran' };
 const mb = (n) => (n / 1024 / 1024).toLocaleString('tr-TR', { maximumFractionDigits: 1 });
 const sec = (ms) => (ms / 1000).toLocaleString('tr-TR', { maximumFractionDigits: 1 });
@@ -457,8 +460,8 @@ function Editor({ gift, admin, onClose, onSaved }) {
     ${app && html`<p class="note">Uygulamayla gelen bir hediye. Değiştirdiğiniz her şey uygulama güncellemesi olmadan telefonlara gider; listedeki <b>Orijinale dön</b> hepsini geri alır. Fiyatı değişirse eski APK'lar bu hediyeyi göstermez (yanlış fiyat göstermesinler diye).</p>`}
     <div class="form"><div class="grid2">
       <label class="field"><span>Ad *</span><input value=${v.name} maxlength=${L.nameMax} onInput=${set('name')} placeholder="Ör. Altın Yıldız" />${was(v.name.trim() !== o?.name, o?.name)}</label>
-      <label class="field"><span>Fiyat (jeton) *</span><input inputmode="numeric" value=${v.price} onInput=${(e) => setV({ ...v, price: e.target.value.replace(/[^\d]/g, '') })} placeholder="Ör. 9999" /><small class="muted">1–${num(L.priceMax)} jeton; değişiklik yeni gönderimlerden itibaren geçer.</small>${was(price !== o?.price, `${num(o?.price)} jeton`)}</label>
-      <label class="field"><span>Raf</span><select value=${v.cat} onChange=${set('cat')}>${CATS.map(([k, l]) => html`<option value=${k}>${l}</option>`)}</select>${was(v.cat !== o?.cat, `${CAT[o?.cat]}${o?.cat === 'privilege' ? ` · VIP ${o.minSvip}+` : ''}`)}</label>
+      <label class="field"><span>Fiyat (jeton) *</span><input inputmode="numeric" value=${v.price} disabled=${isBondGift(gift)} onInput=${(e) => setV({ ...v, price: e.target.value.replace(/[^\d]/g, '') })} placeholder="Ör. 9999" /><small class="muted">${isBondGift(gift) ? 'Bağ hediyesinin fiyatı Bağlar kuralından gelir, buradan değişmez.' : `1–${num(L.priceMax)} jeton; değişiklik yeni gönderimlerden itibaren geçer.`}</small>${was(price !== o?.price, `${num(o?.price)} jeton`)}</label>
+      <label class="field"><span>Raf</span><select value=${v.cat} disabled=${isBondGift(gift)} onChange=${set('cat')}>${CATS.map(([k, l]) => html`<option value=${k}>${l}</option>`)}</select>${was(v.cat !== o?.cat, `${CAT[o?.cat]}${o?.cat === 'privilege' ? ` · VIP ${o.minSvip}+` : ''}`)}</label>
       ${v.cat === 'privilege' && html`<label class="field"><span>En düşük VIP seviyesi</span><select value=${v.minSvip} onChange=${set('minSvip')}>${Array.from({ length: L.svipMax }, (_, i) => html`<option value=${String(i + 1)}>VIP ${i + 1}</option>`)}</select></label>`}
       <label class="field"><span>Emoji ${app ? '' : '(isteğe bağlı)'}</span><input value=${v.emoji} maxlength="8" onInput=${set('emoji')} placeholder=${app ? o.emoji : '🎁'} /><small class="muted">Sohbet satırlarında ve ikon yüklenmeden önce görünür.</small>${was(v.emoji.trim() && v.emoji.trim() !== o?.emoji, o?.emoji)}</label>
       <label class="field inline"><span>Rafta (herkes görür)</span><input type="checkbox" checked=${v.enabled} onChange=${set('enabled')} />${was(!!v.enabled !== o?.enabled, o?.enabled ? 'rafta' : 'duraklatılmış')}</label>

@@ -646,10 +646,13 @@ function Ledger({ settings }) {
 function SettingEditor({ k, value, onClose, onSaved }) {
   const [text, setText] = useState(JSON.stringify(value, null, 2));
   const [reason, setReason] = useState('');
+  // Ajans asistanı: how many assistants an agency may have at once, picked rather than written as JSON.
+  const assistants = k === 'assistant_policy';
+  const [max, setMax] = useState(String(value?.max ?? 1));
   const save = async () => {
     let v;
     try {
-      v = JSON.parse(text);
+      v = assistants ? { max: Number(max) } : JSON.parse(text);
     } catch {
       return showError(new Error('Değer geçerli JSON değil'));
     }
@@ -658,8 +661,11 @@ function SettingEditor({ k, value, onClose, onSaved }) {
     if (await act(() => post('/api/app/agency/settings', { key: k, value: v, reason: reason.trim() }))) onSaved();
   };
   return html`<${Modal} title=${SETTING_TEXT[k] ?? k} onClose=${onClose}>
-    <p class="muted">Oranlar kesir olarak yazılır (0.25 = %25). Uygulama değeri denetler; uymayan değer nedeniyle reddedilir.</p>
-    <label class="field"><span>Değer (JSON)</span><textarea rows="10" class="num" value=${text} onInput=${(e) => setText(e.target.value)}></textarea></label>
+    ${assistants
+      ? html`<p class="muted">Bir ajans aynı anda en fazla bu kadar asistan ekleyebilir. Sınır düşürülürse var olan asistanlar kalır, yenisi eklenemez.</p>
+          <label class="field"><span>Ajans başına asistan</span><select value=${max} onChange=${(e) => setMax(e.target.value)}>${Array.from({ length: 11 }, (_, n) => html`<option value=${String(n)}>${n === 0 ? 'Asistan eklenemez' : `${n} kişi`}</option>`)}</select></label>`
+      : html`<p class="muted">Oranlar kesir olarak yazılır (0.25 = %25). Uygulama değeri denetler; uymayan değer nedeniyle reddedilir.</p>
+          <label class="field"><span>Değer (JSON)</span><textarea rows="10" class="num" value=${text} onInput=${(e) => setText(e.target.value)}></textarea></label>`}
     <label class="field" style="margin-top:10px"><span>Gerekçe (3–300) *</span><input value=${reason} maxlength="300" onInput=${(e) => setReason(e.target.value)} /></label>
     <div class="row gap end"><${Button} onClick=${onClose}>Vazgeç</${Button}><${Button} kind="primary" onClick=${save}>Kaydet</${Button}></div>
   </${Modal}>`;
