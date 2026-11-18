@@ -714,10 +714,31 @@ function Editor({ item, kind, limits, convert, svga, onClose, onSaved }) {
     const m = await measureHole(src, limits);
     setV((s) => ({ ...s, hole: m.hole, ...(limits.holeAtMin ? { holeX: m.x, holeY: m.y } : {}) }));
   };
+  // A frame's SVGA: the app's server makes the still picture and the moving WebP from it; both are then used as uploaded.
+  const pickSvga = async (file) => {
+    if (!svga) return alert('Uygulamanın sunucusu SVGA çeviremiyor: hareketli WebP yükleyin');
+    setBusy('SVGA yükleniyor…');
+    try {
+      const source = await upload('giftsource', file, (p) => setBusy(`SVGA yükleniyor… %${Math.round(p * 100)}`));
+      setBusy('SVGA çevriliyor… (bir dakika sürebilir)');
+      const out = await post('/api/app/shop/frame-svga', { source });
+      setArt(out.art);
+      setArtShown(out.artPreview);
+      setMotion(out.motion);
+      setMotionShown(out.motionPreview);
+      await measure(out.artPreview);
+      toast('SVGA çerçeveye çevrildi');
+    } catch (e) {
+      alert(e.message);
+    } finally {
+      setBusy(null);
+    }
+  };
   const pickMotion = async (file) => {
     if (!file) return;
+    if (/\.svga$/i.test(file.name)) return pickSvga(file);
     const flags = await webpFlags(file);
-    if (!flags?.animated) return alert('Hareketli hali hareketli bir WebP olmalı (GIF ya da SVGA değil). Tasarımcının "animated_webp" klasöründeki dosya.');
+    if (!flags?.animated) return alert('Hareketli hali hareketli bir WebP ya da SVGA olmalı (GIF olmaz). Tasarımcının "animated_webp" klasöründeki dosya.');
     if (!flags.alpha) return alert('Hareketli çerçevede saydamlık yok: ortası ve çevresi saydam olmalı');
     if (file.size > limits.motionBytes) return alert(`Hareketli çerçeve en fazla ${Math.round(limits.motionBytes / 1024 / 1024)} MB olabilir`);
     setBusy('Hareketli çerçeve yükleniyor…');
@@ -851,8 +872,8 @@ function Editor({ item, kind, limits, convert, svga, onClose, onSaved }) {
       <div class="stack" style="flex:1;min-width:220px">
         <label class="field"><span>Çerçeve resmi * (durağan; saydam, kare PNG ya da WebP, ${limits.framePxMin}–${limits.framePxMax} px)</span><input type="file" accept="image/png,image/webp" onChange=${(e) => pickArt(e.target.files[0])} /></label>
         ${limits.motionPxMin &&
-        html`<label class="field"><span>Hareketli hali (isteğe bağlı): hareketli WebP, kare, ${limits.motionPxMin}–${limits.motionPxMax} px, en çok ${Math.round(limits.motionBytes / 1024 / 1024)} MB</span>
-            <input type="file" accept="image/webp" onChange=${(e) => pickMotion(e.target.files[0])} /></label>
+        html`<label class="field"><span>Hareketli hali (isteğe bağlı): SVGA ya da hareketli WebP (kare, ${limits.motionPxMin}–${limits.motionPxMax} px, en çok ${Math.round(limits.motionBytes / 1024 / 1024)} MB). SVGA seçilince durağan resim de ondan yapılır.</span>
+            <input type="file" accept="image/webp,.svga" onChange=${(e) => pickMotion(e.target.files[0])} /></label>
           ${motionShown && html`<div><${Button} kind="ghost" onClick=${() => (setMotion(null), setMotionShown(null))}>Hareketli halini kaldır</${Button}></div>`}
           <small class="muted">Yeni APK hareketli halini oynatır. Eski APK'lar, Düşük veri modu ve listelerdeki küçük fotoğraflar durağan resmi gösterir; ikisi aynı çerçeve olmalı. Durağan resim seçilmezse hareketlinin ilk karesi durağan resim olur.</small>`}
         <label class="field"><span>Fotoğraf alanı: resmin %${pct(v.hole * 2)}'i</span>

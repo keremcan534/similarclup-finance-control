@@ -61,6 +61,7 @@ export const APP_ROUTES: [string, string, Permission | Permission[]][] = [
   // Oda roketi (the app's room-rocket.mjs): on / off, the levels' goals and prizes, the last launches.
   ['GET', '/api/admin/rocket', 'app.rocket'],
   ['POST', '/api/admin/rocket/config', 'app.rocket'],
+  ['POST', '/api/admin/rocket/video', 'app.rocket'],
   ['GET', '/api/admin/levels', 'app.levels'],
   ['POST', '/api/admin/levels/preview', 'app.levels'],
   ['POST', '/api/admin/levels/save', 'app.levels'],
@@ -207,9 +208,9 @@ export const localPath = (appPath: string) => `/api/app${appPath.slice('/api/adm
 /** Upload kinds and the permission each needs (the app's media.mjs kinds). */
 const UPLOADS: Record<string, Permission[]> = {
   gifticon: ['app.gifts'],
-  // A gift's video, and a shop entry effect's (the app's converter makes both).
-  giftvideo: ['app.gifts', 'app.shop'],
-  giftsource: ['app.gifts', 'app.shop'],
+  // A gift's video, a shop entry effect's, a frame's SVGA and a room rocket level's (the app's converter makes them all).
+  giftvideo: ['app.gifts', 'app.shop', 'app.rocket'],
+  giftsource: ['app.gifts', 'app.shop', 'app.rocket'],
   stickerart: ['app.emojis'],
   shopframe: ['app.shop'],
   notice: ['app.notices'],
@@ -279,6 +280,13 @@ export function appRoutes(r: Router<Ctx>, link: AppLink) {
     const out = await appCall(ctx, link, 'POST', '/api/admin/gifts/fetch', req.body, { raw: true, timeoutMs: 630_000 });
     audit(ctx, 'app.gifts.fetch', 'app', null, null, { method: 'POST', path: '/api/admin/gifts/fetch', body: req.body });
     return { ...out, preview: localFiles(out.url) };
+  });
+  // A frame's SVGA (Mağaza): the app's server turns it into the still picture and the moving WebP while this waits.
+  r.add('POST', '/api/app/shop/frame-svga', async (req, ctx) => {
+    need(ctx, 'app.shop');
+    const out = await appCall(ctx, link, 'POST', '/api/admin/shop/frame-svga', req.body, { raw: true, timeoutMs: 270_000 });
+    audit(ctx, 'app.shop.frame-svga', 'app', null, null, { method: 'POST', path: '/api/admin/shop/frame-svga', body: req.body });
+    return { ...out, artPreview: localFiles(out.art), motionPreview: localFiles(out.motion) };
   });
   // A sticker's picture from a link (Emojiler): the same, for a PNG, WebP or Lottie JSON of at most 512 KB.
   r.add('POST', '/api/app/emoji/fetch', async (req, ctx) => {

@@ -3,8 +3,10 @@
 // Turkey's time); five levels in a row, each with its goal; a full level launches and its prizes are drawn among the
 // people who filled it, each one's chance as their share, at most one prize each, the first prize first. Here: on or
 // off, each level's goal and prizes (coins, normal ones, or a shop item for some days, and how many people get each),
-// and the last launches. A save made on an older copy is refused; the page is read again.
-import { Badge, Button, Card, Loading, Page, Table, act, dateTimeTr, html, num, post, useApi, useApp, useState } from '../lib.js';
+// the five launch videos (an SVGA for each level) and the last launches. A save made on an older copy is refused; the
+// page is read again.
+import { Badge, Button, Card, Loading, Page, Table, act, dateTimeTr, html, num, post, useApi, useApp, useEffect, useState } from '../lib.js';
+import { upload, videoKindOf } from './app-gifts.js';
 
 const KIND_TR = { frame: 'Çerçeveler', entry: 'Giriş efektleri', ride: 'Araçlar', bubble: 'Sohbet balonları', wave: 'Ses dalgaları' };
 const clone = (x) => JSON.parse(JSON.stringify(x));
@@ -21,6 +23,7 @@ export function AppRocket() {
   >
     <${Loading} state=${view}>${(d) => html`
       <${Editor} key=${d.version} data=${d} editing=${can('app.rocket')} onSaved=${() => view.reload()} />
+      <${Videos} data=${d} editing=${can('app.rocket')} onSaved=${() => view.reload()} />
       <${Recent} rows=${d.recent} />
     `}</${Loading}>
   </${Page}>`;
@@ -105,6 +108,57 @@ function Editor({ data, editing, onSaved }) {
       <${Button} kind="primary" onClick=${save} disabled=${!dirty}>Kaydet</${Button}>
     </div>`}
   `;
+}
+
+/** Each level's launch video: an SVGA (or a transparent WebM / MOV, or a ready stacked MP4) the app's server converts. */
+function Videos({ data, editing, onSaved }) {
+  const [busy, setBusy] = useState(null);
+  const working = (data.videos ?? []).some((v) => v.job?.status === 'processing');
+  // While a video is being converted the page looks again by itself.
+  useEffect(() => {
+    if (!working) return;
+    const t = setInterval(onSaved, 5000);
+    return () => clearInterval(t);
+  }, [working]);
+  const pick = async (level, file) => {
+    if (!file) return;
+    const k = videoKindOf(file);
+    if (!k) return alert('Dosya SVGA, saydam WebM, ProRes .mov ya da hazır yığılmış MP4 olmalı');
+    if ((k === 'svga' && !data.svga) || (k === 'source' && !data.convert)) return alert('Uygulamanın sunucusu bu dosyayı çeviremiyor: hazır yığılmış MP4 yükleyin');
+    setBusy(level);
+    try {
+      const url = await upload(k === 'stacked' ? 'giftvideo' : 'giftsource', file);
+      if ((await act(() => post('/api/app/rocket/video', { level, video: { kind: k === 'stacked' ? 'stacked' : 'source', url } }), `Lv.${level} videosu kaydedildi`)) !== undefined) onSaved();
+    } catch (e) {
+      alert(e.message);
+    } finally {
+      setBusy(null);
+    }
+  };
+  const remove = async (level) => {
+    if (!confirm(`Lv.${level} videosu kaldırılsın mı? Roket hediyesinin resmi uçar.`)) return;
+    if ((await act(() => post('/api/app/rocket/video', { level, video: null }), `Lv.${level} videosu kaldırıldı`)) !== undefined) onSaved();
+  };
+  const state = (v) =>
+    v.job?.status === 'processing'
+      ? html`<${Badge} s="pending" label="Çevriliyor" />`
+      : v.job?.status === 'failed'
+        ? html`<${Badge} s="error" label="Çevrilemedi" /> <small class="muted">${v.job.error}</small>`
+        : v.video
+          ? html`<${Badge} s="active" label=${`Hazır · ${(v.video.ms / 1000).toLocaleString('tr-TR', { maximumFractionDigits: 1 })} sn`} />`
+          : html`<span class="muted">Yok (Roket hediyesinin resmi uçar)</span>`;
+  return html`<${Card} title="Kalkış videoları">
+    <p class="note">Her seviye kalkarken odada kendi videosu oynar. SVGA yükleyin; uygulamanın sunucusu telefonların oynattığı videoya çevirir. En çok 15 saniye. Videoyu yeni APK gösterir.</p>
+    ${(data.videos ?? []).map(
+      (v) => html`<div class="row gap wrap" key=${v.level} style="align-items:center;margin-bottom:8px">
+        <b style="min-width:48px">Lv.${v.level}</b>
+        <span style="flex:1;min-width:180px">${busy === v.level ? html`<${Badge} s="pending" label="Yükleniyor" />` : state(v)}</span>
+        ${editing &&
+        html`<input type="file" accept=".svga,.webm,.mov,.mp4,video/mp4,video/webm,video/quicktime" aria-label=${`Lv.${v.level} videosu`} disabled=${busy !== null} onChange=${(e) => pick(v.level, e.target.files[0])} />
+          ${v.video && html`<${Button} kind="ghost" onClick=${() => remove(v.level)}>Kaldır</${Button}>`}`}
+      </div>`,
+    )}
+  </${Card}>`;
 }
 
 /** The last launches, every room. */
