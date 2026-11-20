@@ -381,7 +381,7 @@ function webp(kind: 'VP8X' | 'VP8L' | 'VP8 ', w: number, h: number, flags = 0) {
   return new Uint8Array(b);
 }
 
-test('iz resmi tarayıcıda: başlık, saydamlık ve yüz payı uygulamanınki gibi ölçülür; ret cümleleri aynen', () => {
+test('iz resmi tarayıcıda: başlık, saydamlık ve yüz payı uygulamanınki gibi ölçülür; ret cümleleri aynen; yüzü kapatabilir', () => {
   assert.deepEqual(kinds.artInfo(png(512, 512, 6)), { type: 'png', width: 512, height: 512, alpha: true, animated: false });
   assert.deepEqual(kinds.artInfo(png(512, 512, 2)), { type: 'png', width: 512, height: 512, alpha: false, animated: false });
   assert.deepEqual(kinds.artInfo(png(300, 300, 3, ['tRNS'])), { type: 'png', width: 300, height: 300, alpha: true, animated: false });
@@ -414,18 +414,19 @@ test('iz resmi tarayıcıda: başlık, saydamlık ve yüz payı uygulamanınki g
   const problem = (x: object) => kinds.artProblem({ bytes: 1000, info: ok, stats: { clear: 0.5, face: 0.1 }, ...x });
   assert.equal(problem({}), null);
   assert.equal(problem({ stats: undefined }), null);
-  assert.equal(problem({ bytes: 3 * 1024 * 1024 }), 'İz resmi en çok 2 MB olabilir (bu 3 MB)');
+  assert.equal(problem({ bytes: 11 * 1024 * 1024 }), 'İz resmi en çok 10 MB olabilir (bu 11 MB)');
+  assert.equal(problem({ bytes: 3 * 1024 * 1024 }), null, 'tasarımcının 2,6 MB’lık PNG’si geçer');
   assert.equal(problem({ info: null }), 'İz resmi PNG ya da WebP olmalı');
   assert.equal(problem({ info: { ...ok, animated: true } }), 'İz resmi hareketsiz olmalı: hareketli PNG ya da WebP değil, tek kare bir resim yükleyin');
   assert.equal(problem({ info: { ...ok, height: 400 } }), 'İz resmi kare olmalı (bu 512 × 400); 512 × 512 önerilir');
   assert.equal(problem({ info: { ...ok, width: 512, height: 515 } }), null);
   assert.equal(problem({ info: { ...ok, width: 200, height: 200 } }), 'İz resmi 256–2048 piksel olmalı (bu 200 × 200); 512 × 512 önerilir');
   assert.equal(problem({ info: { ...ok, alpha: false } }), 'İz resminde saydamlık yok: arka planı tam saydam (alfa 0) bir PNG ya da WebP yükleyin');
-  assert.equal(problem({ stats: { clear: 0.2, face: 0 } }), "İz resminin en az %30'u tam saydam (alfa 0) olmalı, bunda %20: fotoğraf görünmez kalır. Arka planı silinmiş, kenarlarda çizim olan bir resim yükleyin");
-  assert.equal(problem({ stats: { clear: 0.5, face: 0.64 } }), "İz resmi yüzü kapatıyor: ortadaki dairenin en çok %20'si dolu olabilir, bunda %64. Çizimi kenarlara alın, ortayı boş bırakın");
-  // The app's limits, when it gives them, win over the page's own (with the ending their number takes).
-  assert.equal(kinds.artProblem({ bytes: 1000, info: ok, stats: { clear: 0.35, face: 0 } }, { ...kinds.LIMITS, clearMin: 0.4 }), "İz resminin en az %40'ı tam saydam (alfa 0) olmalı, bunda %35: fotoğraf görünmez kalır. Arka planı silinmiş, kenarlarda çizim olan bir resim yükleyin");
-  assert.equal(kinds.artProblem({ bytes: 1000, info: ok, stats: { clear: 0.5, face: 0.3 } }, { ...kinds.LIMITS, faceMax: 0.25 }), "İz resmi yüzü kapatıyor: ortadaki dairenin en çok %25'i dolu olabilir, bunda %30. Çizimi kenarlara alın, ortayı boş bırakın");
+  // Over the whole photo, face included (ice over the face), or faint all over: the app takes it (20 Nov 2026).
+  assert.equal(problem({ stats: { clear: 0, face: 1 } }), null);
+  assert.equal(problem({ stats: { clear: 0.2, face: 0.64 } }), null);
+  // The app's limits, when it gives them, win over the page's own.
+  assert.equal(kinds.artProblem({ bytes: 3 * 1024 * 1024, info: ok, stats: null }, { ...kinds.LIMITS, bytes: 2 * 1024 * 1024 }), 'İz resmi en çok 2 MB olabilir (bu 3 MB)');
   // Turkish endings after a number, as it is read: bir, iki, üç…; on, yirmi, otuz…; yüz.
   const ends = Object.fromEntries([0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 14, 20, 30, 40, 50, 60, 70, 80, 90, 100].map((n) => [n, kinds.possessiveEnd(n)]));
   assert.deepEqual(ends, { 0: 'ı', 1: 'i', 2: 'si', 3: 'ü', 4: 'ü', 5: 'i', 6: 'sı', 7: 'si', 8: 'i', 9: 'u', 10: 'u', 14: 'ü', 20: 'si', 30: 'u', 40: 'ı', 50: 'si', 60: 'ı', 70: 'i', 80: 'i', 90: 'ı', 100: 'ü' });
