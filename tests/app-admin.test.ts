@@ -4,13 +4,14 @@
 // they are; without a link the pages say so. Existing roles get the new permission once (002_app_permissions.sql).
 import assert from 'node:assert/strict';
 import { createServer, type IncomingMessage } from 'node:http';
-import { mkdtempSync, rmSync } from 'node:fs';
+import { existsSync, mkdtempSync, readFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { dirname, join, resolve } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { after, before, test } from 'node:test';
 import type { AddressInfo } from 'node:net';
 
-import { appLink, localFiles } from '../server/app-admin.ts';
+import { APP_ROUTES, appLink, localFiles } from '../server/app-admin.ts';
 import { createApp } from '../server/app.ts';
 import { PASSWORD, setup } from './helpers.ts';
 
@@ -89,6 +90,15 @@ const fakeApp = createServer(async (req, res) => {
   if (req.method === 'POST' && url.pathname === '/api/admin/lucky/fetch') {
     const b = JSON.parse(body.toString('utf8'));
     return json(200, { url: `${appBase}/api/media/f/giftsource/u1/linked.svga`, link: b.url, kind: 'giftsource', type: 'application/x-svga', bytes: 4000, video: 'source', svga: true });
+  }
+  // İz türleri (the app's mark-kinds.mjs): a kind with its overlay at the app's storage address.
+  if (req.method === 'GET' && url.pathname === '/api/admin/mark-kinds') {
+    return json(200, {
+      kinds: [{ kind: 'kirik-cam', name: 'Kırık Cam', art: { url: `${appBase}/api/media/f/markart/u1/cam.png`, v: '0123456789ab', px: 512, bytes: 69_156, checked: true, stats: { clear: 0.78, face: 0 } }, minutes: 1440, stack: 'refresh', enabled: true, gifts: [{ id: 'p8', name: 'Terlik Geldi!', role: 'leave', minutes: 1440, enabled: true }], showing: 3, updatedAt: null }],
+      limits: { nameMax: 24, minutes: { min: 5, max: 10_080 }, bytes: 2_097_152, types: ['image/png', 'image/webp'], minPx: 256, maxPx: 2048, servePx: 512, serveBytes: 307_200, clearMin: 0.3, faceMax: 0.2, faceRadius: 0.3, stacks: ['refresh', 'replace'] },
+      on: true,
+      hours: 24,
+    });
   }
   // The other admin routes (Para çekme, Ajans ödemeleri, İadeler, Şanslı, Canlı ayarlar, raporlar): an echo.
   if (url.pathname.startsWith('/api/admin/')) return json(200, { ok: true, path: url.pathname + url.search });
@@ -664,6 +674,100 @@ test('Profil izleri: Kullanıcılar yetkisiyle görülür ve kaldırılır; kald
   refuse = null;
   assert.equal(no.status, 400);
   assert.equal(no.json.error, 'Geçersiz iz türü');
+});
+
+test('İz türleri: Hediyeler yetkisiyle; dört uç uygulamaya aynen gider ve denetim kaydına yazılır; iz resmi (markart) aynı yetkiyle yüklenir; ret cümlesi aynen', async () => {
+  for (const [method, path] of [['GET', '/api/admin/mark-kinds'], ['POST', '/api/admin/mark-kinds'], ['POST', '/api/admin/mark-kinds/update'], ['POST', '/api/admin/mark-kinds/delete']]) {
+    assert.deepEqual(APP_ROUTES.find(([m, p]) => m === method && p === path)?.[2], 'app.gifts', `${method} ${path}`);
+  }
+  env.as('operations_manager', 'ops@test.local');
+  env.as('finance_manager', 'fin@test.local');
+  env.as('read_only', 'ro@test.local');
+  // A role with Şanslı hediye ayarı alone: no İz türleri, no overlay upload.
+  env.db.run("INSERT INTO roles (key, name, scope, permissions) VALUES ('sansli', 'Şanslı ekibi', 'platform', '[\"app.lucky\"]') ON CONFLICT (key) DO NOTHING");
+  env.as('sansli', 'sansli@test.local');
+  const ops = await loginAs('ops@test.local');
+  const fin = await loginAs('fin@test.local');
+  const ro = await loginAs('ro@test.local');
+  const lucky = await loginAs('sansli@test.local');
+  // The list: the overlay's address as this server's.
+  const r = await call('GET', '/api/app/mark-kinds', undefined, ops);
+  assert.equal(r.status, 200, JSON.stringify(r.json));
+  assert.equal(seen.at(-1)!.path, '/api/admin/mark-kinds');
+  assert.equal(r.json.kinds[0].art.url, '/api/app/media/f/markart/u1/cam.png');
+  assert.equal(r.json.limits.faceMax, 0.2);
+  for (const h of [ro, lucky]) assert.equal((await call('GET', '/api/app/mark-kinds', undefined, h)).status, 403);
+  // A new kind, a change (its picture taken off, its time back to the Canlı ayar's), turning it off, deleting it.
+  for (const [path, body] of [
+    ['/api/app/mark-kinds', { kind: 'camur', name: 'Çamur', art: `${appBase}/api/media/f/markart/u1/new`, minutes: 60, stack: 'refresh', enabled: true }],
+    ['/api/app/mark-kinds/update', { kind: 'camur', name: 'Çamur Topu', art: null, minutes: null }],
+    ['/api/app/mark-kinds/update', { kind: 'camur', enabled: false }],
+    ['/api/app/mark-kinds/delete', { kind: 'camur' }],
+  ] as const) {
+    for (const h of [ops, fin]) {
+      const out = await call('POST', path, body, h);
+      assert.equal(out.status, 200, `${path}: ${JSON.stringify(out.json)}`);
+      assert.equal(seen.at(-1)!.path, path.replace('/api/app/', '/api/admin/'));
+      assert.deepEqual(JSON.parse(seen.at(-1)!.body), body);
+    }
+    assert.match(seen.at(-1)!.user.email, /fin@test\.local/);
+    const log = env.db.get('SELECT actor, after FROM audit_logs WHERE action = ? ORDER BY id DESC LIMIT 1', `app${path.slice('/api/app'.length).replace(/\//g, '.')}`);
+    assert.ok(log, path);
+    assert.match(log.actor, /fin@test\.local/);
+    assert.deepEqual(JSON.parse(log.after).body, body);
+    for (const h of [ro, lucky]) assert.equal((await call('POST', path, body, h)).status, 403, `${path}`);
+  }
+  // The overlay streams to the app's storage as kind markart; only with Hediyeler.
+  const up = await fetch(`${base}/api/app/upload?kind=markart`, { method: 'POST', headers: { ...ops, 'content-type': 'image/png' }, body: ICON });
+  assert.equal(up.status, 200);
+  assert.equal(((await up.json()) as { url: string }).url, `${appBase}/api/media/f/markart/u1/new`);
+  assert.deepEqual(JSON.parse(seen.at(-1)!.body), { kind: 'markart', contentType: 'image/png', size: ICON.length });
+  assert.deepEqual(stored.get('markart-1')!.body, ICON);
+  for (const h of [lucky, ro]) assert.equal((await fetch(`${base}/api/app/upload?kind=markart`, { method: 'POST', headers: { ...h, 'content-type': 'image/png' }, body: ICON })).status, 403);
+  // Its stored file opens for the page.
+  assert.equal((await fetch(`${base}/api/app/media/f/markart/u1/cam.png`, { headers: ops })).status, 200);
+  // The app's refusals in its words: the pixel check, a kind in use, one that isn't there, the checker down.
+  for (const [status, path, body, error] of [
+    [400, '/api/app/mark-kinds', { kind: 'camur', name: 'Çamur', art: 'x' }, "İz resmi yüzü kapatıyor: ortadaki dairenin en çok %20'i dolu olabilir, bunda %64. Çizimi kenarlara alın, ortayı boş bırakın"],
+    [409, '/api/app/mark-kinds', { kind: 'kaka', name: 'Kaka' }, '"kaka" türü zaten var (Kaka İzi); onu düzenleyin'],
+    [409, '/api/app/mark-kinds/delete', { kind: 'kirik-cam' }, 'Bu türü kullanan hediyeler var: Terlik Geldi!, Cam Tamiri. Önce onların profil izi kuralını değiştirin ya da kaldırın.'],
+    [404, '/api/app/mark-kinds/update', { kind: 'yok', name: 'Yok' }, 'İz türü bulunamadı'],
+    [503, '/api/app/mark-kinds/update', { kind: 'camur', art: 'x' }, 'Sunucu iz resmini şu an denetleyemiyor; biraz sonra yeniden deneyin'],
+  ] as const) {
+    refuse = { status, error };
+    const no = await call('POST', path, body, ops);
+    refuse = null;
+    assert.equal(no.status, status, error);
+    assert.equal(no.json.error, error);
+  }
+  // A gift's rule names a kind and its time in minutes: as sent.
+  const rule = { id: 'p8', enabled: true, mark: { role: 'leave', kind: 'kirik-cam', minutes: 1440 } };
+  assert.equal((await call('POST', '/api/app/gifts/update', rule, ops)).status, 200);
+  assert.deepEqual(JSON.parse(seen.at(-1)!.body), rule);
+  refuse = { status: 400, error: `"camur" diye bir iz türü yok: önce Hediyeler › İz türleri'nden bu türü ekleyin` };
+  const unknown = await call('POST', '/api/app/gifts', { name: 'Çamur Bombası', price: 500, cat: 'gameplay', icon: 'x', mark: { role: 'leave', kind: 'camur' } }, ops);
+  refuse = null;
+  assert.equal(unknown.status, 400);
+  assert.match(unknown.json.error, /diye bir iz türü yok/);
+});
+
+test("uygulamanın PANEL_ROUTES'u: panelin çağırdığı her uç orada (uygulamanın deposu yanındaysa)", (t) => {
+  // The app answers 403 to a route missing from its list, whatever this panel allows: both lists must have it. The
+  // app's repo next to this one (cix), or FC_APP_REPO; elsewhere (CI of this repo alone) there is nothing to compare.
+  const root = resolve(dirname(fileURLToPath(import.meta.url)), '..');
+  const repo = process.env.FC_APP_REPO ?? resolve(root, '..', 'cix');
+  const file = join(repo, 'server', 'api', 'panel.mjs');
+  if (!existsSync(file)) return t.skip(`uygulamanın deposu yok: ${file}`);
+  const src = readFileSync(file, 'utf8');
+  const from = src.indexOf('export const PANEL_ROUTES');
+  assert.ok(from >= 0, 'PANEL_ROUTES bulunamadı');
+  const list = new Set([...src.slice(from, src.indexOf(']);', from)).matchAll(/'((?:GET|POST) \/api\/[^']+)'/g)].map((m) => m[1]));
+  // APP_ROUTES and the calls made outside it (a file from a link, a frame's SVGA, the upload's address).
+  const own = readFileSync(join(root, 'server', 'app-admin.ts'), 'utf8');
+  const extra = [...own.matchAll(/appCall\(ctx, link, '(GET|POST)', '(\/api\/[^']+)'/g)].map((m) => `${m[1]} ${m[2]}`);
+  assert.ok(extra.includes('POST /api/media/upload-url'));
+  const missing = [...APP_ROUTES.map(([m, p]) => `${m} ${p}`), ...extra].filter((r) => !list.has(r));
+  assert.deepEqual(missing, [], "uygulamanın PANEL_ROUTES'unda olmayan uçlar");
 });
 
 test('Emojiler: kendi yetkisiyle; paketler, çıkartmalar, sıra, orijinale dönme, resim yükleme ve bağlantıdan resim', async () => {

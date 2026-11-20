@@ -135,8 +135,11 @@ export function AppUsers() {
 }
 
 // ---- Profil izleri --------------------------------------------------------------------------------------
-/** How a mark came off (the app's profile_marks.cleared_how). */
-const CLEARED = { gift: 'temizleyen hediyeyle', admin: 'yönetim kaldırdı', self: 'kişi izleri kapattı', block: 'engelle kalktı' };
+/**
+ * How a mark came off (the app's profile_marks.cleared_how): 'replaced' another mark took its place (one at a time, Muzip
+ * hediyeler); 'self' only on old rows (nobody takes their own mark off since then).
+ */
+const CLEARED = { gift: 'temizleyen hediyeyle', admin: 'yönetim kaldırdı', replaced: 'başka bir iz yerine geçti', self: 'kişi kapattı (eski)', block: 'engelle kalktı' };
 const markState = (m) =>
   m.showing
     ? html`<${Badge} s="pending" label="Görünüyor" />`
@@ -172,7 +175,7 @@ export function ProfileMarks({ user, onClose }) {
       const showing = d.marks.filter((m) => m.showing);
       return html`
         ${!d.on && html`<p class="note warn">Profil izleri şu an kapalı (Canlı ayarlar › Profil izleri › süre 0): hiçbir iz görünmüyor.</p>`}
-        <p class="muted">İz bırakan bir hediye (ör. 💩 Kaka) alıcının fotoğrafında süresi bitene ya da temizleyen hediye (ör. 💧 Su) gelene kadar kalır. Kişi Gizlilik'ten izleri kapatabilir. Son 50 iz, görünenler önce.</p>
+        <p class="muted">İz bırakan bir hediye (ör. 💩 Kaka Şakası) alıcının fotoğrafında süresi bitene, temizleyen hediye (ör. 💧 Temizlik Suyu) gelene ya da buradan kaldırılana kadar kalır; profilde aynı anda tek iz olur. Kişi kendi izini kaldıramaz: Gizlilik'ten yalnız kimlerin yeni iz bırakabileceğini seçer. İz bırakanı engellerse o kişinin izleri kalkar. Son 50 iz, görünenler önce.</p>
         ${can('app.users') && showing.length > 0 && html`<div class="row gap wrap" style="margin-bottom:10px">
           <${Button} kind="danger" onClick=${() => clear(null)}>Görünen bütün izleri kaldır (${num(showing.length)})</${Button}>
         </div>`}

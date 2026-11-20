@@ -40,7 +40,7 @@ const NAV = [
     ['app-support', 'Destek', 'app.support', AppSupport, 'destek talep yardım yanıt'],
   ]],
   ['gifts', 'Hediye ve mağaza', '🎁', [
-    ['app-gifts', 'Hediyeler', 'app.gifts', AppGifts, 'hediye video svga ikon animasyon raf fiyat global duyuru profil izi kaka su'],
+    ['app-gifts', 'Hediyeler', 'app.gifts', AppGifts, 'hediye video svga ikon animasyon raf fiyat global duyuru profil izi iz türü muzip kaka su kırık cam terlik'],
     ['app-emojis', 'Emojiler', 'app.emojis', AppEmojis, 'emoji çıkartma sticker paket lottie'],
     ['app-shop', 'Mağaza', 'app.shop', AppShop, 'mağaza çerçeve giriş efekti ejderha video svga isim plakası fiyat satış'],
     ['app-economy', 'Mağaza eşyaları (kişiye)', 'app.economy', AppEconomy, 'mağaza eşya çerçeve vip giriş efekti binek balon ver geri al kişi'],

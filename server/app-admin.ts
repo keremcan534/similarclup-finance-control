@@ -36,6 +36,13 @@ export const APP_ROUTES: [string, string, Permission | Permission[]][] = [
   ['POST', '/api/admin/gifts/reset', 'app.gifts'],
   ['POST', '/api/admin/gifts/delete', 'app.gifts'],
   ['POST', '/api/admin/gifts/order', 'app.gifts'],
+  // İz türleri (the app's mark-kinds.mjs, Muzip hediyeler): the kinds of profile mark a gift leaves or cleans, each with
+  // its name, overlay picture (upload markart, checked by the app when saved), minutes, what the same kind again does,
+  // on/off; deleting one no gift uses. Hediyeler's own: a gift's rule names one of these.
+  ['GET', '/api/admin/mark-kinds', 'app.gifts'],
+  ['POST', '/api/admin/mark-kinds', 'app.gifts'],
+  ['POST', '/api/admin/mark-kinds/update', 'app.gifts'],
+  ['POST', '/api/admin/mark-kinds/delete', 'app.gifts'],
   // Emojiler: the emoji panel's packs and stickers, the app's and the admins' own
   ['GET', '/api/admin/emoji', 'app.emojis'],
   ['POST', '/api/admin/emoji/packs', 'app.emojis'],
@@ -222,13 +229,15 @@ const UPLOADS: Record<string, Permission[]> = {
   giftvideo: ['app.gifts', 'app.shop', 'app.rocket', 'app.lucky'],
   giftsource: ['app.gifts', 'app.shop', 'app.rocket', 'app.lucky'],
   stickerart: ['app.emojis'],
+  // A profile mark kind's overlay (Hediyeler › İz türleri): checked pixel by pixel by the app when the kind is saved.
+  markart: ['app.gifts'],
   shopframe: ['app.shop'],
   notice: ['app.notices'],
 };
 /** The permissions that may open the app's stored files through here (every page that shows them). */
 // The app serves these files to anyone with the address (media.mjs GET /api/media/f/…); the panel still asks for a
-// page that shows them: gift art, a Şanslı package's icon and video, a reported post's or room's picture, a ticket's
-// photo, a notice's or event's picture.
+// page that shows them: gift art and a mark kind's overlay, a Şanslı package's icon and video, a reported post's or
+// room's picture, a ticket's photo, a notice's or event's picture.
 const FILE_PERMS: Permission[] = ['app.gifts', 'app.lucky', 'app.emojis', 'app.shop', 'app.complaints', 'app.support', 'app.notices', 'app.events'];
 
 const off = () => new HttpError(503, 'Uygulama bağlantısı ayarlı değil: sunucuda FC_APP_API_URL ve FC_APP_API_KEY gerekli', 'app_off');
@@ -334,7 +343,7 @@ export function appRoutes(r: Router<Ctx>, link: AppLink) {
 }
 
 /**
- * POST /api/app/upload?kind=gifticon|giftvideo|giftsource: the request's body is the file (its type in
+ * POST /api/app/upload?kind=gifticon|giftvideo|giftsource|markart|…: the request's body is the file (its type in
  * Content-Type, its size in Content-Length), streamed on to the address the app's storage gives, never held whole
  * here. Answers { url }: the address to save (the app checks the file when it is saved).
  */
