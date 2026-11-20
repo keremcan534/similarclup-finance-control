@@ -29,14 +29,15 @@ export const COMPILED = Object.freeze({ kaka: 'Kaka İzi', 'kirik-cam': 'Kırık
 export const LIMITS = Object.freeze({
   nameMax: 24,
   minutes: MINUTES,
-  bytes: 2 * 1024 * 1024,
+  bytes: 10 * 1024 * 1024,
   types: ['image/png', 'image/webp'],
   minPx: 256,
   maxPx: 2048,
   servePx: 512,
   serveBytes: 300 * 1024,
-  clearMin: 0.3,
-  faceMax: 0.2,
+  // The picture may cover the face (the app's rule from 20 Nov 2026); both shares are still measured and shown.
+  clearMin: 0,
+  faceMax: 1,
   faceRadius: 0.3,
   stacks: STACKS,
 });
@@ -257,13 +258,8 @@ export function artProblem({ bytes, info, stats }, L = LIMITS) {
   if (Math.abs(w - h) > Math.max(2, w * 0.02)) return `İz resmi kare olmalı (bu ${w} × ${h}); 512 × 512 önerilir`;
   if (w < L.minPx || w > L.maxPx) return `İz resmi ${L.minPx}–${L.maxPx} piksel olmalı (bu ${w} × ${h}); 512 × 512 önerilir`;
   if (!info.alpha) return 'İz resminde saydamlık yok: arka planı tam saydam (alfa 0) bir PNG ya da WebP yükleyin';
-  if (!stats) return null;
-  if (stats.clear < L.clearMin) {
-    return `İz resminin en az ${pctOf(L.clearMin)} tam saydam (alfa 0) olmalı, bunda ${pct(stats.clear)}: fotoğraf görünmez kalır. Arka planı silinmiş, kenarlarda çizim olan bir resim yükleyin`;
-  }
-  if (stats.face > L.faceMax) {
-    return `İz resmi yüzü kapatıyor: ortadaki dairenin en çok ${pctOf(L.faceMax)} dolu olabilir, bunda ${pct(stats.face)}. Çizimi kenarlara alın, ortayı boş bırakın`;
-  }
+  // How much is transparent and how much of the face it covers is no longer a reason (the app's rule from 20 Nov 2026:
+  // a mark may cover the whole photo, like ice); artLine still shows both.
   return null;
 }
 
@@ -279,7 +275,7 @@ export function artLine(a) {
 
 /** The upload's rules in a sentence, under the picture field (`L`: the app's limits). */
 export const artRules = (L = LIMITS) =>
-  `Saydam PNG ya da WebP, kare, ${L.minPx}–${fmt(L.maxPx)} piksel (512 × 512 önerilir), en çok ${mbText(L.bytes)} MB, hareketsiz. Tam saydam (alfa 0) pay en az ${pct(L.clearMin)}; ortadaki yüz dairesinin dolu payı en çok ${pct(L.faceMax)}: çizim kenarlarda, orta boş. Büyüğü telefonlar için ${L.servePx} piksele küçültülür. Arka plan silme yapılmaz.`;
+  `Saydam PNG ya da WebP (alfa kanalı olan), kare, ${L.minPx}–${fmt(L.maxPx)} piksel (512 × 512 önerilir), en çok ${mbText(L.bytes)} MB, hareketsiz. Bütün fotoğrafı, yüzü de kaplayabilir: telefon resmi fotoğrafın dairesine kırpar, çerçeve üstüne gelir. Büyüğü telefonlar için ${L.servePx} piksele küçültülür. Arka plan silme yapılmaz.`;
 
 // ---- The preview (the app's iz-onizleme.tsx) ----------------------------------------------------------------------
 /** The faces a mark is drawn on in the app, in dp (a CSS px here): a mic seat at its smallest, the standard one, the person card, the largest seat and a profile, the host's seat. */
