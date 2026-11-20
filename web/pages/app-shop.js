@@ -253,9 +253,10 @@ function PlateStage({ src, plate, name, onPlate, limits }) {
  * With `onChange` the photo is placed by hand (the frame's picture lets the pointer through to it): dragged, or put
  * where the preview is clicked; sized by the dot on its rim or the mouse wheel; nudged with the arrow keys (Shift:
  * further), + and − size it. A dashed circle over the picture shows its edge. Each change goes out as `{ x, y }` or
- * `{ hole }`, within `limits`, the photo inside the picture.
+ * `{ hole }`, within `limits`, the photo inside the picture. `children`: what fills the photo's circle instead of the
+ * sample face (Hediyeler › İz türleri: a photo with a profile mark on it).
  */
-function FramePreview({ src, hole, at, size = 120, onChange, limits }) {
+export function FramePreview({ src, hole, at, size = 120, onChange, limits, children }) {
   const box = useRef(null);
   const drag = useRef(null);
   const edit = !!onChange;
@@ -318,7 +319,7 @@ function FramePreview({ src, hole, at, size = 120, onChange, limits }) {
     onWheel=${edit ? wheel : undefined}
     onKeyDown=${edit ? key : undefined}
   >
-    <div class="frame-photo" style=${`position:absolute;${circle}`}>🙂</div>
+    <div class="frame-photo" style=${`position:absolute;${circle}${children ? ';overflow:hidden' : ''}`}>${children ?? '🙂'}</div>
     ${src && html`<img src=${src} alt="" width=${size} height=${size} />`}
     ${edit && html`<i class="frame-guide" style=${circle} onPointerDown=${grab('move')}></i><i class="frame-handle" style=${dot} onPointerDown=${grab('size')}></i>`}
   </div>`;

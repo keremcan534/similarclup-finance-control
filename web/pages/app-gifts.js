@@ -5,19 +5,17 @@
 // shelf tile, the icon, and the transparent video drawn over a stage the way the phones draw it. Files go through this
 // server to the app's storage; the app checks them when the gift is saved and converts a WebM / MOV / SVGA itself.
 // Nothing removes a background: the editor says so before a file is picked. Global hediye (announced in every room of
-// the country) and Profil izi (the gift leaves or cleans a mark on its receiver's photo) are fields of the gift
-// (web/gift-fields.js has their rules). The upload parts are shared with Şanslı hediye ayarı (app-lucky.js).
-import { Badge, Button, Loading, Modal, Page, Table, act, dateTimeTr, get, html, num, post, searchable, showError, toast, useApi, useApp, useEffect, useRef, useState } from '../lib.js';
+// the country) and Profil izi (the gift leaves or cleans a mark on its receiver's photo, Muzip hediyeler) are fields
+// of the gift (web/gift-fields.js has their rules); the mark's kind is one of the second tab's, İz türleri
+// (app-mark-kinds.js). An app server from before kinds answers none: the tab says so and the kind is typed, in hours, as
+// before. The upload parts are shared with Şanslı hediye ayarı (app-lucky.js).
+import { Badge, Button, Loading, Modal, Page, Table, Tabs, act, dateTimeTr, get, html, num, post, searchable, showError, toast, useApi, useApp, useEffect, useRef, useState } from '../lib.js';
 import { SORTS, SortBar, sortedIds, useDragOrder } from '../order.js';
-import { extraFields, globalBox, globalNote, globalProblem, markForm, markOf, markText, plainOnly, sameMark } from '../gift-fields.js';
+import { SHELVES, durationText, extraFields, globalBox, globalNote, globalProblem, kindOptions, markForm, markOf, markPriceProblem, markText, markWarnings, plainOnly, sameMark, unknownKind } from '../gift-fields.js';
+import { kindsMissing } from '../mark-kinds.js';
+import { MarkKinds } from './app-mark-kinds.js';
 
-const CATS = [
-  ['hot', 'Popüler'],
-  ['couple', 'İkili'],
-  ['family', 'Aile ve Dost'],
-  ['gameplay', 'Kutlama'],
-  ['privilege', 'Özel'],
-];
+const CATS = SHELVES;
 const CAT = Object.fromEntries(CATS);
 /**
  * A bond gift (Aile ve Dost): it stays on its shelf; its name, icon, video and price change here. Its price is what a bond
@@ -46,7 +44,7 @@ const kindOk = (k, g) => k === 'all' || (k === 'app' && g.builtin) || (k === 'mi
 export function typeOf(kind, file) {
   const t = (file.type || '').toLowerCase();
   const e = ending(file.name);
-  if (kind === 'gifticon' || kind === 'shopframe') return t === 'image/png' || e === 'png' ? 'image/png' : t === 'image/webp' || e === 'webp' ? 'image/webp' : null;
+  if (kind === 'gifticon' || kind === 'shopframe' || kind === 'markart') return t === 'image/png' || e === 'png' ? 'image/png' : t === 'image/webp' || e === 'webp' ? 'image/webp' : null;
   if (kind === 'giftvideo') return t === 'video/mp4' || e === 'mp4' ? 'video/mp4' : null;
   if (e === 'svga') return 'application/x-svga';
   if (t === 'video/webm' || e === 'webm') return 'video/webm';
@@ -99,8 +97,11 @@ export function videoLine(g) {
   return html`<span class="muted">Yok (ikon uçar)</span>`;
 }
 
-export function AppGifts() {
+export function AppGifts({ query }) {
   const { can, meta } = useApp();
+  // Hediyeler, or İz türleri (#/app-gifts?tab=kinds).
+  const [tab, setTab] = useState(query?.get?.('tab') === 'kinds' ? 'kinds' : 'gifts');
+  const [addKind, setAddKind] = useState(false);
   const [shelf, setShelf] = useState('all');
   const [kind, setKind] = useState('all');
   const [q, setQ] = useState('');
@@ -108,6 +109,10 @@ export function AppGifts() {
   const [playing, setPlaying] = useState(null);
   // builtin=1: the app's own gifts too, with their values in the app and what was changed.
   const list = useApi(meta.app_link ? '/api/app/gifts?builtin=1' : null);
+  // İz türleri: the kinds a gift's mark names. 'list' (the kinds read), 'missing' (an app server before them) or
+  // 'unknown' (not read yet, or failed): the form then has the kind typed.
+  const kinds = useApi(meta.app_link ? '/api/app/mark-kinds' : null);
+  const kindsMode = kinds.data?.kinds ? 'list' : kinds.error && kindsMissing(kinds.error) ? 'missing' : 'unknown';
   const processing = !!list.data?.gifts.some((g) => g.job?.status === 'processing');
   // A video converts on the app's server: the list is read again every few seconds until it is done.
   useEffect(() => {
@@ -154,9 +159,14 @@ export function AppGifts() {
   return html`<${Page}
     title="Uygulama hediyeleri"
     subtitle="Değişiklikler uygulama güncellemesi olmadan telefonlara gider; uygulamanın kendi hediyeleri Orijinale dön ile geri alınır. Fiyatı değişen uygulama hediyesini eski APK'lar göstermez."
-    actions=${can('app.gifts') && html`<${Button} kind="primary" disabled=${!list.data?.storage} onClick=${() => setEdit({})}>Yeni hediye</${Button}>`}
+    actions=${can('app.gifts') &&
+    (tab === 'kinds'
+      ? kinds.data && html`<${Button} kind="primary" onClick=${() => setAddKind(true)}>Yeni tür</${Button}>`
+      : html`<${Button} kind="primary" disabled=${!list.data?.storage} onClick=${() => setEdit({})}>Yeni hediye</${Button}>`)}
   >
-    <div class="row gap wrap" style="margin-bottom:6px">
+    <${Tabs} tabs=${[['gifts', 'Hediyeler'], ['kinds', `İz türleri${kinds.data?.kinds ? ` (${kinds.data.kinds.length})` : ''}`]]} value=${tab} onChange=${setTab} />
+    ${tab === 'kinds' && html`<div style="margin-top:10px"><${MarkKinds} state=${kinds} gifts=${list.data?.gifts} storage=${list.data?.storage !== false} adding=${addKind} onAdded=${() => setAddKind(false)} /></div>`}
+    ${tab === 'gifts' && html`<div class="row gap wrap" style="margin:10px 0 6px">
       ${[['all', 'Tümü'], ...CATS].map(([k, l]) => html`<button class=${`chip ${shelf === k ? 'on' : ''}`} onClick=${() => setShelf(k)}>${l}</button>`)}
     </div>
     <div class="row gap wrap" style="margin-bottom:10px">
@@ -179,7 +189,7 @@ export function AppGifts() {
               ${otherChanges(g).length > 0 ? html` <${Badge} s="warning" label=${`Değiştirildi: ${otherChanges(g).map((f) => FIELD_TR[f] ?? f).join(', ')}`} />` : ''}
               ${g.global ? html` <${Badge} s=${globalNote(g, d.globalMinPrice) ? 'warning' : 'info'} label="Global" />` : ''}
               ${globalNote(g, d.globalMinPrice) ? html` <small class="muted">${globalNote(g, d.globalMinPrice)}</small>` : ''}
-              <br /><small class="muted">${g.id}${g.iconLink || g.videoLink ? ' · 🔗 bağlantıdan' : ''}${g.builtin && g.changed?.includes('name') ? ` · uygulamada: ${g.original.name}` : ''}${markText(g.mark) ? ` · ${markText(g.mark)}` : ''}</small></div>`,
+              <br /><small class="muted">${g.id}${g.iconLink || g.videoLink ? ' · 🔗 bağlantıdan' : ''}${g.builtin && g.changed?.includes('name') ? ` · uygulamada: ${g.original.name}` : ''}${markText(g.mark, kinds.data?.kinds) ? ` · ${markText(g.mark, kinds.data?.kinds)}` : ''}</small></div>`,
           },
           {
             key: 'cat',
@@ -219,8 +229,8 @@ export function AppGifts() {
           },
         ]}
         rows=${d.gifts.filter((g) => (shelf === 'all' || g.cat === shelf) && kindOk(kind, g) && (!q.trim() || [g.name, g.id, g.emoji, g.original?.name].some((t) => t && searchable(t).includes(searchable(q.trim())))))}
-      />`}</${Loading}>
-    ${edit && list.data && html`<${Editor} gift=${edit.gift} admin=${list.data} onClose=${() => setEdit(null)} onSaved=${(text) => (setEdit(null), toast(text), list.reload())} />`}
+      />`}</${Loading}>`}
+    ${edit && list.data && html`<${Editor} gift=${edit.gift} admin=${list.data} kinds=${kinds.data} kindsMode=${kindsMode} onClose=${() => setEdit(null)} onSaved=${(text) => (setEdit(null), toast(text), list.reload(), kinds.reload())} />`}
     ${playing && html`<${Modal} title="Önizleme" onClose=${() => setPlaying(null)}>
       ${playing.refused && html`<p class="note bad">Kullanılmayan video: odada böyle, arka planıyla kutu gibi görünürdü. Hediyedeki video değişmedi.</p>`}
       <${Stage} src=${playing.src} onEnd=${() => setPlaying(null)} />
@@ -347,8 +357,17 @@ export const specOf = (x, url) => ({
   ...(x.opaque ? { opaque: true } : {}),
 });
 
-function Editor({ gift, admin, onClose, onSaved }) {
+/** A new gift's id in the price rule's check (it has none until saved). */
+const NEW = '\u0000yeni';
+
+/**
+ * A gift's editor. `kinds`: İz türleri (GET /api/app/mark-kinds), `kindsMode` 'list' (the mark's kind picked from them,
+ * its time in hours or minutes), else typed as before ('missing': an app server before kinds, hours only).
+ */
+function Editor({ gift, admin, kinds: kindsAnswer, kindsMode = 'unknown', onClose, onSaved }) {
   const L = admin.limits;
+  const kinds = kindsMode === 'list' ? kindsAnswer.kinds : null;
+  const legacy = kindsMode !== 'list';
   // One of the app's own gifts: its values in the app (`original`) show under each field that differs.
   const app = !!gift?.builtin;
   const o = gift?.original;
@@ -361,7 +380,7 @@ function Editor({ gift, admin, onClose, onSaved }) {
     enabled: gift ? gift.enabled : true,
     global: gift?.global === true,
   });
-  // Profil izi: { role: 'none'|'leave'|'clean', kind, hours } (hours '': the Canlı ayar's).
+  // Profil izi: { role: 'none'|'leave'|'clean', kind, amount, unit } (amount '': the kind's, else the Canlı ayar's).
   const [mark, setMark] = useState(() => markForm(gift?.mark));
   // An app server without these features answers neither (no globalMinPrice, no gift's `mark`): their fields stay off.
   const globalOn = typeof admin.globalMinPrice === 'number';
@@ -462,7 +481,7 @@ function Editor({ gift, admin, onClose, onSaved }) {
     if (!Number.isSafeInteger(price) || price < 1 || price > L.priceMax) return showError(new Error(`Fiyat 1–${num(L.priceMax)} jeton arasında bir tam sayı olmalı`));
     if (!gift && !icon) return showError(new Error('İkon seçin'));
     // Profil izi and Global hediye, checked here as the app's server checks them (its sentence still wins).
-    const rule = marksOn && !plainOnly(gift?.id) ? markOf(mark) : { mark: gift?.mark ?? null };
+    const rule = marksOn && !plainOnly(gift?.id) ? markOf(mark, { legacy }) : { mark: gift?.mark ?? null };
     if (rule.error) return showError(new Error(rule.error));
     const global = globalOn && !plainOnly(gift?.id) ? !!v.global : gift?.global === true;
     const why = globalOn ? globalProblem({ id: gift?.id, price, global, was: gift?.global === true, priceChanged: !gift || price !== gift.price, mark: rule.mark, min: admin.globalMinPrice }) : null;
@@ -470,6 +489,16 @@ function Editor({ gift, admin, onClose, onSaved }) {
     const extra = extraFields(gift, { global, mark: rule.mark });
     if (!globalOn) delete extra.global;
     if (!marksOn) delete extra.mark;
+    // A rule that changes names a kind İz türleri has; a cleaning gift dearer than every gift leaving its kind (the
+    // app's sentences). Checked on every save, as there: a price change can break the rule too.
+    const unknown = extra.mark ? unknownKind(extra.mark, kinds) : null;
+    if (unknown) return showError(new Error(unknown));
+    if (marksOn) {
+      const id = gift?.id ?? NEW;
+      const after = [...admin.gifts.filter((g) => g.id !== id), { id, name, price, mark: rule.mark }];
+      const dear = markPriceProblem(after, id);
+      if (dear) return showError(new Error(dear));
+    }
     try {
       let iconAt;
       if (icon?.at) iconAt = icon.at;
@@ -516,7 +545,13 @@ function Editor({ gift, admin, onClose, onSaved }) {
 
   const price = Number(v.price);
   const box = globalOn ? globalBox({ id: gift?.id, price, global: v.global, mark: mark.role === 'none' ? null : mark, min: admin.globalMinPrice }) : { hidden: true };
-  const ruleNow = markOf(mark);
+  const ruleNow = markOf(mark, { legacy });
+  const kindNow = kinds?.find((k) => k.kind === mark.kind);
+  const warnings = ruleNow.mark ? markWarnings(ruleNow.mark, { kinds, gifts: admin.gifts, self: gift?.id }) : [];
+  const timeHint =
+    kindsMode === 'missing'
+      ? "1–168 saat; boş: Canlı ayarlar › Profil izleri'ndeki süre."
+      : `1–168 saat ya da 5–10.080 dakika; boş: ${kindNow?.minutes ? `türün süresi (${durationText(kindNow.minutes)})` : `Canlı ayardaki süre${kindsAnswer?.hours > 0 ? ` (${durationText(kindsAnswer.hours * 60)})` : ''}`}.`;
   return html`<${Modal} title=${gift ? `${gift.name}${app ? ' (uygulamanın hediyesi)' : ''}` : 'Yeni hediye'} wide onClose=${onClose}>
     ${gift?.updatedAt && html`<p class="muted" style="margin-top:-6px">Son değişiklik: ${dateTimeTr(gift.updatedAt)}${gift.updatedBy?.name ? ` · ${gift.updatedBy.name}` : ''}</p>`}
     ${app && html`<p class="note">Uygulamayla gelen bir hediye. Değiştirdiğiniz her şey uygulama güncellemesi olmadan telefonlara gider; listedeki <b>Orijinale dön</b> hepsini geri alır. Fiyatı değişirse eski APK'lar bu hediyeyi göstermez (yanlış fiyat göstermesinler diye).</p>`}
@@ -531,14 +566,24 @@ function Editor({ gift, admin, onClose, onSaved }) {
     </div></div>
 
     ${marksOn && !plainOnly(gift?.id) && html`<h3>Profil izi</h3>
-    <p class="muted">İz bırakan hediye (ör. 💩 Kaka) alıcının profil fotoğrafında bir iz bırakır; aynı türü temizleyen hediye (ör. 💧 Su) onu kaldırır. Temizleyen hediye, o türü bırakan her hediyeden pahalı olmalı. Kişi Gizlilik'ten izleri kapatabilir. Profil izi olan hediye global olamaz.</p>
+    <p class="muted">İz bırakan hediye (ör. 💩 Kaka Şakası, 🩴 Terlik Geldi!) alıcının profil fotoğrafına türünün izini bırakır; aynı türü temizleyen hediye (ör. 💧 Temizlik Suyu, Cam Tamiri) onu kaldırır. Temizleyen hediye o türü bırakan her hediyeden pahalı olmalı. Profilde aynı anda tek iz olur: iz varken başka türden bir iz hediyesi düz hediye olarak gider (iz değişmez); aynı tür yeniden gelirse iz en son göndereninki olur, süresi kısalmaz. Kimlerin iz bırakabileceğini alıcı Gizlilik'ten seçer (varsayılan: takip ettikleri); görünen izi kendisi kaldıramaz. Profil izi olan hediye global olamaz. Profil izinden önceki APK'lar iz kurallı hediyeyi rafta göstermez.</p>
     <div class="form"><div class="grid2">
       <label class="field"><span>Profil izi</span><select value=${mark.role} disabled=${v.global && mark.role === 'none'} onChange=${(e) => setMark({ ...mark, role: e.target.value })}>
         <option value="none">Yok</option><option value="leave">Bırakır</option><option value="clean">Temizler</option>
-      </select>${v.global && mark.role === 'none' ? html`<small class="muted">Global hediye iz bırakamaz: önce Global'i kaldırın.</small>` : ''}${was(!sameMark(ruleNow.mark, o?.mark) && !ruleNow.error, markText(o?.mark) ?? 'iz yok')}</label>
-      ${mark.role !== 'none' && html`<label class="field"><span>İz türü *</span><input value=${mark.kind} maxlength="24" placeholder="ör. kaka" onInput=${(e) => setMark({ ...mark, kind: e.target.value })} /><small class="muted">Küçük harfle kısa bir kelime; bırakan ve temizleyen hediye aynı türü yazar.</small></label>`}
-      ${mark.role === 'leave' && html`<label class="field"><span>Süre (saat, isteğe bağlı)</span><input inputmode="numeric" value=${mark.hours} placeholder="Canlı ayardaki süre" onInput=${(e) => setMark({ ...mark, hours: e.target.value.replace(/[^\d]/g, '') })} /><small class="muted">1–168 saat; boş: Canlı ayarlar › Profil izleri'ndeki süre.</small></label>`}
-    </div></div>`}
+      </select>${v.global && mark.role === 'none' ? html`<small class="muted">Global hediye iz bırakamaz: önce Global'i kaldırın.</small>` : ''}${was(!sameMark(ruleNow.mark, o?.mark) && !ruleNow.error, markText(o?.mark, kinds) ?? 'iz yok')}</label>
+      ${mark.role !== 'none' &&
+      (kinds
+        ? html`<label class="field"><span>İz türü *</span><select value=${mark.kind} onChange=${(e) => setMark({ ...mark, kind: e.target.value })}>
+            <option value="">— Tür seçin —</option>${kindOptions(kinds, mark.kind).map((x) => html`<option value=${x.value}>${x.label}</option>`)}
+          </select><small class="muted">${mark.role === 'clean' ? 'Temizlediği tür (bir hediye bir tür temizler).' : 'Bıraktığı iz.'} Bırakan ve temizleyen hediye aynı türü seçer. Listede yoksa önce bu sayfanın İz türleri sekmesinden ekleyin.</small></label>`
+        : html`<label class="field"><span>İz türü *</span><input value=${mark.kind} maxlength="24" placeholder="ör. kaka" onInput=${(e) => setMark({ ...mark, kind: e.target.value })} /><small class="muted">${kindsMode === 'missing' ? 'Küçük harfle kısa bir kelime; bırakan ve temizleyen hediye aynı türü yazar.' : 'İz türleri listesi alınamadı: türün anahtarını yazın (ör. kaka, kirik-cam).'}</small></label>`)}
+      ${mark.role === 'leave' && html`<label class="field"><span>Süre (isteğe bağlı)</span><div class="row gap">
+        <input inputmode="numeric" style="flex:1" value=${mark.amount} placeholder=${kindNow?.minutes ? 'Türün süresi' : 'Canlı ayardaki süre'} aria-label="İzin süresi" onInput=${(e) => setMark({ ...mark, amount: e.target.value.replace(/[^\d]/g, '') })} />
+        ${kindsMode === 'missing' ? html`<span class="muted">saat</span>` : html`<select value=${mark.unit} aria-label="Süre birimi" onChange=${(e) => setMark({ ...mark, unit: e.target.value })}><option value="hours">saat</option><option value="minutes">dakika</option></select>`}
+      </div><small class="muted">${timeHint}</small></label>`}
+    </div></div>
+    ${ruleNow.mark && html`<p class="muted" style="margin-top:6px">Kaydedince: ${markText(ruleNow.mark, kinds)}</p>`}
+    ${warnings.map((w) => html`<p class="note warn">${w}</p>`)}`}
 
     <h3>İkon</h3>
     <p class="muted">Saydam (arka planı silinmiş) PNG ya da WebP, kare, ${L.iconMinPx}–${L.iconMaxPx} piksel (önerilen 512 × 512), en çok ${mb(L.iconBytes)} MB.${L.iconServePx ? ` Daha büyüğü telefonlar için kendiliğinden ${L.iconServePx} piksele ve ${mb(L.iconServeBytes)} MB'a küçültülür.` : ''}${app ? ' Seçmezseniz uygulamanın resmi kalır.' : ''}</p>
