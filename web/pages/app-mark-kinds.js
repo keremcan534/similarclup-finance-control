@@ -7,8 +7,9 @@
 // the same way first (web/mark-kinds.js) and shows the server's sentence when it refuses. A preview draws the overlay
 // over a sample photo (or one picked from this computer, never uploaded) at the app's real sizes, without a frame,
 // with a VIP ring and with a shop frame (Mağaza's FramePreview), on a light and a dark ground, as the app's own
-// Yönetim › Hediyeler › "İz türlerini önizle" does.
-import { Badge, Button, Loading, Modal, Table, act, dateTimeTr, html, num, post, showError, toast, useApi, useApp, useEffect, useState } from '../lib.js';
+// Yönetim › Hediyeler › "İz türlerini önizle" does. The kind editor also opens over a gift's form (its "+ Yeni iz türü" and
+// "Resim yükle"), which stays as typed and gets the saved kind.
+import { Badge, Button, Loading, Modal, Table, act, dateTimeTr, html, num, post, showError, toast, useApi, useApp, useEffect, useRef, useState } from '../lib.js';
 import { durationText } from '../gift-fields.js';
 import { FACES, GROUNDS, LIMITS, OTHER_KIND_TEXT, STACK_HELP, STACK_TEXT, VIP_RING, artInfo, artLine, artProblem, artRules, artStats, badgeBox, frameBox, keyFromName, kindBody, kindForm, kindSummary, kindTime, kindsMissing, layerOf, pctOf } from '../mark-kinds.js';
 import { upload } from './app-gifts.js';
@@ -134,9 +135,19 @@ async function checkArt(file, url, L) {
 
 const pct = (x) => `%${Math.round(x * 100)}`;
 
-/** A new kind (`kind` none) or one to change: name, key (new only), time, what the same kind again does, on/off, the overlay. */
-function KindEditor({ kind, all, limits: L, hours, gifts, storage, onClose, onSaved }) {
+/**
+ * A new kind (`kind` none) or one to change: name, key (new only), time, what the same kind again does, on/off, the
+ * overlay. `onSaved(text, saved)`: `saved` is the kind as the app answered it (its key at least). `intro`: a line at the
+ * top (opened over a gift's form: what happens to it); `startAt` 'art': the picture's field shown and focused first.
+ */
+export function KindEditor({ kind, all, limits: L, hours, gifts, storage, onClose, onSaved, intro, startAt }) {
   const [v, setV] = useState(() => kindForm(kind));
+  const artInput = useRef(null);
+  useEffect(() => {
+    if (startAt !== 'art' || !artInput.current) return;
+    artInput.current.scrollIntoView({ block: 'center' });
+    artInput.current.focus();
+  }, []);
   // A new kind's key follows its name until it is typed.
   const [keyTyped, setKeyTyped] = useState(false);
   // The overlay: { mode: 'keep' } (as it is), 'none' (taken off), 'file' ({ file, url, info, stats, problem, at }).
@@ -180,7 +191,8 @@ function KindEditor({ kind, all, limits: L, hours, gifts, storage, onClose, onSa
       if (kind && !out.changed && body.art === undefined) return onClose();
       setStep(body.art ? 'Resim denetleniyor…' : 'Kaydediliyor…');
       const r = await post(kind ? '/api/app/mark-kinds/update' : '/api/app/mark-kinds', body);
-      onSaved(kind ? `“${r?.kind?.name ?? kind.name}” kaydedildi` : `“${r?.kind?.name ?? body.name}” türü eklendi`);
+      const saved = r?.kind?.kind ? r.kind : { ...(kind ?? {}), ...body, art: body.art === undefined ? (kind?.art ?? null) : body.art ? { url: body.art } : null };
+      onSaved(kind ? `“${r?.kind?.name ?? kind.name}” kaydedildi` : `“${r?.kind?.name ?? body.name}” türü eklendi`, saved);
     } catch (e) {
       fail(e.message);
     } finally {
@@ -192,6 +204,7 @@ function KindEditor({ kind, all, limits: L, hours, gifts, storage, onClose, onSa
   const shown = art.mode === 'file' ? { ...(kind ?? { kind: v.kind }), art: { url: art.url, checked: true } } : art.mode === 'none' ? { ...kind, art: null } : (kind ?? { kind: v.kind });
   const timeHint = `1–168 saat ya da ${L.minutes?.min ?? 5}–${num(L.minutes?.max ?? 10_080)} dakika. Boş: Canlı ayardaki süre${hours > 0 ? ` (şu an ${durationText(hours * 60)})` : ''}. Hediyenin kendi süresi varsa o geçer.`;
   return html`<${Modal} title=${kind ? `İz türü: ${kind.name}` : 'Yeni iz türü'} wide onClose=${onClose}>
+    ${intro && html`<p class="note">${intro}</p>`}
     <div class="form"><div class="grid2">
       <label class="field"><span>Ad *</span><input value=${v.name} maxlength=${L.nameMax} placeholder="Ör. Çamur" onInput=${(e) => setV({ ...v, name: e.target.value, ...(!kind && !keyTyped ? { kind: keyFromName(e.target.value) } : {}) })} /><small class="muted">Uygulamada görünen ad, 1–${L.nameMax} harf (ör. Kırık Cam).</small></label>
       <label class="field"><span>Anahtar *</span><input value=${v.kind} maxlength="24" disabled=${!!kind} placeholder="ör. camur" onInput=${(e) => (setKeyTyped(true), setV({ ...v, kind: e.target.value.toLowerCase() }))} /><small class="muted">${kind ? 'Anahtar sonradan değişmez.' : 'Küçük harf, rakam ve tire (ör. kirik-cam); Türkçe harf, boşluk ve alt çizgi olmaz. Sonradan değişmez.'}</small></label>
@@ -206,7 +219,7 @@ function KindEditor({ kind, all, limits: L, hours, gifts, storage, onClose, onSa
     <h3>İz resmi</h3>
     <p class="muted">${artRules(L)} Resmi uygulamanın sunucusu kaydederken piksel piksel denetler; uymayanı nedeniyle reddeder. Boşsa ${layerOf({ kind: v.kind }).compiled ? 'uygulamanın kendi resmi' : 'hediyenin küçük resmi (rozet)'} çizilir.</p>
     <div class="row gap wrap">
-      <input type="file" accept="image/png,image/webp" aria-label="İz resmi dosyası" disabled=${!storage} onChange=${pick} />
+      <input ref=${artInput} type="file" accept="image/png,image/webp" aria-label="İz resmi dosyası" disabled=${!storage} onChange=${pick} />
       ${!storage && html`<span class="bad">Uygulamanın dosya deposu açık değil: resim yüklenemez.</span>`}
       ${art.mode === 'keep' && kind?.art && html`<span class="muted">Şimdiki resim: ${artLine(kind.art) || 'yüklü'}${kind.art.checked === false ? ' · denetlenmedi (telefonlara gitmez)' : ''}</span> <${Button} kind="ghost" onClick=${() => setArt({ mode: 'none' })}>Resmi kaldır</${Button}>`}
       ${art.mode === 'none' && html`<span class="muted">Kaydedince resim kalkar: ${layerOf({ kind: kind?.kind }).compiled ? 'uygulamanın kendi resmi' : 'hediyenin rozeti'} çizilir.</span> <${Button} kind="ghost" onClick=${() => setArt({ mode: 'keep' })}>Vazgeç</${Button}>`}

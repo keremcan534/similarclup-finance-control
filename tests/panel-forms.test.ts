@@ -1,9 +1,9 @@
 // The Uygulama pages' form rules, apart from the pages (no browser): Şanslı hediye ayarı's odds editor and new package
 // (web/lucky-odds.js), Hediyeler's Global hediye box and Profil izi fields (web/gift-fields.js) and its İz türleri
-// (web/mark-kinds.js: a kind's form, its overlay checked in the browser, the list's warnings). What they check is what
-// the app's server checks (its lucky-rules.mjs, global-gifts.mjs, profile-mark-rules.mjs, mark-kinds.mjs), so a save
-// the page lets through isn't refused there for a reason the page could have said, and the body sent is what the app
-// reads.
+// (web/mark-kinds.js: a kind's form, its overlay checked in the browser, the list's warnings, the gift form's kind
+// without a picture and the kinds saved from it). What they check is what the app's server checks (its lucky-rules.mjs,
+// global-gifts.mjs, profile-mark-rules.mjs, mark-kinds.mjs), so a save the page lets through isn't refused there for a
+// reason the page could have said, and the body sent is what the app reads.
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 
@@ -308,6 +308,42 @@ test('İz türleri listesi: süre, hediyeleri, uyarılar, silinebilirlik; telefo
   assert.deepEqual(kinds.badgeBox(96), { size: 31, left: 60 - (31 / 96) * 50, top: 63 - (31 / 96) * 50 });
   assert.equal(kinds.badgeBox(30).size, 14);
   assert.equal(kinds.frameBox(96, 0.36), 133);
+});
+
+test('hediye formunda iz türü: resmi yoksa ne görünür (Resim yükle notu); formdan kaydedilen tür liste okunana kadar seçimde', () => {
+  // The line under the kind when phones draw no uploaded picture: what shows instead (the app's own, else the badge).
+  assert.equal(kinds.artNote({ kind: 'kartopu', name: 'kartopu', art: null }), 'Bu türe şeffaf iz resmi yüklenmemiş: profilde hediyenin küçük rozeti görünür.');
+  assert.equal(kinds.artNote({ kind: 'kaka', name: 'Kaka İzi', art: null }), 'Bu türe şeffaf iz resmi yüklenmemiş: profilde uygulamanın kendi resmi görünür.');
+  assert.equal(kinds.artNote({ kind: 'camur', art: { url: 'x.png', checked: false } }), 'Bu türün resmi denetlenmedi: telefonlara gitmez, profilde hediyenin küçük rozeti görünür.');
+  assert.equal(kinds.artNote({ kind: 'kirik-cam', art: { url: 'x.png', checked: false } }), 'Bu türün resmi denetlenmedi: telefonlara gitmez, profilde uygulamanın kendi resmi görünür.');
+  // A checked picture (or one from an app server that doesn't say): nothing to say; no kind chosen: nothing either.
+  assert.equal(kinds.artNote({ kind: 'kirik-cam', art: { url: 'x.png', checked: true } }), null);
+  assert.equal(kinds.artNote({ kind: 'camur', art: { url: 'x.png' } }), null);
+  assert.equal(kinds.artNote(undefined), null);
+  assert.equal(kinds.artNote({ kind: '' }), null);
+
+  const list = [
+    { kind: 'kaka', name: 'Kaka İzi', art: null, updatedAt: '2026-11-20T09:00:00.000Z' },
+    { kind: 'kartopu', name: 'kartopu', art: null, updatedAt: null },
+  ];
+  // A kind added from the gift form ("+ Yeni iz türü"): in the select at once, the list's order kept, it last.
+  const kopuk = { kind: 'kopuk-banyosu', name: 'Köpük Banyosu', art: { url: 'k.png', checked: true }, updatedAt: '2026-11-20T15:00:00.000Z' };
+  assert.deepEqual(kinds.withKinds(list, [kopuk]).map((k: { kind: string }) => k.kind), ['kaka', 'kartopu', 'kopuk-banyosu']);
+  assert.deepEqual(kinds.pendingKinds(list, [kopuk]), [kopuk]);
+  // Its picture uploaded from there ("Resim yükle"): the answer replaces the older row until the list is read again.
+  const kaka = { ...list[0], art: { url: 'kaka.png', checked: true }, updatedAt: '2026-11-20T15:05:00.000Z' };
+  assert.equal(kinds.withKinds(list, [kaka])[0].art.url, 'kaka.png');
+  assert.equal(kinds.artNote(kinds.withKinds(list, [kaka])[0]), null);
+  // The list read again has both: nothing is pending, the list is what shows (a later change there wins too).
+  const fresh = [{ ...kaka }, list[1], { ...kopuk, name: 'Köpük', updatedAt: '2026-11-20T15:10:00.000Z' }];
+  assert.deepEqual(kinds.pendingKinds(fresh, [kopuk, kaka]), []);
+  assert.deepEqual(kinds.withKinds(fresh, [kopuk, kaka]), fresh);
+  // A saved row with no time (an older answer) doesn't replace the list's.
+  assert.equal(kinds.withKinds(list, [{ kind: 'kartopu', name: 'eski', updatedAt: null }])[1].name, 'kartopu');
+  // No list (not read, or an app server before kinds): only what was saved; junk is left out.
+  assert.deepEqual(kinds.withKinds(null, [kopuk, null, { name: 'anahtarsız' }]), [kopuk]);
+  assert.deepEqual(kinds.withKinds(list), list);
+  assert.notEqual(kinds.withKinds(list), list);
 });
 
 /** A PNG's first bytes: signature, IHDR (colour `type`), the chunks named, IDAT. */

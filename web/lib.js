@@ -258,13 +258,29 @@ export function Table({ columns, rows, onRow, empty = 'Kayıt yok', dense, rowPr
   </table></div>`;
 }
 
-export function Modal({ title, onClose, children, wide }) {
+/** The modals open now, oldest first: Escape closes only the newest one shown (a kind's editor over a gift's, alone). */
+const MODALS = [];
+
+/**
+ * `hidden`: kept open (what is typed in it stays) but not shown, and Escape leaves it alone, e.g. a gift's form while
+ * Hediyeler shows its İz türleri tab.
+ */
+export function Modal({ title, onClose, children, wide, hidden = false }) {
+  const me = useRef(null);
+  if (!me.current) me.current = {};
+  me.current.close = onClose;
+  me.current.hidden = hidden;
   useEffect(() => {
-    const k = (e) => e.key === 'Escape' && onClose();
+    const m = me.current;
+    MODALS.push(m);
+    const k = (e) => e.key === 'Escape' && MODALS.filter((x) => !x.hidden).at(-1) === m && m.close();
     window.addEventListener('keydown', k);
-    return () => window.removeEventListener('keydown', k);
+    return () => {
+      window.removeEventListener('keydown', k);
+      MODALS.splice(MODALS.indexOf(m), 1);
+    };
   }, []);
-  return html`<div class="modal-bg" onClick=${(e) => e.target === e.currentTarget && onClose()}>
+  return html`<div class="modal-bg" style=${hidden ? 'display:none' : ''} onClick=${(e) => e.target === e.currentTarget && onClose()}>
     <div class=${`modal ${wide ? 'wide' : ''}`} role="dialog" aria-modal="true" aria-label=${title}>
       <header class="card-h"><h2>${title}</h2><button class="btn ghost" onClick=${onClose} aria-label="Kapat">✕</button></header>
       <div class="modal-body">${children}</div>

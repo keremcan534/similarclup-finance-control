@@ -145,6 +145,42 @@ export function layerOf(k) {
   return { art: null, compiled: null, badge: true, text: 'Resim yok: hediyenin rozeti' };
 }
 
+/**
+ * The one line under a gift form's kind when phones draw no uploaded picture for it (null: they draw one): none was
+ * uploaded, or the server couldn't check the one uploaded. Says what shows instead (layerOf); the form puts "Resim
+ * yükle" after it.
+ */
+export function artNote(k) {
+  if (!k?.kind || layerOf(k).art) return null;
+  const drawn = layerOf({ kind: k.kind }).compiled ? 'uygulamanın kendi resmi' : 'hediyenin küçük rozeti';
+  if (k.art?.url) return `Bu türün resmi denetlenmedi: telefonlara gitmez, profilde ${drawn} görünür.`;
+  return `Bu türe şeffaf iz resmi yüklenmemiş: profilde ${drawn} görünür.`;
+}
+
+/**
+ * The kinds saved from a gift form (`saved`, each as the app answered the save) that the list read (`list`) doesn't
+ * have yet: missing from it, or changed there earlier than the save (`updatedAt`). The form drops the others, so a
+ * kind deleted later on İz türleri goes from its select too.
+ */
+export function pendingKinds(list, saved = []) {
+  const have = new Map((Array.isArray(list) ? list : []).map((k) => [k.kind, k]));
+  return (saved ?? []).filter((s) => s?.kind && (!have.has(s.kind) || Date.parse(s.updatedAt ?? '') > (Date.parse(have.get(s.kind).updatedAt ?? '') || 0)));
+}
+
+/**
+ * The kinds a gift form chooses from: the list read, with the kinds saved from the form that it doesn't have yet
+ * (pendingKinds): a new kind is in the select, and passes the form's own check, before the list is read again.
+ */
+export function withKinds(list, saved = []) {
+  const out = Array.isArray(list) ? [...list] : [];
+  for (const s of pendingKinds(list, saved)) {
+    const i = out.findIndex((k) => k.kind === s.kind);
+    if (i < 0) out.push(s);
+    else out[i] = s;
+  }
+  return out;
+}
+
 // ---- The overlay picture ------------------------------------------------------------------------------------------
 const ascii = (b, from, to) => String.fromCharCode(...b.subarray(from, to));
 const u32be = (b, p) => b[p] * 0x1000000 + ((b[p + 1] << 16) | (b[p + 2] << 8) | b[p + 3]);
