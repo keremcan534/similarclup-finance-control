@@ -136,10 +136,11 @@ export function AppUsers() {
 
 // ---- Profil izleri --------------------------------------------------------------------------------------
 /**
- * How a mark came off (the app's profile_marks.cleared_how): 'replaced' another mark took its place (one at a time, Muzip
- * hediyeler); 'self' only on old rows (nobody takes their own mark off since then).
+ * How a mark came off (the app's profile_marks.cleared_how): 'replaced' a newer mark of the same kind took its place
+ * (the kind's "Aynı iz yeniden gelince" set to replace; another kind never takes a mark's place: its gift goes as a
+ * plain gift); 'self' only on old rows (nobody takes their own mark off since then).
  */
-const CLEARED = { gift: 'temizleyen hediyeyle', admin: 'yönetim kaldırdı', replaced: 'başka bir iz yerine geçti', self: 'kişi kapattı (eski)', block: 'engelle kalktı' };
+const CLEARED = { gift: 'temizleyen hediyeyle', admin: 'yönetim kaldırdı', replaced: 'aynı türden yeni iz yerine geçti', self: 'kişi kapattı (eski)', block: 'engelle kalktı' };
 const markState = (m) =>
   m.showing
     ? html`<${Badge} s="pending" label="Görünüyor" />`

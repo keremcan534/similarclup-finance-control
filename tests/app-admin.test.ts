@@ -728,7 +728,7 @@ test('İz türleri: Hediyeler yetkisiyle; dört uç uygulamaya aynen gider ve de
   assert.equal((await fetch(`${base}/api/app/media/f/markart/u1/cam.png`, { headers: ops })).status, 200);
   // The app's refusals in its words: the pixel check, a kind in use, one that isn't there, the checker down.
   for (const [status, path, body, error] of [
-    [400, '/api/app/mark-kinds', { kind: 'camur', name: 'Çamur', art: 'x' }, "İz resmi yüzü kapatıyor: ortadaki dairenin en çok %20'i dolu olabilir, bunda %64. Çizimi kenarlara alın, ortayı boş bırakın"],
+    [400, '/api/app/mark-kinds', { kind: 'camur', name: 'Çamur', art: 'x' }, "İz resmi yüzü kapatıyor: ortadaki dairenin en çok %20'si dolu olabilir, bunda %64. Çizimi kenarlara alın, ortayı boş bırakın"],
     [409, '/api/app/mark-kinds', { kind: 'kaka', name: 'Kaka' }, '"kaka" türü zaten var (Kaka İzi); onu düzenleyin'],
     [409, '/api/app/mark-kinds/delete', { kind: 'kirik-cam' }, 'Bu türü kullanan hediyeler var: Terlik Geldi!, Cam Tamiri. Önce onların profil izi kuralını değiştirin ya da kaldırın.'],
     [404, '/api/app/mark-kinds/update', { kind: 'yok', name: 'Yok' }, 'İz türü bulunamadı'],

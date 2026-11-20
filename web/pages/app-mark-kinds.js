@@ -10,7 +10,7 @@
 // Yönetim › Hediyeler › "İz türlerini önizle" does.
 import { Badge, Button, Loading, Modal, Table, act, dateTimeTr, html, num, post, showError, toast, useApi, useApp, useEffect, useState } from '../lib.js';
 import { durationText } from '../gift-fields.js';
-import { FACES, GROUNDS, LIMITS, STACK_HELP, STACK_TEXT, VIP_RING, artInfo, artLine, artProblem, artRules, artStats, badgeBox, frameBox, keyFromName, kindBody, kindForm, kindSummary, kindTime, kindsMissing, layerOf } from '../mark-kinds.js';
+import { FACES, GROUNDS, LIMITS, OTHER_KIND_TEXT, STACK_HELP, STACK_TEXT, VIP_RING, artInfo, artLine, artProblem, artRules, artStats, badgeBox, frameBox, keyFromName, kindBody, kindForm, kindSummary, kindTime, kindsMissing, layerOf, pctOf } from '../mark-kinds.js';
 import { upload } from './app-gifts.js';
 import { FramePreview } from './app-shop.js';
 
@@ -53,7 +53,7 @@ export function MarkKinds({ state, gifts, storage, adding, onAdded }) {
   };
   return html`<${Loading} state=${state}>${(d) => html`
     ${!d.on && html`<p class="note warn">Profil izleri şu an kapalı (Canlı ayarlar › Profil izleri › süre 0): hiçbir hediye iz bırakmıyor, hiçbir iz görünmüyor.</p>`}
-    <p class="muted">Bir tür, iz bırakan hediyeyle onu temizleyen hediyelerin paylaştığı anahtardır. Yeni bir şaka çifti için: önce burada türü ekleyin (resmiyle), sonra Hediyeler'de iz bırakan ve ondan pahalı temizleyen hediyeyi bu türle kurun. Kendi süresi olmayan türün izi Canlı ayardaki süre kadar kalır${d.hours > 0 ? ` (şu an ${durationText(d.hours * 60)})` : ''}. Profilde aynı anda tek iz olur: başka bir tür gelirse eskisinin yerine geçer.</p>
+    <p class="muted">Bir tür, iz bırakan hediyeyle onu temizleyen hediyelerin paylaştığı anahtardır. Yeni bir şaka çifti için: önce burada türü ekleyin (resmiyle), sonra Hediyeler'de iz bırakan ve ondan pahalı temizleyen hediyeyi bu türle kurun. Kendi süresi olmayan türün izi Canlı ayardaki süre kadar kalır${d.hours > 0 ? ` (şu an ${durationText(d.hours * 60)})` : ''}. Profilde aynı anda tek iz olur. ${OTHER_KIND_TEXT}</p>
     <p class="muted">Yüklenen resmi yalnız yeni APK (1.1.0) çizer. Ondan önceki APK Kaka İzi'ni kendi resmiyle, öteki türleri hediyenin rozetiyle gösterir; Profil izinden önceki APK'lar iz kurallı hediyeleri hiç göstermez. Telefonda bakmak için: Yönetim › Hediyeler › İz türlerini önizle.</p>
     <${Table}
       empty="Henüz iz türü yok."
@@ -199,7 +199,7 @@ function KindEditor({ kind, all, limits: L, hours, gifts, storage, onClose, onSa
         <input inputmode="numeric" style="flex:1" value=${v.amount} placeholder="Canlı ayardaki süre" aria-label="Süre" onInput=${(e) => setV({ ...v, amount: e.target.value.replace(/[^\d]/g, '') })} />
         <select value=${v.unit} aria-label="Süre birimi" onChange=${set('unit')}><option value="hours">saat</option><option value="minutes">dakika</option></select>
       </div><small class="muted">${timeHint}</small></label>
-      <label class="field"><span>Aynı iz yeniden gelince</span><select value=${v.stack} onChange=${set('stack')}>${Object.entries(STACK_TEXT).map(([k, l]) => html`<option value=${k}>${l}</option>`)}</select><small class="muted">${STACK_HELP[v.stack]} Başka bir tür gelirse her zaman eskisinin yerine geçer.</small></label>
+      <label class="field"><span>Aynı iz yeniden gelince</span><select value=${v.stack} onChange=${set('stack')}>${Object.entries(STACK_TEXT).map(([k, l]) => html`<option value=${k}>${l}</option>`)}</select><small class="muted">${STACK_HELP[v.stack]} ${OTHER_KIND_TEXT}</small></label>
       <label class="field inline wide"><span><b>Açık</b>: kapalı türün hediyeleri düz hediye gibi gider (iz bırakmaz, temizlemez), görünen izleri görünmez; açınca süresi dolmamış izler geri gelir. Bir türü hemen durdurmanın yolu bu.</span><input type="checkbox" checked=${v.enabled} onChange=${set('enabled')} /></label>
     </div></div>
 
@@ -215,7 +215,7 @@ function KindEditor({ kind, all, limits: L, hours, gifts, storage, onClose, onSa
     ${art.mode === 'file' && art.checking && html`<p class="muted">Resim denetleniyor…</p>`}
     ${art.mode === 'file' && !art.checking && (art.problem
       ? html`<p class="note bad">${art.problem}</p>`
-      : html`<p class="note">Bu tarayıcıdaki denetimden geçti${art.stats ? ` (${pct(art.stats.clear)} saydam, yüz dairesinin ${pct(art.stats.face)}'i dolu)` : ''}. Son sözü kaydederken uygulamanın sunucusu söyler.${art.info?.width > L.servePx ? ` Telefonlar için ${L.servePx} piksele küçültülür.` : ''}</p>`)}
+      : html`<p class="note">Bu tarayıcıdaki denetimden geçti${art.stats ? ` (${pct(art.stats.clear)} saydam, yüz dairesinin ${pctOf(art.stats.face)} dolu)` : ''}. Son sözü kaydederken uygulamanın sunucusu söyler.${art.info?.width > L.servePx ? ` Telefonlar için ${L.servePx} piksele küçültülür.` : ''}</p>`)}
 
     <h3>Önizleme</h3>
     <${MarkPreview} layer=${layerOf(shown)} badge=${badgeOf(kind, gifts)} />

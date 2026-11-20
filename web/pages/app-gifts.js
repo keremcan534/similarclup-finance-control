@@ -566,7 +566,7 @@ function Editor({ gift, admin, kinds: kindsAnswer, kindsMode = 'unknown', onClos
     </div></div>
 
     ${marksOn && !plainOnly(gift?.id) && html`<h3>Profil izi</h3>
-    <p class="muted">İz bırakan hediye (ör. 💩 Kaka Şakası, 🩴 Terlik Geldi!) alıcının profil fotoğrafına türünün izini bırakır; aynı türü temizleyen hediye (ör. 💧 Temizlik Suyu, Cam Tamiri) onu kaldırır. Temizleyen hediye o türü bırakan her hediyeden pahalı olmalı. Profilde aynı anda tek iz olur: başka bir tür gelirse eskisinin yerine geçer. Kimlerin iz bırakabileceğini alıcı Gizlilik'ten seçer (varsayılan: takip ettikleri); görünen izi kendisi kaldıramaz. Profil izi olan hediye global olamaz. Profil izinden önceki APK'lar iz kurallı hediyeyi rafta göstermez.</p>
+    <p class="muted">İz bırakan hediye (ör. 💩 Kaka Şakası, 🩴 Terlik Geldi!) alıcının profil fotoğrafına türünün izini bırakır; aynı türü temizleyen hediye (ör. 💧 Temizlik Suyu, Cam Tamiri) onu kaldırır. Temizleyen hediye o türü bırakan her hediyeden pahalı olmalı. Profilde aynı anda tek iz olur: iz varken başka türden bir iz hediyesi düz hediye olarak gider (iz değişmez); aynı tür yeniden gelirse iz en son göndereninki olur, süresi kısalmaz. Kimlerin iz bırakabileceğini alıcı Gizlilik'ten seçer (varsayılan: takip ettikleri); görünen izi kendisi kaldıramaz. Profil izi olan hediye global olamaz. Profil izinden önceki APK'lar iz kurallı hediyeyi rafta göstermez.</p>
     <div class="form"><div class="grid2">
       <label class="field"><span>Profil izi</span><select value=${mark.role} disabled=${v.global && mark.role === 'none'} onChange=${(e) => setMark({ ...mark, role: e.target.value })}>
         <option value="none">Yok</option><option value="leave">Bırakır</option><option value="clean">Temizler</option>

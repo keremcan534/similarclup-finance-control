@@ -10,13 +10,19 @@
 import { KIND, MINUTES, amountForm, amountMinutes, durationText } from './gift-fields.js';
 
 export { durationText };
-/** What the same kind again does to a showing mark (the app's STACKS). */
+/**
+ * How the record keeps the same kind again (the app's STACKS). Either way the profile shows one mark, the newest
+ * sender's, and it never ends sooner than the one showing did (the later of its end and the new gift's time: the
+ * owners' decision, 20 Nov 2026); only the earlier row's line in the history differs.
+ */
 export const STACKS = ['refresh', 'replace'];
-export const STACK_TEXT = { refresh: 'Süre yeniden başlar', replace: 'Eskisi kalkar, yenisi konur' };
+export const STACK_TEXT = { refresh: 'Süre yenilenir (eski kayıt: süresi bitti)', replace: 'Süre yenilenir (eski kayıt: yerine geçti)' };
 export const STACK_HELP = {
-  refresh: 'Aynı iz yeniden gelirse profildeki iz kalır, süresi baştan başlar (kayıtta tek iz).',
-  replace: 'Aynı iz yeniden gelirse eskisi "yerine geçti" diye kapanır, yenisi baştan konur (kayıtta iki iz).',
+  refresh: 'Aynı iz yeniden gelirse profilde tek iz kalır, en son göndereninki olur; süresi kısalmaz: kalan süreyle yeni hediyenin süresinden uzun olanı geçer. Geçmişte önceki kayıt "süresi bitti" görünür.',
+  replace: 'Profilde aynısı olur (tek iz, en son göndereninki, süresi kısalmaz); yalnız geçmişte önceki kayıt "aynı türden yeni iz yerine geçti" diye kapanır.',
 };
+/** What a mark gift of another kind does while a mark shows (the app's rule, the owners' decision, 20 Nov 2026). */
+export const OTHER_KIND_TEXT = 'Profilde iz varken başka türden bir iz hediyesi gelirse iz değişmez: hediye düz hediye olarak gider (jetonu düşer, alıcı elmasını alır, iz bırakmaz); gönderen bunu uygulamada okur.';
 /** The kinds the app draws with a picture of its own when none is uploaded (lib/profile-marks COMPILED_MARKS). */
 export const COMPILED = Object.freeze({ kaka: 'Kaka İzi', 'kirik-cam': 'Kırık Cam' });
 /** The upload's rules when the app's server gives none (its mark-kinds.mjs limits, profile-mark-rules.mjs MARK_ART). */
@@ -36,6 +42,19 @@ export const LIMITS = Object.freeze({
 });
 const fmt = (n) => Number(n).toLocaleString('tr-TR');
 const pct = (x) => `%${Math.round(x * 100)}`;
+// The third-person possessive ending after a whole number as it is read aloud ("%30'u", "%20'si", "%40'ı", "%14'ü"):
+// the last spoken word decides. The same as the app's profile-mark-rules.mjs possessiveEnd.
+const UNIT_END = ['', 'i', 'si', 'ü', 'ü', 'i', 'sı', 'si', 'i', 'u'];
+const TEN_END = ['', 'u', 'si', 'u', 'ı', 'si', 'ı', 'i', 'i', 'ı'];
+export function possessiveEnd(n) {
+  const v = Math.abs(Math.round(n));
+  if (v === 0) return 'ı';
+  if (v % 10) return UNIT_END[v % 10];
+  if (v % 100) return TEN_END[(v / 10) % 10];
+  return v % 1000 ? 'ü' : 'i';
+}
+/** A share as a percentage with its possessive ending: "%30'u", "%20'si". */
+export const pctOf = (x) => `${pct(x)}'${possessiveEnd(Math.round(x * 100))}`;
 const mbText = (n) => (n / 1024 / 1024).toLocaleString('tr-TR', { maximumFractionDigits: 1 });
 
 /**
@@ -204,10 +223,10 @@ export function artProblem({ bytes, info, stats }, L = LIMITS) {
   if (!info.alpha) return 'İz resminde saydamlık yok: arka planı tam saydam (alfa 0) bir PNG ya da WebP yükleyin';
   if (!stats) return null;
   if (stats.clear < L.clearMin) {
-    return `İz resminin en az ${pct(L.clearMin)}'i tam saydam (alfa 0) olmalı, bunda ${pct(stats.clear)}: fotoğraf görünmez kalır. Arka planı silinmiş, kenarlarda çizim olan bir resim yükleyin`;
+    return `İz resminin en az ${pctOf(L.clearMin)} tam saydam (alfa 0) olmalı, bunda ${pct(stats.clear)}: fotoğraf görünmez kalır. Arka planı silinmiş, kenarlarda çizim olan bir resim yükleyin`;
   }
   if (stats.face > L.faceMax) {
-    return `İz resmi yüzü kapatıyor: ortadaki dairenin en çok ${pct(L.faceMax)}'i dolu olabilir, bunda ${pct(stats.face)}. Çizimi kenarlara alın, ortayı boş bırakın`;
+    return `İz resmi yüzü kapatıyor: ortadaki dairenin en çok ${pctOf(L.faceMax)} dolu olabilir, bunda ${pct(stats.face)}. Çizimi kenarlara alın, ortayı boş bırakın`;
   }
   return null;
 }
