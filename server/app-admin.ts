@@ -89,9 +89,13 @@ export const APP_ROUTES: [string, string, Permission | Permission[]][] = [
   ['POST', '/api/admin/purchases/refund', 'app.refunds'],
   ['POST', '/api/admin/purchases/voided-sync', 'app.refunds'],
   ['GET', '/api/admin/wallet/audit', 'app.refunds'],
-  // Şanslı hediyeler
+  // Şanslı hediyeler: the packages (a new one too: up to 20, each with its odds), the daily limit, the announcement;
+  // each package's own icon and video (the app's lucky-art.mjs; uploads and a link as a gift's: gifticon, giftvideo,
+  // giftsource, POST /api/app/lucky/fetch below).
   ['GET', '/api/admin/lucky', 'app.lucky'],
   ['POST', '/api/admin/lucky/config', 'app.lucky'],
+  ['POST', '/api/admin/lucky/art', 'app.lucky'],
+  ['POST', '/api/admin/lucky/art/remove', 'app.lucky'],
   // Canlı ayarlar
   ['GET', '/api/admin/live-settings', 'app.settings'],
   ['POST', '/api/admin/live-settings', 'app.settings'],
@@ -108,6 +112,10 @@ export const APP_ROUTES: [string, string, Permission | Permission[]][] = [
   ['GET', '/api/admin/lookup', ['app.users', 'app.refunds', 'app.notices', 'app.agencies', 'app.agency_ledger', 'app.agency_staff', 'app.sanctions', 'app.sanctions_full', 'app.economy', 'app.jeton']],
   ['POST', '/api/admin/users/delete', 'app.users'],
   ['POST', '/api/admin/users/room-level', 'app.users'],
+  // Profil izleri (the app's profile-marks.mjs): a person's marks (who left each, until when, how it came off), and
+  // taking the ones showing off (all or one kind) with a reason. Kullanıcılar, and a reported person in Şikâyetler.
+  ['GET', '/api/admin/marks', 'app.users'],
+  ['POST', '/api/admin/marks/clear', 'app.users'],
   ['POST', '/api/admin/ban', 'app.users'],
   ['POST', '/api/admin/referrals/revoke', 'app.users'],
   // Şikâyetler and a reported room's pictures
@@ -207,18 +215,21 @@ const COMPUTE_ONLY = new Set(['/api/admin/agency/simulate', '/api/admin/levels/p
 export const localPath = (appPath: string) => `/api/app${appPath.slice('/api/admin'.length)}`;
 /** Upload kinds and the permission each needs (the app's media.mjs kinds). */
 const UPLOADS: Record<string, Permission[]> = {
-  gifticon: ['app.gifts'],
-  // A gift's video, a shop entry effect's, a frame's SVGA and a room rocket level's (the app's converter makes them all).
-  giftvideo: ['app.gifts', 'app.shop', 'app.rocket'],
-  giftsource: ['app.gifts', 'app.shop', 'app.rocket'],
+  // A gift's icon, and a Şanslı package's (the app checks it as a gift's).
+  gifticon: ['app.gifts', 'app.lucky'],
+  // A gift's video, a shop entry effect's, a frame's SVGA, a room rocket level's and a Şanslı package's (the app's
+  // converter makes them all).
+  giftvideo: ['app.gifts', 'app.shop', 'app.rocket', 'app.lucky'],
+  giftsource: ['app.gifts', 'app.shop', 'app.rocket', 'app.lucky'],
   stickerart: ['app.emojis'],
   shopframe: ['app.shop'],
   notice: ['app.notices'],
 };
 /** The permissions that may open the app's stored files through here (every page that shows them). */
 // The app serves these files to anyone with the address (media.mjs GET /api/media/f/…); the panel still asks for a
-// page that shows them: gift art, a reported post's or room's picture, a ticket's photo, a notice's or event's picture.
-const FILE_PERMS: Permission[] = ['app.gifts', 'app.emojis', 'app.shop', 'app.complaints', 'app.support', 'app.notices', 'app.events'];
+// page that shows them: gift art, a Şanslı package's icon and video, a reported post's or room's picture, a ticket's
+// photo, a notice's or event's picture.
+const FILE_PERMS: Permission[] = ['app.gifts', 'app.lucky', 'app.emojis', 'app.shop', 'app.complaints', 'app.support', 'app.notices', 'app.events'];
 
 const off = () => new HttpError(503, 'Uygulama bağlantısı ayarlı değil: sunucuda FC_APP_API_URL ve FC_APP_API_KEY gerekli', 'app_off');
 
@@ -279,6 +290,14 @@ export function appRoutes(r: Router<Ctx>, link: AppLink) {
     // The app's server gives a video's link up to 10 minutes (a source up to 500 MB from the client's site).
     const out = await appCall(ctx, link, 'POST', '/api/admin/gifts/fetch', req.body, { raw: true, timeoutMs: 630_000 });
     audit(ctx, 'app.gifts.fetch', 'app', null, null, { method: 'POST', path: '/api/admin/gifts/fetch', body: req.body });
+    return { ...out, preview: localFiles(out.url) };
+  });
+  // A Şanslı package's icon or video from a link (Şanslı hediye ayarı): the app's server fetches it as a gift's (the
+  // same checks and time); the address to save, and its preview through this server.
+  r.add('POST', '/api/app/lucky/fetch', async (req, ctx) => {
+    need(ctx, 'app.lucky');
+    const out = await appCall(ctx, link, 'POST', '/api/admin/lucky/fetch', req.body, { raw: true, timeoutMs: 630_000 });
+    audit(ctx, 'app.lucky.fetch', 'app', null, null, { method: 'POST', path: '/api/admin/lucky/fetch', body: req.body });
     return { ...out, preview: localFiles(out.url) };
   });
   // A frame's SVGA (Mağaza): the app's server turns it into the still picture and the moving WebP while this waits.

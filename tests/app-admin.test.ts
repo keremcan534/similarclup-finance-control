@@ -72,6 +72,24 @@ const fakeApp = createServer(async (req, res) => {
     return json(200, { url: `${appBase}/api/media/f/stickerart/u1/linked.png`, link: b.url, kind: 'image', type: 'image/png', bytes: 2000 });
   }
   if (req.method === 'POST' && url.pathname.startsWith('/api/admin/gifts')) return json(200, { gift: { id: 'a2', ...JSON.parse(body.toString('utf8') || '{}') } });
+  // Şanslı hediye ayarı: the packages and each one's icon and video (the app's lucky-art.mjs), and a file from a link.
+  if (req.method === 'GET' && url.pathname === '/api/admin/lucky') {
+    return json(200, {
+      config: { gifts: [{ id: 'lk1', name: 'Şans Yoncası', emoji: '🍀', price: 20, enabled: true, tiers: [{ mult: 0, weight: 100_000 }], since: 1 }], dailyPayoutLimit: 20_000_000, announceFrom: 50 },
+      version: 3,
+      art: [{ id: 'lk1', icon: `${appBase}/api/media/f/gifticon/u1/yonca.png`, iconLink: null, video: { url: '/api/fx/l/lk1.mp4?v=0123456789ab', bytes: 10, ms: 4000 }, videoLink: null, job: { status: 'failed', error: 'Saydam değil', preview: `${appBase}/api/media/f/giftsource/u1/onizleme.mp4` }, original: { icon: '/api/fx/art/gifts/lk1.webp' }, updatedAt: null }],
+      artLimits: { iconBytes: 2_000_000, iconMinPx: 128, iconMaxPx: 4096, videoBytes: 10_000_000, sourceBytes: 500_000_000, svgaBytes: 100_000_000, videoMinMs: 1000, videoMaxMs: 15000, fills: [0.45, 0.6, 0.8, 1] },
+      convert: true,
+      svga: true,
+      storage: true,
+      // As the other reads' echo (para sayfaları checks where each went).
+      path: url.pathname + url.search,
+    });
+  }
+  if (req.method === 'POST' && url.pathname === '/api/admin/lucky/fetch') {
+    const b = JSON.parse(body.toString('utf8'));
+    return json(200, { url: `${appBase}/api/media/f/giftsource/u1/linked.svga`, link: b.url, kind: 'giftsource', type: 'application/x-svga', bytes: 4000, video: 'source', svga: true });
+  }
   // The other admin routes (Para çekme, Ajans ödemeleri, İadeler, Şanslı, Canlı ayarlar, raporlar): an echo.
   if (url.pathname.startsWith('/api/admin/')) return json(200, { ok: true, path: url.pathname + url.search });
   json(404, { error: 'Bulunamadı' });
@@ -505,6 +523,147 @@ test('Hediyeler: uygulamanın kendi hediyeleri listede istenir, orijinale dönme
   assert.ok(env.db.get("SELECT 1 FROM audit_logs WHERE action = 'app.gifts.reset'"));
   env.as('read_only', 'ro@test.local');
   assert.equal((await call('POST', '/api/app/gifts/reset', { id: 'g6' }, await loginAs('ro@test.local'))).status, 403);
+});
+
+test('Hediyeler: Global hediye ve Profil izi uygulamaya aynen gider, en düşük fiyat listede gelir; reddi uygulamanın cümlesiyle', async () => {
+  env.as('operations_manager', 'ops@test.local');
+  const ops = await loginAs('ops@test.local');
+  // The box and the mark round-trip: the page sends them as the app takes them; the app's answer comes back as it is.
+  const tick = { id: 'a1', global: true, mark: null };
+  const r = await call('POST', '/api/app/gifts/update', tick, ops);
+  assert.equal(r.status, 200, JSON.stringify(r.json));
+  assert.equal(seen.at(-1)!.path, '/api/admin/gifts/update');
+  assert.deepEqual(JSON.parse(seen.at(-1)!.body), tick);
+  assert.equal(r.json.gift.global, true);
+  const mark = { id: 'k1', mark: { role: 'leave', kind: 'kaka', hours: 12 } };
+  assert.equal((await call('POST', '/api/app/gifts/update', mark, ops)).status, 200);
+  assert.deepEqual(JSON.parse(seen.at(-1)!.body), mark);
+  const create = { name: 'Uzay Gemisi', price: 300_000, cat: 'hot', icon: 'x', global: true, mark: null };
+  assert.equal((await call('POST', '/api/app/gifts', create, ops)).status, 200);
+  assert.deepEqual(JSON.parse(seen.at(-1)!.body), create);
+  assert.equal((await call('POST', '/api/app/gifts/reset', { id: 'g6', fields: ['global', 'mark'] }, ops)).status, 200);
+  assert.deepEqual(JSON.parse(seen.at(-1)!.body), { id: 'g6', fields: ['global', 'mark'] });
+  const log = env.db.get("SELECT after FROM audit_logs WHERE action = 'app.gifts.update' ORDER BY id DESC LIMIT 1")!;
+  assert.deepEqual(JSON.parse(log.after).body, mark);
+  // Below the minimum: the app refuses in its words, shown as they are.
+  refuse = { status: 400, error: 'Global hediye en az 300.000 jeton olmalı (bu 100.000 jeton)' };
+  const low = await call('POST', '/api/app/gifts/update', { id: 'a1', global: true }, ops);
+  refuse = { status: 400, error: 'Su izi temizlediği için onu bırakan hediyelerden pahalı olmalı: Kaka 99 jeton, bu 50 jeton.' };
+  const cheap = await call('POST', '/api/app/gifts/update', { id: 'k2', price: 50 }, ops);
+  refuse = null;
+  assert.equal(low.status, 400);
+  assert.equal(low.json.error, 'Global hediye en az 300.000 jeton olmalı (bu 100.000 jeton)');
+  assert.equal(cheap.status, 400);
+  assert.match(cheap.json.error, /pahalı olmalı/);
+});
+
+test('Şanslı hediye ayarı: paketler, ikon ve video, bağlantıdan dosya kendi yetkisiyle; dosyaları bu sunucudan; uygulamanın reddi aynen', async () => {
+  env.as('finance_manager', 'fin@test.local');
+  env.as('operations_manager', 'ops@test.local');
+  // A role made in this panel with Şanslı hediye ayarı alone: its uploads and its packages' files open with it.
+  env.db.run("INSERT INTO roles (key, name, scope, permissions) VALUES ('sansli', 'Şanslı ekibi', 'platform', '[\"app.lucky\"]') ON CONFLICT (key) DO NOTHING");
+  env.as('sansli', 'sansli@test.local');
+  const fin = await loginAs('fin@test.local');
+  const ops = await loginAs('ops@test.local');
+  const team = await loginAs('sansli@test.local');
+  // The packages with each one's art: the app's file addresses as this server's (icon, video, a refused one's preview,
+  // the app's own picture).
+  const r = await call('GET', '/api/app/lucky', undefined, team);
+  assert.equal(r.status, 200, JSON.stringify(r.json));
+  assert.equal(r.json.art[0].icon, '/api/app/media/f/gifticon/u1/yonca.png');
+  assert.equal(r.json.art[0].video.url, '/api/app/fx/l/lk1.mp4?v=0123456789ab');
+  assert.equal(r.json.art[0].job.preview, '/api/app/media/f/giftsource/u1/onizleme.mp4');
+  assert.equal(r.json.art[0].original.icon, '/api/app/fx/art/gifts/lk1.webp');
+  assert.equal(r.json.artLimits.iconMinPx, 128);
+  assert.equal((await call('GET', '/api/app/lucky', undefined, ops)).status, 403);
+  // A new package (the whole settings with it), its icon and video, taking them off: each as sent, each in the log.
+  const tiers = [{ mult: 0, weight: 84_500 }, { mult: 2, weight: 15_000 }, { mult: 1000, weight: 500 }];
+  for (const [path, body] of [
+    ['/api/app/lucky/config', { config: { gifts: [{ id: 'lk5', name: 'Altın Yonca', emoji: '☘️', price: 250, enabled: false, tiers }], dailyPayoutLimit: 20_000_000, announceFrom: 50 }, version: 3 }],
+    ['/api/app/lucky/art', { id: 'lk5', icon: `${appBase}/api/media/f/gifticon/u1/new`, iconLink: null, video: { url: `${appBase}/api/media/f/giftsource/u1/new`, kind: 'source', fill: 0.6 }, videoLink: null }],
+    ['/api/app/lucky/art', { id: 'lk5', video: null }],
+    ['/api/app/lucky/art/remove', { id: 'lk5' }],
+  ] as const) {
+    for (const h of [team, fin]) {
+      const out = await call('POST', path, body, h);
+      assert.equal(out.status, 200, `${path}: ${JSON.stringify(out.json)}`);
+      assert.equal(seen.at(-1)!.path, path.replace('/api/app/', '/api/admin/'));
+      assert.deepEqual(JSON.parse(seen.at(-1)!.body), body);
+    }
+    assert.equal((await call('POST', path, body, ops)).status, 403, `ops ${path}`);
+    const log = env.db.get('SELECT actor, after FROM audit_logs WHERE action = ? ORDER BY id DESC LIMIT 1', `app${path.slice('/api/app'.length).replace(/\//g, '.')}`);
+    assert.ok(log, path);
+    assert.match(log.actor, /fin@test\.local/);
+    assert.deepEqual(JSON.parse(log.after).body, body);
+  }
+  // A file from a link: the app downloads it as a gift's; the address to save as it gave it, its preview through here.
+  const link = { slot: 'video', url: 'https://alanadi.com/sansli/yonca.svga' };
+  const got = await call('POST', '/api/app/lucky/fetch', link, team);
+  assert.equal(got.status, 200, JSON.stringify(got.json));
+  assert.equal(got.json.url, `${appBase}/api/media/f/giftsource/u1/linked.svga`);
+  assert.equal(got.json.preview, '/api/app/media/f/giftsource/u1/linked.svga');
+  assert.equal(got.json.svga, true);
+  assert.equal(seen.at(-1)!.path, '/api/admin/lucky/fetch');
+  assert.deepEqual(JSON.parse(seen.at(-1)!.body), link);
+  assert.ok(env.db.get("SELECT 1 FROM audit_logs WHERE action = 'app.lucky.fetch'"));
+  assert.equal((await call('POST', '/api/app/lucky/fetch', link, ops)).status, 403);
+  // Uploads as a gift's: the icon, a ready video and a source; the files open for the page (the package's video too).
+  for (const [kind, type] of [['gifticon', 'image/png'], ['giftvideo', 'video/mp4'], ['giftsource', 'application/x-svga']]) {
+    const up = await fetch(`${base}/api/app/upload?kind=${kind}`, { method: 'POST', headers: { ...team, 'content-type': type }, body: ICON });
+    assert.equal(up.status, 200, kind);
+    assert.deepEqual(JSON.parse(seen.at(-1)!.body), { kind, contentType: type, size: ICON.length });
+  }
+  assert.equal((await fetch(`${base}/api/app/upload?kind=shopframe`, { method: 'POST', headers: { ...team, 'content-type': 'image/png' }, body: ICON })).status, 403);
+  assert.equal((await fetch(`${base}/api/app/fx/l/lk1.mp4?v=0123456789ab`, { headers: { ...team, range: 'bytes=0-9' } })).status, 206);
+  assert.equal((await fetch(`${base}/api/app/media/f/gifticon/u1/yonca.png`, { headers: team })).status, 200);
+  // The app's refusals in its words: odds that don't add up, two packages with one name, an unsaved package's art.
+  for (const [path, body, error] of [
+    ['/api/app/lucky/config', { config: { gifts: [] }, version: 3 }, 'Altın Yonca: olasılıkların toplamı %99,5; %100 olmalı'],
+    ['/api/app/lucky/config', { config: { gifts: [] }, version: 3 }, '“Altın Yonca” adında iki paket var; her paketin adı ayrı olmalı'],
+    ['/api/app/lucky/art', { id: 'lk9', icon: 'x' }, 'Şanslı paket bulunamadı: önce paketi Şanslı hediye ayarında kaydet'],
+  ] as const) {
+    refuse = { status: error.includes('bulunamadı') ? 404 : 400, error };
+    const no = await call('POST', path, body, team);
+    refuse = null;
+    assert.equal(no.status, error.includes('bulunamadı') ? 404 : 400);
+    assert.equal(no.json.error, error);
+  }
+  refuse = { status: 409, error: 'Ayarlar bu arada değişti; yenileyip tekrar dene' };
+  const stale = await call('POST', '/api/app/lucky/config', { config: { gifts: [] }, version: 1 }, team);
+  refuse = null;
+  assert.equal(stale.status, 409);
+});
+
+test('Profil izleri: Kullanıcılar yetkisiyle görülür ve kaldırılır; kaldırma denetim kaydına yazılır', async () => {
+  env.as('operations_manager', 'ops@test.local');
+  env.as('finance_manager', 'fin@test.local');
+  env.as('read_only', 'ro@test.local');
+  const ops = await loginAs('ops@test.local');
+  const fin = await loginAs('fin@test.local');
+  const ro = await loginAs('ro@test.local');
+  const user = '6f1c2a3b-4d5e-4f60-8a7b-9c0d1e2f3a4b';
+  const r = await call('GET', `/api/app/marks?user=${user}`, undefined, ops);
+  assert.equal(r.status, 200, JSON.stringify(r.json));
+  assert.equal(r.json.path, `/api/admin/marks?user=${user}`);
+  for (const body of [{ user, reason: 'Şikâyet: hakaret' }, { user, kind: 'kaka' }]) {
+    const out = await call('POST', '/api/app/marks/clear', body, ops);
+    assert.equal(out.status, 200, JSON.stringify(out.json));
+    assert.equal(seen.at(-1)!.path, '/api/admin/marks/clear');
+    assert.deepEqual(JSON.parse(seen.at(-1)!.body), body);
+    assert.equal(seen.at(-1)!.user.email, 'ops@test.local');
+    const log = env.db.get("SELECT actor, after FROM audit_logs WHERE action = 'app.marks.clear' ORDER BY id DESC LIMIT 1")!;
+    assert.match(log.actor, /ops@test\.local/);
+    assert.deepEqual(JSON.parse(log.after).body, body);
+  }
+  for (const h of [fin, ro]) {
+    assert.equal((await call('GET', `/api/app/marks?user=${user}`, undefined, h)).status, 403);
+    assert.equal((await call('POST', '/api/app/marks/clear', { user }, h)).status, 403);
+  }
+  refuse = { status: 400, error: 'Geçersiz iz türü' };
+  const no = await call('POST', '/api/app/marks/clear', { user, kind: 'KAKA!' }, ops);
+  refuse = null;
+  assert.equal(no.status, 400);
+  assert.equal(no.json.error, 'Geçersiz iz türü');
 });
 
 test('Emojiler: kendi yetkisiyle; paketler, çıkartmalar, sıra, orijinale dönme, resim yükleme ve bağlantıdan resim', async () => {

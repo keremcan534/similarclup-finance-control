@@ -4,9 +4,12 @@
 // and go back to the app's ("Orijinale dön"). A list per shelf in the phones' order, an editor, and a preview: the
 // shelf tile, the icon, and the transparent video drawn over a stage the way the phones draw it. Files go through this
 // server to the app's storage; the app checks them when the gift is saved and converts a WebM / MOV / SVGA itself.
-// Nothing removes a background: the editor says so before a file is picked.
+// Nothing removes a background: the editor says so before a file is picked. Global hediye (announced in every room of
+// the country) and Profil izi (the gift leaves or cleans a mark on its receiver's photo) are fields of the gift
+// (web/gift-fields.js has their rules). The upload parts are shared with Şanslı hediye ayarı (app-lucky.js).
 import { Badge, Button, Loading, Modal, Page, Table, act, dateTimeTr, get, html, num, post, searchable, showError, toast, useApi, useApp, useEffect, useRef, useState } from '../lib.js';
 import { SORTS, SortBar, sortedIds, useDragOrder } from '../order.js';
+import { extraFields, globalBox, globalNote, globalProblem, markForm, markOf, markText, plainOnly, sameMark } from '../gift-fields.js';
 
 const CATS = [
   ['hot', 'Popüler'],
@@ -16,16 +19,20 @@ const CATS = [
   ['privilege', 'Özel'],
 ];
 const CAT = Object.fromEntries(CATS);
-/** A bond gift (Aile ve Dost): its price comes from the Bağlar rule and it stays on its shelf; its name, icon and video change here. */
+/**
+ * A bond gift (Aile ve Dost): it stays on its shelf; its name, icon, video and price change here. Its price is what a bond
+ * request costs (the app's bonds.mjs charges it; older APKs, which show the app's own price, are asked to update while it
+ * differs).
+ */
 const isBondGift = (g) => !!g?.id?.startsWith('bag-');
-const FILLS = { 0.45: 'Küçük', 0.6: 'Orta', 0.8: 'Büyük', 1: 'Tam ekran' };
-const mb = (n) => (n / 1024 / 1024).toLocaleString('tr-TR', { maximumFractionDigits: 1 });
-const sec = (ms) => (ms / 1000).toLocaleString('tr-TR', { maximumFractionDigits: 1 });
+export const FILLS = { 0.45: 'Küçük', 0.6: 'Orta', 0.8: 'Büyük', 1: 'Tam ekran' };
+export const mb = (n) => (n / 1024 / 1024).toLocaleString('tr-TR', { maximumFractionDigits: 1 });
+export const sec = (ms) => (ms / 1000).toLocaleString('tr-TR', { maximumFractionDigits: 1 });
 /** A file's size as people read it: KB under a megabyte. */
-const size = (n) => (n < 1024 * 1024 ? `${Math.max(1, Math.round(n / 1024))} KB` : `${mb(n)} MB`);
+export const size = (n) => (n < 1024 * 1024 ? `${Math.max(1, Math.round(n / 1024))} KB` : `${mb(n)} MB`);
 const ending = (name) => (/\.([A-Za-z0-9]{1,8})$/.exec(name ?? '')?.[1] ?? '').toLowerCase();
 /** What "Değiştirildi" names, as the app answers it (`changed`). */
-const FIELD_TR = { name: 'ad', emoji: 'emoji', price: 'fiyat', cat: 'raf / VIP', enabled: 'rafta / kapalı', icon: 'ikon', video: 'video' };
+const FIELD_TR = { name: 'ad', emoji: 'emoji', price: 'fiyat', cat: 'raf / VIP', enabled: 'rafta / kapalı', icon: 'ikon', video: 'video', mark: 'profil izi', global: 'global' };
 const changedText = (g) => (g.changed ?? []).map((f) => FIELD_TR[f] ?? f).join(', ');
 const KINDS = [
   ['all', 'Hepsi'],
@@ -76,10 +83,11 @@ const shelfNote = (g) => (g.builtin && g.changed?.includes('enabled') ? (g.enabl
 const otherChanges = (g) => (g.changed ?? []).filter((f) => !(g.builtin && f === 'enabled'));
 
 /** A link plainly to a video or to a picture, by its file name (the app's server checks the file itself anyway). */
-const VIDEO_LINK = /\.(mp4|m4v|webm|mov|svga)(?:[?#]|$)/i;
-const IMAGE_LINK = /\.(png|webp|jpe?g|gif)(?:[?#]|$)/i;
+export const VIDEO_LINK = /\.(mp4|m4v|webm|mov|svga)(?:[?#]|$)/i;
+export const IMAGE_LINK = /\.(png|webp|jpe?g|gif)(?:[?#]|$)/i;
 
-function videoLine(g) {
+/** A gift's (or a Şanslı package's) video in a few words: converting, refused with the reason, ready, none. */
+export function videoLine(g) {
   if (g.job?.status === 'processing') return html`<${Badge} s="pending" label=${g.video ? 'Yeni video çevriliyor' : 'Video çevriliyor'} />`;
   // The whole sentence (what is wrong and how to export it), wrapped: the cell would otherwise cut it off.
   if (g.job?.status === 'failed')
@@ -169,7 +177,9 @@ export function AppGifts() {
             render: (g) => html`<div class="cell-wrap" style="min-width:170px;max-width:290px"><strong>${g.name}</strong> ${g.builtin ? html`<${Badge} s="info" label="Uygulamanın" />` : ''}
               ${shelfNote(g) ? html` <${Badge} s=${g.enabled ? 'active' : 'passive'} label=${shelfNote(g)} />` : ''}
               ${otherChanges(g).length > 0 ? html` <${Badge} s="warning" label=${`Değiştirildi: ${otherChanges(g).map((f) => FIELD_TR[f] ?? f).join(', ')}`} />` : ''}
-              <br /><small class="muted">${g.id}${g.iconLink || g.videoLink ? ' · 🔗 bağlantıdan' : ''}${g.builtin && g.changed?.includes('name') ? ` · uygulamada: ${g.original.name}` : ''}</small></div>`,
+              ${g.global ? html` <${Badge} s=${globalNote(g, d.globalMinPrice) ? 'warning' : 'info'} label="Global" />` : ''}
+              ${globalNote(g, d.globalMinPrice) ? html` <small class="muted">${globalNote(g, d.globalMinPrice)}</small>` : ''}
+              <br /><small class="muted">${g.id}${g.iconLink || g.videoLink ? ' · 🔗 bağlantıdan' : ''}${g.builtin && g.changed?.includes('name') ? ` · uygulamada: ${g.original.name}` : ''}${markText(g.mark) ? ` · ${markText(g.mark)}` : ''}</small></div>`,
           },
           {
             key: 'cat',
@@ -285,15 +295,57 @@ export function Stage({ src, onEnd, loop = false, muted = false, onVideo }) {
   return html`<div class="alpha-stage"><canvas ref=${canvas} class="alpha-video"></canvas>${blocked && !muted && html`<small class="muted">Tarayıcı sesi kapattı</small>`}</div>`;
 }
 
-/** A file's size in words: KB under a megabyte. */
 /** The file name at the end of a link, for the line under the field. */
-const linkName = (link) => {
+export const linkName = (link) => {
   try {
     return decodeURIComponent(new URL(link).pathname.split('/').filter(Boolean).pop() ?? '') || link;
   } catch {
     return link;
   }
 };
+
+/** A picked or fetched video in words. */
+export const KIND_TEXT = { stacked: 'hazır video', svga: 'SVGA, çevrilecek', source: 'saydam kaynak, çevrilecek' };
+
+/**
+ * What a video file may be (`L`: the app's limits for it), said before one is picked. `what`: whose video it is, as
+ * the sentences name it (a gift's, a Şanslı package's). An older app server gives no output size: the converter's.
+ */
+export function VideoRules({ L, what = 'hediye' }) {
+  const [w, h, fps] = [L.width ?? 540, L.height ?? 960, L.fps ?? 20];
+  return html`<p class="note bad">Arka plan silme yapılmaz: ${what} videosu odanın üstünde oynar, saydam (arka planı silinmiş) olmalı. Video arka planıyla bir sahneyse (ör. gece yolunda araba) aşağıda <b>Arka planlı tam ekran</b>'ı seçin; o zaman bütün ekranı kaplar.</p>
+    <ul class="muted">
+      <li>Hazır yığılmış MP4: üst yarı renk, alt yarı alfa (ör. 540 × 1920), ${sec(L.videoMinMs)}–${sec(L.videoMaxMs)} sn, en çok ${mb(L.videoBytes)} MB. Olduğu gibi kullanılır.</li>
+      <li>Saydam WebM (VP8/VP9 alfa) ya da ProRes 4444 .mov, en çok ${mb(L.sourceBytes)} MB: ${w} × ${h}, ${fps} fps, sesli videoya çevrilir. <b>Dosya küçük olsun:</b> videoyu bu boyutta (${w} × ${h}, ${fps} fps) dışa aktarın; uygulamada görüntü aynı kalır, dosya kabaca dörtte birine iner.</li>
+      <li>SVGA 2.x, en çok ${mb(L.svgaBytes ?? L.sourceBytes)} MB: aynı biçime çevrilir, sesi korunur; vektör şekiller ve maskeler çizilmez.</li>
+      <li>Çevirme birkaç dakika sürebilir; bu sürede ${what} videosuz gönderilir (ikonu uçar), eski video varsa o oynar.</li>
+    </ul>`;
+}
+
+/** A new video's choices: an SVGA's size on the screen, and playing full screen with its background. */
+export function VideoChoices({ video, fills, onChange }) {
+  if (video.mode !== 'file' && video.mode !== 'link') return null;
+  return html`<div class="video-choices">
+    ${video.kind === 'svga' && !video.opaque && html`<label class="field" style="max-width:280px"><span>Ekrandaki boyutu</span><select value=${String(video.fill)} onChange=${(e) => onChange({ ...video, fill: Number(e.target.value) })}>${fills.map((f) => html`<option value=${String(f)}>${FILLS[f] ?? ''} (%${Math.round(f * 100)})</option>`)}</select></label>`}
+    <label class="field inline"><span><b>Arka planlı tam ekran</b>: video bir sahne, arka planıyla bütün ekranı kaplasın (saydamlık aranmaz; oda video bitene kadar görünmez).</span><input type="checkbox" checked=${!!video.opaque} onChange=${(e) => onChange({ ...video, opaque: e.target.checked })} /></label>
+  </div>`;
+}
+
+/** What a pasted link must be, under the link fields. */
+export const LinkHelp = () => html`<p class="muted">
+  Bağlantı, dosyayı <b>doğrudan indiren</b> adres olmalı: tarayıcıda açınca dosyanın kendisi görünmeli ya da hemen inmeli (ör. sitenizin
+  <code>/hediyeler/</code> klasörüne koyduğunuz dosyanın adresi). Google Drive ya da Dropbox paylaşım sayfası, GoDaddy dosya yöneticisi
+  olmaz. Dosyayı uygulamanın sunucusu bir kez indirir, denetler ve kendisi sunar; telefonlar sizin sitenize bağlanmaz. Dosyayı aynı
+  adreste değiştirirseniz <b>Bağlantıdan yeniden çek</b> ve <b>Kaydet</b> ile yenilenir.
+</p>`;
+
+/** What the app's server is sent for a new video: its size (an SVGA) and whether it plays full screen with its background. */
+export const specOf = (x, url) => ({
+  url,
+  kind: x.kind === 'stacked' ? 'stacked' : 'source',
+  ...(x.kind === 'svga' ? { fill: x.opaque ? 1 : x.fill } : {}),
+  ...(x.opaque ? { opaque: true } : {}),
+});
 
 function Editor({ gift, admin, onClose, onSaved }) {
   const L = admin.limits;
@@ -307,7 +359,13 @@ function Editor({ gift, admin, onClose, onSaved }) {
     minSvip: String(gift?.minSvip || 1),
     emoji: gift?.emoji ?? '',
     enabled: gift ? gift.enabled : true,
+    global: gift?.global === true,
   });
+  // Profil izi: { role: 'none'|'leave'|'clean', kind, hours } (hours '': the Canlı ayar's).
+  const [mark, setMark] = useState(() => markForm(gift?.mark));
+  // An app server without these features answers neither (no globalMinPrice, no gift's `mark`): their fields stay off.
+  const globalOn = typeof admin.globalMinPrice === 'number';
+  const marksOn = admin.gifts.some((g) => g.mark !== undefined);
   // A picked or fetched icon ({ file, url } / { at, url, link }), or { reset: true }: back to the app's picture.
   const [icon, setIcon] = useState(null);
   const [video, setVideo] = useState(gift?.video || gift?.job ? { mode: 'keep' } : { mode: 'none' });
@@ -397,20 +455,21 @@ function Editor({ gift, admin, onClose, onSaved }) {
     if (await act(() => post('/api/app/gifts/reset', { id: gift.id, fields: ['video'] }))) onSaved('Video orijinaline döndü');
   };
 
-  /** What the app's server is sent for a new video: its size (an SVGA) and whether it plays full screen with its background. */
-  const specOf = (x, url) => ({
-    url,
-    kind: x.kind === 'stacked' ? 'stacked' : 'source',
-    ...(x.kind === 'svga' ? { fill: x.opaque ? 1 : x.fill } : {}),
-    ...(x.opaque ? { opaque: true } : {}),
-  });
-
   const save = async () => {
     const name = v.name.replace(/\s+/g, ' ').trim();
     const price = Number(v.price);
     if (name.length < L.nameMin || name.length > L.nameMax) return showError(new Error(`Ad ${L.nameMin}–${L.nameMax} karakter olmalı`));
     if (!Number.isSafeInteger(price) || price < 1 || price > L.priceMax) return showError(new Error(`Fiyat 1–${num(L.priceMax)} jeton arasında bir tam sayı olmalı`));
     if (!gift && !icon) return showError(new Error('İkon seçin'));
+    // Profil izi and Global hediye, checked here as the app's server checks them (its sentence still wins).
+    const rule = marksOn && !plainOnly(gift?.id) ? markOf(mark) : { mark: gift?.mark ?? null };
+    if (rule.error) return showError(new Error(rule.error));
+    const global = globalOn && !plainOnly(gift?.id) ? !!v.global : gift?.global === true;
+    const why = globalOn ? globalProblem({ id: gift?.id, price, global, was: gift?.global === true, priceChanged: !gift || price !== gift.price, mark: rule.mark, min: admin.globalMinPrice }) : null;
+    if (why) return showError(new Error(why));
+    const extra = extraFields(gift, { global, mark: rule.mark });
+    if (!globalOn) delete extra.global;
+    if (!marksOn) delete extra.mark;
     try {
       let iconAt;
       if (icon?.at) iconAt = icon.at;
@@ -441,10 +500,11 @@ function Editor({ gift, admin, onClose, onSaved }) {
         if (iconLink !== undefined) patch.iconLink = iconLink;
         if (videoLink !== undefined) patch.videoLink = videoLink;
         if (videoSpec !== undefined && !(videoSpec === null && !gift.video && !gift.job)) patch.video = videoSpec;
+        Object.assign(patch, extra);
         if (!Object.keys(patch).length) return onClose();
         await post('/api/app/gifts/update', { id: gift.id, ...patch });
       } else {
-        await post('/api/app/gifts', { ...fields, icon: iconAt, video: videoSpec ?? null, iconLink: iconLink ?? null, videoLink: videoLink ?? null });
+        await post('/api/app/gifts', { ...fields, ...extra, icon: iconAt, video: videoSpec ?? null, iconLink: iconLink ?? null, videoLink: videoLink ?? null });
       }
       onSaved(videoSpec?.kind === 'source' ? 'Kaydedildi; video uygulamanın sunucusunda çevriliyor' : gift ? 'Kaydedildi' : 'Hediye eklendi');
     } catch (e) {
@@ -455,17 +515,30 @@ function Editor({ gift, admin, onClose, onSaved }) {
   };
 
   const price = Number(v.price);
+  const box = globalOn ? globalBox({ id: gift?.id, price, global: v.global, mark: mark.role === 'none' ? null : mark, min: admin.globalMinPrice }) : { hidden: true };
+  const ruleNow = markOf(mark);
   return html`<${Modal} title=${gift ? `${gift.name}${app ? ' (uygulamanın hediyesi)' : ''}` : 'Yeni hediye'} wide onClose=${onClose}>
     ${gift?.updatedAt && html`<p class="muted" style="margin-top:-6px">Son değişiklik: ${dateTimeTr(gift.updatedAt)}${gift.updatedBy?.name ? ` · ${gift.updatedBy.name}` : ''}</p>`}
     ${app && html`<p class="note">Uygulamayla gelen bir hediye. Değiştirdiğiniz her şey uygulama güncellemesi olmadan telefonlara gider; listedeki <b>Orijinale dön</b> hepsini geri alır. Fiyatı değişirse eski APK'lar bu hediyeyi göstermez (yanlış fiyat göstermesinler diye).</p>`}
     <div class="form"><div class="grid2">
       <label class="field"><span>Ad *</span><input value=${v.name} maxlength=${L.nameMax} onInput=${set('name')} placeholder="Ör. Altın Yıldız" />${was(v.name.trim() !== o?.name, o?.name)}</label>
-      <label class="field"><span>Fiyat (jeton) *</span><input inputmode="numeric" value=${v.price} disabled=${isBondGift(gift)} onInput=${(e) => setV({ ...v, price: e.target.value.replace(/[^\d]/g, '') })} placeholder="Ör. 9999" /><small class="muted">${isBondGift(gift) ? 'Bağ hediyesinin fiyatı Bağlar kuralından gelir, buradan değişmez.' : `1–${num(L.priceMax)} jeton; değişiklik yeni gönderimlerden itibaren geçer.`}</small>${was(price !== o?.price, `${num(o?.price)} jeton`)}</label>
+      <label class="field"><span>Fiyat (jeton) *</span><input inputmode="numeric" value=${v.price} onInput=${(e) => setV({ ...v, price: e.target.value.replace(/[^\d]/g, '') })} placeholder="Ör. 9999" /><small class="muted">${isBondGift(gift) ? 'Bağ isteğinin fiyatı. Değişiklik yeni isteklerden itibaren geçer; bekleyen istekler kendi fiyatını tutar. Fiyat uygulamanınkinden farklıyken eski APK\'lar bağ isteği gönderemez, güncelleme ister.' : `1–${num(L.priceMax)} jeton; değişiklik yeni gönderimlerden itibaren geçer.`}</small>${was(price !== o?.price, `${num(o?.price)} jeton`)}</label>
       <label class="field"><span>Raf</span><select value=${v.cat} disabled=${isBondGift(gift)} onChange=${set('cat')}>${CATS.map(([k, l]) => html`<option value=${k}>${l}</option>`)}</select>${was(v.cat !== o?.cat, `${CAT[o?.cat]}${o?.cat === 'privilege' ? ` · VIP ${o.minSvip}+` : ''}`)}</label>
       ${v.cat === 'privilege' && html`<label class="field"><span>En düşük VIP seviyesi</span><select value=${v.minSvip} onChange=${set('minSvip')}>${Array.from({ length: L.svipMax }, (_, i) => html`<option value=${String(i + 1)}>VIP ${i + 1}</option>`)}</select></label>`}
       <label class="field"><span>Emoji ${app ? '' : '(isteğe bağlı)'}</span><input value=${v.emoji} maxlength="8" onInput=${set('emoji')} placeholder=${app ? o.emoji : '🎁'} /><small class="muted">Sohbet satırlarında ve ikon yüklenmeden önce görünür.</small>${was(v.emoji.trim() && v.emoji.trim() !== o?.emoji, o?.emoji)}</label>
       <label class="field inline"><span>Rafta (herkes görür)</span><input type="checkbox" checked=${v.enabled} onChange=${set('enabled')} />${was(!!v.enabled !== o?.enabled, o?.enabled ? 'rafta' : 'duraklatılmış')}</label>
+      ${!box.hidden && html`<label class="field inline wide"><span><b>Global hediye</b> (ülkedeki bütün odalarda duyurulur: gönderenin ve alıcının adıyla)<br /><small class="muted">${box.hint}</small></span><input type="checkbox" checked=${v.global} disabled=${box.disabled} onChange=${set('global')} />${was(!!v.global !== !!o?.global, o?.global ? 'global' : 'global değil')}</label>`}
     </div></div>
+
+    ${marksOn && !plainOnly(gift?.id) && html`<h3>Profil izi</h3>
+    <p class="muted">İz bırakan hediye (ör. 💩 Kaka) alıcının profil fotoğrafında bir iz bırakır; aynı türü temizleyen hediye (ör. 💧 Su) onu kaldırır. Temizleyen hediye, o türü bırakan her hediyeden pahalı olmalı. Kişi Gizlilik'ten izleri kapatabilir. Profil izi olan hediye global olamaz.</p>
+    <div class="form"><div class="grid2">
+      <label class="field"><span>Profil izi</span><select value=${mark.role} disabled=${v.global && mark.role === 'none'} onChange=${(e) => setMark({ ...mark, role: e.target.value })}>
+        <option value="none">Yok</option><option value="leave">Bırakır</option><option value="clean">Temizler</option>
+      </select>${v.global && mark.role === 'none' ? html`<small class="muted">Global hediye iz bırakamaz: önce Global'i kaldırın.</small>` : ''}${was(!sameMark(ruleNow.mark, o?.mark) && !ruleNow.error, markText(o?.mark) ?? 'iz yok')}</label>
+      ${mark.role !== 'none' && html`<label class="field"><span>İz türü *</span><input value=${mark.kind} maxlength="24" placeholder="ör. kaka" onInput=${(e) => setMark({ ...mark, kind: e.target.value })} /><small class="muted">Küçük harfle kısa bir kelime; bırakan ve temizleyen hediye aynı türü yazar.</small></label>`}
+      ${mark.role === 'leave' && html`<label class="field"><span>Süre (saat, isteğe bağlı)</span><input inputmode="numeric" value=${mark.hours} placeholder="Canlı ayardaki süre" onInput=${(e) => setMark({ ...mark, hours: e.target.value.replace(/[^\d]/g, '') })} /><small class="muted">1–168 saat; boş: Canlı ayarlar › Profil izleri'ndeki süre.</small></label>`}
+    </div></div>`}
 
     <h3>İkon</h3>
     <p class="muted">Saydam (arka planı silinmiş) PNG ya da WebP, kare, ${L.iconMinPx}–${L.iconMaxPx} piksel (önerilen 512 × 512), en çok ${mb(L.iconBytes)} MB.${L.iconServePx ? ` Daha büyüğü telefonlar için kendiliğinden ${L.iconServePx} piksele ve ${mb(L.iconServeBytes)} MB'a küçültülür.` : ''}${app ? ' Seçmezseniz uygulamanın resmi kalır.' : ''}</p>
@@ -478,17 +551,11 @@ function Editor({ gift, admin, onClose, onSaved }) {
     ${icon?.at && html`<small class="muted">Bağlantıdan alındı: ${linkName(icon.link)} · ${size(icon.bytes)}</small>`}
 
     <h3>Video (isteğe bağlı)</h3>
-    <p class="note bad">Arka plan silme yapılmaz: hediye videosu odanın üstünde oynar, saydam (arka planı silinmiş) olmalı. Video arka planıyla bir sahneyse (ör. gece yolunda araba) aşağıda <b>Arka planlı tam ekran</b>'ı seçin; o zaman bütün ekranı kaplar.</p>
-    <ul class="muted">
-      <li>Hazır yığılmış MP4: üst yarı renk, alt yarı alfa (ör. 540 × 1920), ${sec(L.videoMinMs)}–${sec(L.videoMaxMs)} sn, en çok ${mb(L.videoBytes)} MB. Olduğu gibi kullanılır.</li>
-      <li>Saydam WebM (VP8/VP9 alfa) ya da ProRes 4444 .mov, en çok ${mb(L.sourceBytes)} MB: ${L.width} × ${L.height}, ${L.fps} fps, sesli videoya çevrilir. <b>Dosya küçük olsun:</b> videoyu bu boyutta (${L.width} × ${L.height}, ${L.fps} fps) dışa aktarın; uygulamada görüntü aynı kalır, dosya kabaca dörtte birine iner.</li>
-      <li>SVGA 2.x, en çok ${mb(L.svgaBytes ?? L.sourceBytes)} MB: aynı biçime çevrilir, sesi korunur; vektör şekiller ve maskeler çizilmez.</li>
-      <li>Çevirme birkaç dakika sürebilir; bu sürede hediye videosuz gönderilir (ikonu uçar), eski video varsa o oynar.</li>
-    </ul>
+    <${VideoRules} L=${L} />
     <div class="row gap wrap">
       <input type="file" accept=".mp4,.webm,.mov,.svga,video/mp4,video/webm,video/quicktime" aria-label="Video ya da SVGA dosyası" onChange=${pickVideo} />
-      ${video.mode === 'link' && html`<span class="muted">Bağlantıdan: ${video.name} · ${video.kind === 'stacked' ? 'hazır video' : video.kind === 'svga' ? 'SVGA, çevrilecek' : 'saydam kaynak, çevrilecek'} · ${size(video.bytes)}</span>`}
-      ${video.mode === 'file' && html`<span class="muted">${video.file.name} · ${video.kind === 'stacked' ? 'hazır video' : video.kind === 'svga' ? 'SVGA, çevrilecek' : 'saydam kaynak, çevrilecek'} · ${mb(video.file.size)} MB</span>`}
+      ${video.mode === 'link' && html`<span class="muted">Bağlantıdan: ${video.name} · ${KIND_TEXT[video.kind]} · ${size(video.bytes)}</span>`}
+      ${video.mode === 'file' && html`<span class="muted">${video.file.name} · ${KIND_TEXT[video.kind]} · ${mb(video.file.size)} MB</span>`}
       ${video.mode === 'keep' && html`<span>${videoLine(gift)}</span>`}
       ${video.mode === 'keep' && gift?.job?.status === 'failed' && gift.job.preview && html`<${Button} kind="ghost" onClick=${() => setPreview(gift.job.preview)}>Önizle</${Button}>`}
       ${video.mode === 'none' && html`<span class="muted">Video yok: gönderilince ikonu uçar.</span>`}
@@ -496,17 +563,9 @@ function Editor({ gift, admin, onClose, onSaved }) {
       ${video.mode === 'none' && (gift?.video || gift?.job) && html`<${Button} kind="ghost" onClick=${() => setVideo({ mode: 'keep' })}>Vazgeç</${Button}>`}
       ${app && gift.changed?.includes('video') && html`<${Button} kind="ghost" disabled=${!!step} onClick=${videoBack}>${o.video ? 'Uygulamanın videosuna dön' : 'Videoyu orijinaline döndür'}</${Button}>`}
     </div>
-    ${(video.mode === 'file' || video.mode === 'link') && html`<div class="video-choices">
-      ${video.kind === 'svga' && !video.opaque && html`<label class="field" style="max-width:280px"><span>Ekrandaki boyutu</span><select value=${String(video.fill)} onChange=${(e) => setVideo({ ...video, fill: Number(e.target.value) })}>${L.fills.map((f) => html`<option value=${String(f)}>${FILLS[f] ?? ''} (%${Math.round(f * 100)})</option>`)}</select></label>`}
-      <label class="field inline"><span><b>Arka planlı tam ekran</b>: video bir sahne, arka planıyla bütün ekranı kaplasın (saydamlık aranmaz; oda video bitene kadar görünmez).</span><input type="checkbox" checked=${!!video.opaque} onChange=${(e) => setVideo({ ...video, opaque: e.target.checked })} /></label>
-    </div>`}
+    <${VideoChoices} video=${video} fills=${L.fills} onChange=${setVideo} />
     ${linkRow('video', 'https://alanadiniz.com/hediyeler/yuzuk.svga')}
-    <p class="muted">
-      Bağlantı, dosyayı <b>doğrudan indiren</b> adres olmalı: tarayıcıda açınca dosyanın kendisi görünmeli ya da hemen inmeli (ör. sitenizin
-      <code>/hediyeler/</code> klasörüne koyduğunuz dosyanın adresi). Google Drive ya da Dropbox paylaşım sayfası, GoDaddy dosya yöneticisi
-      olmaz. Dosyayı uygulamanın sunucusu bir kez indirir, denetler ve kendisi sunar; telefonlar sizin sitenize bağlanmaz. Dosyayı aynı
-      adreste değiştirirseniz <b>Bağlantıdan yeniden çek</b> ve <b>Kaydet</b> ile hediye yenilenir.
-    </p>
+    <${LinkHelp} />
 
     <h3>Önizleme</h3>
     <div class="gift-preview">

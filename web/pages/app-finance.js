@@ -1,7 +1,7 @@
 // Uygulama › finance pages: the Similar Club app's own money work, through its admin API (server/app-admin.ts passes
 // each call on as the signed-in panel user; the app checks and records every one). Para çekme and Ajans ödemeleri
 // never send money: the money goes from the bank, the page records it. İadeler takes back a store purchase's coins;
-// Şanslı hediyeler and Canlı ayarlar change what the app does at once, for everyone.
+// Canlı ayarlar changes what the app does at once, for everyone (Şanslı hediyeler is app-lucky.js).
 import { Badge, Button, Card, ID_HINT, Kpi, Loading, Modal, Page, Table, Tabs, act, dateTimeTr, html, num, personOf, post, showError, toast, useApi, useApp, usePrompt, useState } from '../lib.js';
 
 const usd = (n) => `$${num(n, 2)}`;
@@ -211,93 +211,6 @@ export function AppRefunds() {
           { key: 'reason', label: 'Neden' },
         ]} rows=${a.ledger} /></${Card}>`}</${Loading}>`}`}
   </${Page}>`;
-}
-
-// ---- Şanslı hediyeler -----------------------------------------------------------------------------------
-const MULTS = [2, 5, 10, 20, 50, 100, 200, 500, 1000];
-const TOTAL = 100_000;
-/** What a package pays back on average for each coin spent: Σ multiplier × chance. */
-const rtp = (g) => g.tiers.reduce((s, t) => s + t.mult * t.weight, 0) / TOTAL;
-const top = (g) => Math.max(0, ...g.tiers.filter((t) => t.weight > 0).map((t) => t.mult));
-
-export function AppLucky() {
-  const { can } = useApp();
-  const data = useApi('/api/app/lucky');
-  const [edit, setEdit] = useState(null);
-  return html`<${Page}
-    title="Şanslı hediyeler"
-    subtitle="Uygulamadaki Şanslı hediye paketleri: fiyat, olasılık tablosu (toplam %100), günlük ödül limiti ve duyuru çarpanı. Kayıt anında herkes için geçer; ödülü uygulamanın sunucusu çeker. Alıcı her gönderimde fiyatın %20'sini elmas olarak alır."
-    actions=${can('app.lucky') && data.data && html`<${Button} kind="primary" onClick=${() => setEdit(structuredClone(data.data.config))}>Düzenle</${Button}>`}
-  >
-    <${Loading} state=${data}>${(d) => html`
-      <div class="kpis">
-        ${[['Bugün', d.stats.today], ['Toplam', d.stats.total]].map(([l, s]) => html`
-          <${Kpi} label=${`${l}: gönderim`} value=${num(s.sends)} />
-          <${Kpi} label=${`${l}: harcanan jeton`} value=${num(s.spent)} />
-          <${Kpi} label=${`${l}: ödenen oyun jetonu`} value=${num(s.paid)} sub=${s.spent ? `geri ödeme %${num((s.paid / s.spent) * 100, 1)}` : ''} />
-          <${Kpi} label=${`${l}: alıcılara elmas`} value=${num(s.shared)} />`)}
-      </div>
-      <${Card} title=${`Paketler (sürüm ${d.version}${d.updatedAt ? ` · ${dateTimeTr(d.updatedAt)}` : ''})`}>
-        <p class="muted">Günlük ödül limiti ${num(d.config.dailyPayoutLimit)} oyun jetonu · ${d.config.announceFrom}x ve üstü odada duyurulur.</p>
-        <${Table} dense columns=${[
-          { key: 'name', label: 'Paket', render: (g) => `${g.emoji} ${g.name} (${g.id})` },
-          { key: 'price', label: 'Fiyat', align: 'right', render: (g) => num(g.price) },
-          { key: 'enabled', label: 'Durum', render: (g) => html`<${Badge} s=${g.enabled ? 'active' : 'passive'} label=${g.enabled ? 'Açık' : 'Kapalı'} />` },
-          { key: 'tiers', label: 'Olasılıklar', render: (g) => g.tiers.filter((t) => t.weight > 0).map((t) => `${t.mult ? `${t.mult}x` : 'ödülsüz'} %${num(t.weight / 1000, 3)}`).join(' · ') },
-          { key: 'rtp', label: 'Ortalama geri ödeme', align: 'right', render: (g) => `%${num(rtp(g) * 100, 2)}` },
-          { key: 'top', label: 'En yüksek', align: 'right', render: (g) => `${top(g)}x` },
-        ]} rows=${d.config.gifts} />
-      </${Card}>
-      <${Card} title="Son gönderimler"><${Table} dense empty="Gönderim yok" columns=${[
-        { key: 'at', label: 'Zaman', render: (s) => dateTimeTr(s.at) },
-        { key: 'sender', label: 'Gönderen', render: (s) => s.sender.name },
-        { key: 'giftId', label: 'Paket' },
-        { key: 'count', label: 'Adet', align: 'right' },
-        { key: 'cost', label: 'Harcanan', align: 'right', render: (s) => num(s.cost) },
-        { key: 'payout', label: 'Ödül', align: 'right', render: (s) => num(s.payout) },
-        { key: 'best', label: 'En iyi', align: 'right', render: (s) => (s.best ? `${s.best}x` : '—') },
-      ]} rows=${d.recent} /></${Card}>`}</${Loading}>
-    ${edit && html`<${LuckyEditor} config=${edit} version=${data.data.version} onClose=${() => setEdit(null)} onSaved=${() => (setEdit(null), toast('Şanslı hediye ayarları kaydedildi'), data.reload())} />`}
-  </${Page}>`;
-}
-
-function LuckyEditor({ config, version, onClose, onSaved }) {
-  const [c, setC] = useState(config);
-  const setGift = (i, patch) => setC({ ...c, gifts: c.gifts.map((g, j) => (j === i ? { ...g, ...patch } : g)) });
-  /** The tier weights as percentages with 3 decimals; the no-reward row takes what is left. */
-  const pct = (g, m) => (g.tiers.find((t) => t.mult === m)?.weight ?? 0) / 1000;
-  const setPct = (i, m, value) => {
-    const g = c.gifts[i];
-    const w = Math.round(Number(String(value).replace(',', '.')) * 1000);
-    const rest = g.tiers.filter((t) => t.mult !== 0 && t.mult !== m);
-    const list = [...rest, ...(Number.isFinite(w) && w > 0 ? [{ mult: m, weight: w }] : [])];
-    const left = TOTAL - list.reduce((s, t) => s + t.weight, 0);
-    setGift(i, { tiers: [{ mult: 0, weight: left }, ...list].sort((a, b) => a.mult - b.mult) });
-  };
-  const add = () => setC({ ...c, gifts: [...c.gifts, { id: `lk${Date.now().toString(36)}`, name: 'Yeni paket', emoji: '🍀', price: 100, enabled: false, tiers: [{ mult: 0, weight: TOTAL }] }] });
-  const save = async () => {
-    const bad = c.gifts.find((g) => (g.tiers.find((t) => t.mult === 0)?.weight ?? 0) < 0);
-    if (bad) return showError(new Error(`${bad.name}: olasılıkların toplamı %100'ü geçiyor`));
-    (await act(() => post('/api/app/lucky/config', { config: c, version }))) && onSaved();
-  };
-  return html`<${Modal} title="Şanslı hediyeler" wide onClose=${onClose}>
-    <div class="form"><div class="grid2">
-      <label class="field"><span>Günlük ödül limiti (oyun jetonu, bütün platform)</span><input inputmode="numeric" value=${c.dailyPayoutLimit} onInput=${(e) => setC({ ...c, dailyPayoutLimit: Number(e.target.value.replace(/[^\d]/g, '')) })} /></label>
-      <label class="field"><span>Odada duyurulan en düşük çarpan</span><select value=${String(c.announceFrom)} onChange=${(e) => setC({ ...c, announceFrom: Number(e.target.value) })}>${MULTS.map((m) => html`<option value=${String(m)}>${m}x</option>`)}</select></label>
-    </div></div>
-    ${c.gifts.map((g, i) => html`<${Card} title=${`${g.emoji} ${g.name}`} actions=${html`<${Button} kind="ghost" onClick=${() => setC({ ...c, gifts: c.gifts.filter((_, j) => j !== i) })}>Paketi çıkar</${Button}>`}>
-      <div class="form"><div class="grid2">
-        <label class="field"><span>Ad</span><input value=${g.name} maxlength="30" onInput=${(e) => setGift(i, { name: e.target.value })} /></label>
-        <label class="field"><span>Simge</span><input value=${g.emoji} maxlength="8" onInput=${(e) => setGift(i, { emoji: e.target.value })} /></label>
-        <label class="field"><span>Fiyat (jeton, 5–100.000)</span><input inputmode="numeric" value=${g.price} onInput=${(e) => setGift(i, { price: Number(e.target.value.replace(/[^\d]/g, '')) })} /></label>
-        <label class="field inline"><span>Açık</span><input type="checkbox" checked=${g.enabled} onChange=${(e) => setGift(i, { enabled: e.target.checked })} /></label>
-      </div></div>
-      <div class="row gap wrap">${MULTS.map((m) => html`<label class="field" style="width:96px"><span>${m}x (%)</span><input inputmode="decimal" value=${String(pct(g, m) || '').replace('.', ',')} placeholder="0" onChange=${(e) => setPct(i, m, e.target.value)} /></label>`)}</div>
-      <p class=${pct(g, 0) < 0 ? 'note bad' : 'muted'}>Ödülsüz %${num(pct(g, 0), 3)} · ortalama geri ödeme %${num(rtp(g) * 100, 2)} · en yüksek ${top(g)}x</p>
-    </${Card}>`)}
-    <${Button} onClick=${add}>Paket ekle</${Button}>
-    <div class="row end gap" style="margin-top:12px"><${Button} onClick=${onClose}>Vazgeç</${Button}><${Button} kind="primary" onClick=${save}>Kaydet</${Button}></div>
-  </${Modal}>`;
 }
 
 // ---- Canlı ayarlar --------------------------------------------------------------------------------------

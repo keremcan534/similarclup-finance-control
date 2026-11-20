@@ -1,6 +1,7 @@
 // Uygulama › operations pages: the Similar Club app's moderation and community work, through its admin API
 // (server/app-admin.ts passes each call on as the signed-in panel user; the app checks and records every one).
-// Kullanıcılar, Şikâyetler (with a reported room's own pictures), Destek, Duyurular, Etkinlikler. The full sanction
+// Kullanıcılar (with a person's profile marks: Kaka and the like, taken off with a reason), Şikâyetler (with a reported
+// room's own pictures, and a reported person's profile marks), Destek, Duyurular, Etkinlikler. The full sanction
 // system (evidence, approvals, appeals, staff permissions) is Uygulama › Yaptırımlar (app-sanctions.js).
 import { Badge, Button, Card, ID_HINT, Kpi, Loading, Modal, Page, Table, Tabs, accountOf, act, dateTimeTr, html, num, post, showError, toast, useApi, useApp, usePrompt, useState } from '../lib.js';
 import { Chips } from './app-finance.js';
@@ -82,13 +83,14 @@ export function AppUsers() {
   const remove = async (u) =>
     confirm(`${u.name}\n\nProfil, mesajlar, takipler ve oturumlar silinir; kişi çıkış yapar. Para kayıtları yasal olarak saklanır. Bu işlem geri alınamaz.`) &&
     after('Hesap silindi')(await act(() => post('/api/app/users/delete', { id: u.id })));
+  const [marks, setMarks] = useState(null);
   const removeTests = async (n) =>
     confirm(`Sunucu denemesinin açtığı ${n} hesap ("Test A", "Test B") silinir. Gerçek kişilere dokunulmaz. Bu işlem geri alınamaz.`) &&
     after((r) => `${num(r.deleted)} deneme hesabı silindi`)(await act(() => post('/api/app/users/delete', { tests: true })));
   const d = list.data;
   return html`<${Page}
     title="Kullanıcılar"
-    subtitle="Uygulamanın hesapları: ad, kullanıcı adı, e-posta ya da ID ile arama (kişinin profilindeki ID, odasının ID'si de aynı; özel ID ve eski 8 haneli oda ID'si de bulunur); askıya alma, oda seviyesi, davet ödülünü geri alma, hesap silme. Yetkili hesapları (yönetici, moderatör) buradan değiştirilemez."
+    subtitle="Uygulamanın hesapları: ad, kullanıcı adı, e-posta ya da ID ile arama (kişinin profilindeki ID, odasının ID'si de aynı; özel ID ve eski 8 haneli oda ID'si de bulunur); askıya alma, oda seviyesi, davet ödülünü geri alma, hesap silme; profil izleri (Kaka gibi): kim bıraktı, ne zaman, kaldırma. Yetkili hesapları (yönetici, moderatör) buradan değiştirilemez."
     actions=${can('app.users') && d?.tests > 0 && html`<${Button} kind="danger" onClick=${() => removeTests(d.tests)}>Deneme hesaplarını sil (${num(d.tests)})</${Button}>`}
   >
     ${prompt}
@@ -112,13 +114,13 @@ export function AppUsers() {
             label: '',
             render: (u) =>
               can('app.users') &&
-              !STAFF(u.role) &&
               html`<span class="row gap wrap">
-                <${Button} kind="danger" onClick=${() => ban(u)}>Askıya al</${Button}>
+                ${!STAFF(u.role) && html`<${Button} kind="danger" onClick=${() => ban(u)}>Askıya al</${Button}>
                 <${Button} onClick=${() => unban(u)}>Askıyı kaldır</${Button}>
-                <${Button} onClick=${() => level(u)}>Oda seviyesi</${Button}>
-                <${Button} kind="ghost" onClick=${() => revoke(u)}>Davet ödülü</${Button}>
-                <${Button} kind="ghost" onClick=${() => remove(u)}>Sil</${Button}>
+                <${Button} onClick=${() => level(u)}>Oda seviyesi</${Button}>`}
+                <${Button} onClick=${() => setMarks(u)}>Profil izleri</${Button}>
+                ${!STAFF(u.role) && html`<${Button} kind="ghost" onClick=${() => revoke(u)}>Davet ödülü</${Button}>
+                <${Button} kind="ghost" onClick=${() => remove(u)}>Sil</${Button}>`}
               </span>`,
           },
         ]}
@@ -128,7 +130,62 @@ export function AppUsers() {
         ${offset > 0 && html`<${Button} onClick=${() => setOffset(Math.max(0, offset - 50))}>Önceki</${Button}>`}
         ${x.next !== null && html`<${Button} onClick=${() => setOffset(x.next)}>Sonraki</${Button}>`}
       </div>`}</${Loading}>
+    ${marks && html`<${ProfileMarks} user=${marks} onClose=${() => setMarks(null)} />`}
   </${Page}>`;
+}
+
+// ---- Profil izleri --------------------------------------------------------------------------------------
+/** How a mark came off (the app's profile_marks.cleared_how). */
+const CLEARED = { gift: 'temizleyen hediyeyle', admin: 'yönetim kaldırdı', self: 'kişi izleri kapattı', block: 'engelle kalktı' };
+const markState = (m) =>
+  m.showing
+    ? html`<${Badge} s="pending" label="Görünüyor" />`
+    : m.cleared
+      ? html`<${Badge} s="closed" label=${`Kalktı · ${CLEARED[m.cleared] ?? m.cleared}`} />${m.clearedAt ? html`<br /><small class="muted">${dateTimeTr(m.clearedAt)}${m.clearedBy?.name ? ` · ${m.clearedBy.name}` : ''}</small>` : ''}`
+      : html`<${Badge} s="ended" label="Süresi bitti" />`;
+
+/**
+ * A person's profile marks (the app's last 50, the ones showing first): who left each, until when, how it came off.
+ * The ones showing come off (all, or one kind) with a reason, written to the app's audit log; the rooms the person is
+ * in see their photo clean at once.
+ */
+export function ProfileMarks({ user, onClose }) {
+  const { can } = useApp();
+  const list = useApi(`/api/app/marks?user=${encodeURIComponent(user.id)}`);
+  const [ask, prompt] = usePrompt();
+  const clear = async (kind) => {
+    const v = await ask(kind ? `“${kind}” izi kaldırılsın` : 'Görünen bütün izler kaldırılsın', {
+      text: `${user.name ?? 'Kişi'}: profil fotoğrafındaki ${kind ? 'bu tür iz' : 'izler'} hemen kalkar; bulunduğu odalar da görür. Kaldırma uygulamanın denetim kaydına yazılır.`,
+      fields: [{ name: 'reason', label: 'Neden (isteğe bağlı, en çok 200 karakter; ör. şikâyet)', type: 'textarea', wide: true }],
+      ok: 'İzi kaldır',
+    });
+    if (!v) return;
+    const r = await act(() => post('/api/app/marks/clear', { user: user.id, ...(kind ? { kind } : {}), ...(v.reason.trim() ? { reason: v.reason.trim().slice(0, 200) } : {}) }));
+    if (r) {
+      toast(r.cleared ? `${num(r.cleared)} iz kaldırıldı` : 'Kaldırılacak görünen iz yoktu');
+      list.reload();
+    }
+  };
+  return html`<${Modal} title=${`Profil izleri: ${user.name ?? ''}`} wide onClose=${onClose}>
+    ${prompt}
+    <${Loading} state=${list}>${(d) => {
+      const showing = d.marks.filter((m) => m.showing);
+      return html`
+        ${!d.on && html`<p class="note warn">Profil izleri şu an kapalı (Canlı ayarlar › Profil izleri › süre 0): hiçbir iz görünmüyor.</p>`}
+        <p class="muted">İz bırakan bir hediye (ör. 💩 Kaka) alıcının fotoğrafında süresi bitene ya da temizleyen hediye (ör. 💧 Su) gelene kadar kalır. Kişi Gizlilik'ten izleri kapatabilir. Son 50 iz, görünenler önce.</p>
+        ${can('app.users') && showing.length > 0 && html`<div class="row gap wrap" style="margin-bottom:10px">
+          <${Button} kind="danger" onClick=${() => clear(null)}>Görünen bütün izleri kaldır (${num(showing.length)})</${Button}>
+        </div>`}
+        <${Table} dense empty="Bu kişinin profilinde hiç iz olmadı" columns=${[
+          { key: 'kind', label: 'İz', render: (m) => html`<strong>${m.giftName}</strong><br /><small class="muted">${m.kind}</small>` },
+          { key: 'from', label: 'Bırakan', render: (m) => m.from?.name ?? '—' },
+          { key: 'at', label: 'Ne zaman', render: (m) => dateTimeTr(m.at) },
+          { key: 'until', label: 'Bitiş', render: (m) => dateTimeTr(m.until) },
+          { key: 'state', label: 'Durum', render: markState },
+          { key: 'a', label: '', render: (m) => can('app.users') && m.showing && html`<${Button} onClick=${() => clear(m.kind)}>İzi kaldır</${Button}>` },
+        ]} rows=${d.marks} />`;
+    }}</${Loading}>
+  </${Modal}>`;
 }
 
 // ---- Şikâyetler -----------------------------------------------------------------------------------------
@@ -146,6 +203,7 @@ export function AppComplaints() {
   const [status, setStatus] = useState('open');
   const list = useApi(`/api/app/reports?status=${status}`);
   const [room, setRoom] = useState(null);
+  const [marks, setMarks] = useState(null);
   const [ask, prompt] = usePrompt();
   const handle = async (r, body, text) => (await act(() => post('/api/app/reports/handle', { id: r.id, ...body }))) && (toast(text), list.reload());
   const dismiss = (r) => confirm('Şikâyet işlem yapılmadan kapatılır.') && handle(r, { status: 'dismissed' }, 'Şikâyet kapatıldı');
@@ -166,7 +224,7 @@ export function AppComplaints() {
     confirm(`${targetName(r)} ${r.target.bannedForever ? 'için ömür boyu ban da kaldırılır ve ' : ''}hemen yeniden giriş yapabilir.`) &&
     (await act(() => post('/api/app/ban', { user: r.target.id, days: null }))) &&
     (toast('Askı kaldırıldı'), list.reload());
-  return html`<${Page} title="Şikâyetler" subtitle="Kullanıcıların kişi, oda, mesaj, an, yorum ve aile şikâyetleri: sorun yok, işlem yapıldı, askıya alma (kişide), içeriği kaldırma (an ve yorumda), şikâyet edilen odanın görselleri.">
+  return html`<${Page} title="Şikâyetler" subtitle="Kullanıcıların kişi, oda, mesaj, an, yorum ve aile şikâyetleri: sorun yok, işlem yapıldı, askıya alma (kişide), içeriği kaldırma (an ve yorumda), şikâyet edilen odanın görselleri, şikâyet edilen kişinin profil izleri.">
     ${prompt}
     <${Chips} value=${status} options=${R_STATUS} onChange=${setStatus} />
     <${Loading} state=${list}>${(d) => html`<${Table}
@@ -203,12 +261,14 @@ export function AppComplaints() {
               ${r.status === 'open' && r.target.content && !r.target.content.removed && html`<${Button} kind="danger" onClick=${() => removeContent(r)}>${r.target.type === 'comment' ? 'Yorumu kaldır' : 'Anı kaldır'}</${Button}>`}
               ${r.target.type === 'room' && html`<${Button} kind="ghost" onClick=${() => setRoom(r.target.id)}>Oda görselleri</${Button}>`}
               ${r.target.type === 'user' && (r.target.bannedUntil || r.target.bannedForever) && can('app.users') && html`<${Button} kind="ghost" onClick=${() => unban(r)}>Askıyı kaldır</${Button}>`}
+              ${r.target.type === 'user' && r.target.id && can('app.users') && html`<${Button} kind="ghost" onClick=${() => setMarks({ id: r.target.id, name: targetName(r) })}>Profil izleri</${Button}>`}
             </span>`,
         },
       ]}
       rows=${d.reports}
     />`}</${Loading}>
     ${room && html`<${RoomPictures} room=${room} onClose=${() => setRoom(null)} />`}
+    ${marks && html`<${ProfileMarks} user=${marks} onClose=${() => setMarks(null)} />`}
   </${Page}>`;
 }
 

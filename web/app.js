@@ -17,7 +17,8 @@ import { AppLevels } from './pages/app-levels.js';
 import { AppLevelRewards } from './pages/app-level-rewards.js';
 import { AppShop } from './pages/app-shop.js';
 import { AppRocket } from './pages/app-rocket.js';
-import { AppLucky, AppPayouts, AppRefunds, AppReports, AppSettings, AppWithdrawals } from './pages/app-finance.js';
+import { AppPayouts, AppRefunds, AppReports, AppSettings, AppWithdrawals } from './pages/app-finance.js';
+import { AppLucky } from './pages/app-lucky.js';
 import { AppComplaints, AppEvents, AppNotices, AppSupport, AppUsers } from './pages/app-ops.js';
 import { AppAgencies } from './pages/app-agencies.js';
 import { AppAgencyStaff } from './pages/app-agency-staff.js';
@@ -33,17 +34,17 @@ const NAV = [
     ['approvals', 'Onay bekleyenler', 'rules.view', Approvals, 'onay kural bekleyen'],
   ]],
   ['people', 'Kullanıcılar ve güvenlik', '👥', [
-    ['app-users', 'Kullanıcılar', 'app.users', AppUsers, 'hesap üye kişi id kimlik ara bul askıya alma silme oda seviyesi davet'],
+    ['app-users', 'Kullanıcılar', 'app.users', AppUsers, 'hesap üye kişi id kimlik ara bul askıya alma silme oda seviyesi davet profil izi kaka'],
     ['app-sanctions', 'Yaptırımlar', 'app.sanctions', AppSanctions, 'ban yasak engel susturma mute cihaz banı itiraz ceza kademe yetki kanıt'],
     ['app-complaints', 'Şikâyetler', 'app.complaints', AppComplaints, 'şikayet rapor bildirim an yorum oda kapak aile'],
     ['app-support', 'Destek', 'app.support', AppSupport, 'destek talep yardım yanıt'],
   ]],
   ['gifts', 'Hediye ve mağaza', '🎁', [
-    ['app-gifts', 'Hediyeler', 'app.gifts', AppGifts, 'hediye video svga ikon animasyon raf fiyat'],
+    ['app-gifts', 'Hediyeler', 'app.gifts', AppGifts, 'hediye video svga ikon animasyon raf fiyat global duyuru profil izi kaka su'],
     ['app-emojis', 'Emojiler', 'app.emojis', AppEmojis, 'emoji çıkartma sticker paket lottie'],
     ['app-shop', 'Mağaza', 'app.shop', AppShop, 'mağaza çerçeve giriş efekti ejderha video svga isim plakası fiyat satış'],
     ['app-economy', 'Mağaza eşyaları (kişiye)', 'app.economy', AppEconomy, 'mağaza eşya çerçeve vip giriş efekti binek balon ver geri al kişi'],
-    ['app-lucky', 'Şanslı hediye ayarı', 'app.lucky', AppLucky, 'şanslı lucky çanta olasılık ödül'],
+    ['app-lucky', 'Şanslı hediye ayarı', 'app.lucky', AppLucky, 'şanslı lucky çanta olasılık ödül yeni paket ikon video'],
     ['app-rocket', 'Oda roketi', 'app.rocket', AppRocket, 'roket oda hediye seviye hedef ödül kalkış çekiliş jeton'],
   ]],
   ['levels', 'Seviye ve VIP', '⭐', [
