@@ -43,6 +43,11 @@ export const APP_ROUTES: [string, string, Permission | Permission[]][] = [
   ['POST', '/api/admin/mark-kinds', 'app.gifts'],
   ['POST', '/api/admin/mark-kinds/update', 'app.gifts'],
   ['POST', '/api/admin/mark-kinds/delete', 'app.gifts'],
+  // Bağ işaretleri (the app's bond-looks.mjs): each bond kind's mark, level by level (its pictures uploaded as
+  // shopframe, an SVGA as giftsource and turned into both by POST /api/app/bond-looks/svga below).
+  ['GET', '/api/admin/bond-looks', 'app.gifts'],
+  ['POST', '/api/admin/bond-looks/save', 'app.gifts'],
+  ['POST', '/api/admin/bond-looks/clear', 'app.gifts'],
   // Emojiler: the emoji panel's packs and stickers, the app's and the admins' own
   ['GET', '/api/admin/emoji', 'app.emojis'],
   ['POST', '/api/admin/emoji/packs', 'app.emojis'],
@@ -231,7 +236,8 @@ const UPLOADS: Record<string, Permission[]> = {
   stickerart: ['app.emojis'],
   // A profile mark kind's overlay (Hediyeler › İz türleri): checked pixel by pixel by the app when the kind is saved.
   markart: ['app.gifts'],
-  shopframe: ['app.shop'],
+  // Mağaza's frames, bubbles, icons; Hediyeler › Bağ işaretleri's pictures.
+  shopframe: ['app.shop', 'app.gifts'],
   notice: ['app.notices'],
 };
 /** The permissions that may open the app's stored files through here (every page that shows them). */
@@ -314,6 +320,13 @@ export function appRoutes(r: Router<Ctx>, link: AppLink) {
     need(ctx, 'app.shop');
     const out = await appCall(ctx, link, 'POST', '/api/admin/shop/frame-svga', req.body, { raw: true, timeoutMs: 270_000 });
     audit(ctx, 'app.shop.frame-svga', 'app', null, null, { method: 'POST', path: '/api/admin/shop/frame-svga', body: req.body });
+    return { ...out, artPreview: localFiles(out.art), motionPreview: localFiles(out.motion) };
+  });
+  // A bond mark's SVGA (Hediyeler › Bağ işaretleri): the same, for a level's still picture and moving WebP.
+  r.add('POST', '/api/app/bond-looks/svga', async (req, ctx) => {
+    need(ctx, 'app.gifts');
+    const out = await appCall(ctx, link, 'POST', '/api/admin/bond-looks/svga', req.body, { raw: true, timeoutMs: 270_000 });
+    audit(ctx, 'app.bond-looks.svga', 'app', null, null, { method: 'POST', path: '/api/admin/bond-looks/svga', body: req.body });
     return { ...out, artPreview: localFiles(out.art), motionPreview: localFiles(out.motion) };
   });
   // A sticker's picture from a link (Emojiler): the same, for a PNG, WebP or Lottie JSON of at most 512 KB.

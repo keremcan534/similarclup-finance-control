@@ -16,6 +16,7 @@ import { SORTS, SortBar, sortedIds, useDragOrder } from '../order.js';
 import { SHELVES, durationText, extraFields, globalBox, globalNote, globalProblem, kindOptions, markForm, markOf, markPriceProblem, markText, markWarnings, plainOnly, sameMark, unknownKind } from '../gift-fields.js';
 import { LIMITS as KIND_LIMITS, artNote, kindsMissing, layerOf, pendingKinds, withKinds } from '../mark-kinds.js';
 import { KindEditor, MarkKinds } from './app-mark-kinds.js';
+import { BondLooks } from './app-bond-looks.js';
 
 const CATS = SHELVES;
 const CAT = Object.fromEntries(CATS);
@@ -101,8 +102,8 @@ export function videoLine(g) {
 
 export function AppGifts({ query }) {
   const { can, meta } = useApp();
-  // Hediyeler, or İz türleri (#/app-gifts?tab=kinds).
-  const [tab, setTab] = useState(query?.get?.('tab') === 'kinds' ? 'kinds' : 'gifts');
+  // Hediyeler, İz türleri (#/app-gifts?tab=kinds) or Bağ işaretleri (#/app-gifts?tab=bonds).
+  const [tab, setTab] = useState(['kinds', 'bonds'].includes(query?.get?.('tab')) ? query.get('tab') : 'gifts');
   const [addKind, setAddKind] = useState(false);
   const [shelf, setShelf] = useState('all');
   const [kind, setKind] = useState('all');
@@ -114,6 +115,8 @@ export function AppGifts({ query }) {
   // İz türleri: the kinds a gift's mark names. 'list' (the kinds read), 'missing' (an app server before them) or
   // 'unknown' (not read yet, or failed): the form then has the kind typed.
   const kinds = useApi(meta.app_link ? '/api/app/mark-kinds' : null);
+  // Bağ işaretleri (the app's bond-looks.mjs): read when its tab opens.
+  const bondLooks = useApi(meta.app_link && tab === 'bonds' ? '/api/app/bond-looks' : null);
   const kindsMode = kinds.data?.kinds ? 'list' : kinds.error && kindsMissing(kinds.error) ? 'missing' : 'unknown';
   const processing = !!list.data?.gifts.some((g) => g.job?.status === 'processing');
   // An app server with Profil izi answers each gift's `mark` (null: none); one before it answers none.
@@ -164,12 +167,14 @@ export function AppGifts({ query }) {
     title="Uygulama hediyeleri"
     subtitle="Değişiklikler uygulama güncellemesi olmadan telefonlara gider; uygulamanın kendi hediyeleri Orijinale dön ile geri alınır. Fiyatı değişen uygulama hediyesini eski APK'lar göstermez."
     actions=${can('app.gifts') &&
+    tab !== 'bonds' &&
     (tab === 'kinds'
       ? kinds.data && html`<${Button} kind="primary" onClick=${() => setAddKind(true)}>Yeni tür</${Button}>`
       : html`<${Button} kind="primary" disabled=${!list.data?.storage} onClick=${() => setEdit({})}>Yeni hediye</${Button}>`)}
   >
-    <${Tabs} tabs=${[['gifts', 'Hediyeler'], ['kinds', `İz türleri${kinds.data?.kinds ? ` (${kinds.data.kinds.length})` : ''}`]]} value=${tab} onChange=${setTab} />
+    <${Tabs} tabs=${[['gifts', 'Hediyeler'], ['kinds', `İz türleri${kinds.data?.kinds ? ` (${kinds.data.kinds.length})` : ''}`], ['bonds', 'Bağ işaretleri']]} value=${tab} onChange=${setTab} />
     ${tab === 'kinds' && edit && html`<p class="note warn" style="margin-top:10px">${edit.gift ? `“${edit.gift.name}” hediyesinin formu` : 'Yeni hediye formu'} açık bekliyor: yazdıklarınız duruyor, henüz kaydedilmedi. <button type="button" class="btn link" onClick=${() => setTab('gifts')}>Hediye formuna dön</button></p>`}
+    ${tab === 'bonds' && html`<div style="margin-top:10px"><${BondLooks} state=${bondLooks} /></div>`}
     ${tab === 'kinds' && html`<div style="margin-top:10px"><${MarkKinds} state=${kinds} gifts=${list.data?.gifts} storage=${list.data?.storage !== false} adding=${addKind} onAdded=${() => setAddKind(false)} /></div>`}
     ${tab === 'gifts' && marksOn && kindsMode !== 'missing' && html`<p class="note" style="margin:10px 0 0">İz bırakan / temizleyen hediyelerin iz resimleri ve süreleri İz türleri sekmesinde. <button type="button" class="btn link" onClick=${() => setTab('kinds')}>İz türleri sekmesini aç</button></p>`}
     ${tab === 'gifts' && html`<div class="row gap wrap" style="margin:10px 0 6px">

@@ -451,3 +451,30 @@ test("İz resmi cümleleri uygulamanınkiyle harfi harfine aynı (uygulamanın d
   for (const x of [{ ...info, height: 400 }, { ...info, width: 200, height: 200 }, { ...info, alpha: false }, { ...info, animated: true }]) assert.equal(kinds.artProblem({ bytes: 1000, info: x, stats: null }, L), app.markArtProblem(x, null));
   for (let n = 0; n <= 100; n++) assert.equal(kinds.possessiveEnd(n), app.possessiveEnd(n), `%${n}`);
 });
+
+// Hediyeler › Bağ işaretleri (web/bond-looks.js): what each level shows, and what the editor saves.
+const bondLooks: any = await import(new URL('../web/bond-looks.js', import.meta.url).href);
+
+test('Bağ işaretleri: tasarımı olmayan seviye bir alttakini gösterir; kaydet yalnız değişeni gönderir', () => {
+  const looks = [
+    { kind: 'cift', level: 3, art: { url: 'a3' }, motion: null, size: 1.5 },
+    { kind: 'cift', level: 10, art: null, motion: { url: 'm10' }, size: 2 },
+    { kind: 'kanka', level: 1, art: { url: 'k1' }, motion: null, size: 1 },
+  ];
+  const rows = bondLooks.levelRows(looks, 'cift', 20);
+  assert.equal(rows.length, 20);
+  assert.equal(rows[0].shows, null);
+  assert.equal(bondLooks.showsText(rows[0]), 'Uygulamanın kendi işareti (İnce halka)');
+  assert.equal(bondLooks.showsText(rows[2]), 'Bu seviyenin kendi tasarımı');
+  assert.equal(bondLooks.showsText(rows[8]), 'Lv3 tasarımı devam ediyor');
+  assert.equal(rows[19].from, 10);
+  assert.equal(bondLooks.showsText(bondLooks.levelRows([], 'abla', 20)[15]), 'Uygulamanın kendi işareti (Elmas halka ve yıldız)');
+  assert.deepEqual(bondLooks.designedCount(looks), { cift: 2, kanka: 1 });
+  const was = looks[0];
+  assert.equal(bondLooks.saveBody('cift', 3, was, { art: 'a3', motion: null, size: 1.5 }), null, 'değişiklik yok');
+  assert.deepEqual(bondLooks.saveBody('cift', 3, was, { art: 'a3', motion: 'm3', size: 1.5 }), { kind: 'cift', level: 3, motion: 'm3' });
+  assert.deepEqual(bondLooks.saveBody('cift', 3, was, { art: null, motion: 'm3', size: 2 }), { kind: 'cift', level: 3, art: null, motion: 'm3', size: 2 });
+  assert.deepEqual(bondLooks.saveBody('cift', 4, null, { art: 'a4', motion: null, size: 1 }), { kind: 'cift', level: 4, art: 'a4', size: 1 });
+  assert.match(bondLooks.saveBody('cift', 4, null, { art: null, motion: null, size: 1 }).error, /durağan resim ya da hareketli/);
+  assert.equal(bondLooks.sizeText(1.5), '1,5×');
+});
