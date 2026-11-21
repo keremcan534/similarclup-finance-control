@@ -121,7 +121,7 @@ export const APP_ROUTES: [string, string, Permission | Permission[]][] = [
   // Kullanıcılar: search, ban (and lifting it), room level, deleting, an invite's coins back
   ['GET', '/api/admin/users', 'app.users'],
   // An account by the ID on the person's profile in the app (their own number): every page's account fields
-  ['GET', '/api/admin/lookup', ['app.users', 'app.refunds', 'app.notices', 'app.agencies', 'app.agency_ledger', 'app.agency_staff', 'app.sanctions', 'app.sanctions_full', 'app.economy', 'app.jeton']],
+  ['GET', '/api/admin/lookup', ['app.users', 'app.refunds', 'app.notices', 'app.agencies', 'app.agency_ledger', 'app.agency_staff', 'app.sanctions', 'app.sanctions_full', 'app.economy', 'app.jeton', 'app.jeton_load']],
   ['POST', '/api/admin/users/delete', 'app.users'],
   ['POST', '/api/admin/users/room-level', 'app.users'],
   // Profil izleri (the app's profile-marks.mjs): a person's marks (who left each, until when, how it came off), and
@@ -220,7 +220,11 @@ export const APP_ROUTES: [string, string, Permission | Permission[]][] = [
   ['GET', '/api/admin/economy/reviews', ['app.economy', 'app.refunds']],
   // Jeton Noktası: an account made a bank or back, a bank's stock sold to it (critical)
   ['POST', '/api/admin/jeton/bank', 'app.jeton'],
-  ['POST', '/api/admin/jeton/wholesale', 'app.jeton'],
+  // Jeton üretimi (toptan) and Yönetim jeton yükleme: the Süper yönetici alone (owners, 22 Nov 2026).
+  ['POST', '/api/admin/jeton/wholesale', 'app.jeton_load'],
+  ['GET', '/api/admin/jeton/loads', 'app.jeton_load'],
+  ['POST', '/api/admin/jeton/load', 'app.jeton_load'],
+  ['POST', '/api/admin/jeton/reverse', 'app.jeton_load'],
 ];
 /** POSTs that only compute (nothing changes in the app): no row in this panel's audit log. */
 const COMPUTE_ONLY = new Set(['/api/admin/agency/simulate', '/api/admin/levels/preview']);

@@ -57,7 +57,9 @@ export const PERMISSIONS = {
   'app.sanctions': 'Uygulama: yaptırımlar ve itirazlar, moderatör yetkisiyle (susturma, süreli ban, kaldırma, itiraz inceleme)',
   'app.sanctions_full': 'Uygulama: bütün yaptırımlar (ömür boyu ban, ikinci kişi onayı, itiraz kararı), ceza kademeleri, yaptırım yetkileri, cihaz riski (kritik)',
   'app.economy': 'Uygulama: kişinin mağaza eşyaları (ver, geri al) ve iadenin bıraktığı eşyalar',
-  'app.jeton': 'Uygulama: Jeton Noktası hesabı açma ve kapama, toptan jeton satışı (kritik)',
+  'app.jeton': 'Uygulama: Jeton Noktası hesabı açma ve kapama',
+  // No role but the Süper yönetici has it (who has every permission): the owners' call, 22 Nov 2026.
+  'app.jeton_load': 'Uygulama: jeton üretme (toptan), kişiye yönetim jeton yüklemesi ve geri alma (kritik, yalnız Süper yönetici)',
 } as const;
 export type Permission = keyof typeof PERMISSIONS;
 export const ALL_PERMISSIONS = Object.keys(PERMISSIONS) as Permission[];

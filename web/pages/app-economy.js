@@ -136,6 +136,7 @@ function Reviews({ onOpen }) {
 }
 
 export function AppJeton() {
+  const { can } = useApp();
   const [ask, prompt] = usePrompt();
   const [last, setLast] = useState(null);
   const bank = async (enabled) => {
@@ -176,11 +177,11 @@ export function AppJeton() {
         <p class="muted">Bir hesabı Jeton Noktası yap ya da sıradan hesaba döndür.</p>
         <div class="row gap"><${Button} kind="primary" onClick=${() => bank(true)}>Aç</${Button}><${Button} onClick=${() => bank(false)}>Kapat</${Button}></div>
       </${Card}>
-      <${Card} title="Toptan satış">
+      ${can('app.jeton_load') && html`<${Card} title="Toptan satış">
         <p class="muted">Jeton Noktası'nın ödediği tutarın dekontuyla stok satışı.</p>
         <${Button} kind="primary" onClick=${wholesale}>Toptan sat</${Button}>
         ${last && html`<p class="muted">Son satış: ${num(last.coins ?? last.transfer?.coins)} jeton${last.transfer?.id ? ` · aktarım #${last.transfer.id}` : ''}${last.replay ? ' (daha önce yapılmıştı)' : ''}</p>`}
-      </${Card}>
+      </${Card}>`}
     </div>
   </${Page}>`;
 }

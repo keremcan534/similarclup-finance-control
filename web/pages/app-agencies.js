@@ -81,7 +81,31 @@ function Overview({ onTab }) {
     <${Kpi} label="Merkez onayı bekleyen transfer" value=${num(d.transfers_waiting)} tone=${d.transfers_waiting ? 'warn' : ''} note=${d.transfers_waiting ? 'Transferler sekmesinde' : ''} onClick=${() => onTab('transfers')} />
     <${Kpi} label="Açık ajans itirazı" value=${num(d.appeals_open)} sub="uygulamada karara bağlanır" />
     <${Kpi} label="Komisyonu hesaplanmamış gelir" value=${num(d.calc_pending)} />
-  </div>`}</${Loading}>`;
+  </div>`}</${Loading}>
+  <${Assistants} />`;
+}
+
+/**
+ * Ajans asistanları (owners, 22 Nov 2026: "1 ile 10 arasında rakamı seçip tüm ajanslar için aktif yapabilmeliyiz"):
+ * how many assistants every agency may add, in sight on the first tab (it was one row of the network rules' JSON).
+ * The same rule as there (assistant_policy, the app's agency-lib.mjs), so it needs the ledger's permission.
+ */
+function Assistants() {
+  const { can } = useApp();
+  const settings = useApi(can('app.agency_ledger') ? '/api/app/agency/settings' : null);
+  const [edit, setEdit] = useState(false);
+  if (!can('app.agency_ledger')) return null;
+  return html`<${Card} title="Ajans asistanları">
+    <${Loading} state=${settings}>${(d) => {
+      const max = d.values.assistant_policy?.max ?? 1;
+      return html`<div class="row gap wrap" style="align-items:center">
+        <span>Her ajans en fazla <strong>${max === 0 ? 'hiç' : `${max} kişi`}</strong> asistan ekleyebilir. Bu sayı bütün ajanslar için geçerlidir.</span>
+        <span style="flex:1"></span>
+        <${Button} kind="primary" onClick=${() => setEdit(true)}>Değiştir</${Button}>
+      </div>
+      ${edit && html`<${SettingEditor} k="assistant_policy" value=${d.values.assistant_policy} onClose=${() => setEdit(false)} onSaved=${() => (setEdit(false), toast('Asistan sınırı kaydedildi'), settings.reload())} />`}`;
+    }}</${Loading}>
+  </${Card}>`;
 }
 
 // ---- Ajanslar -------------------------------------------------------------------------------------------
@@ -663,7 +687,7 @@ function SettingEditor({ k, value, onClose, onSaved }) {
   return html`<${Modal} title=${SETTING_TEXT[k] ?? k} onClose=${onClose}>
     ${assistants
       ? html`<p class="muted">Bir ajans aynı anda en fazla bu kadar asistan ekleyebilir. Sınır düşürülürse var olan asistanlar kalır, yenisi eklenemez.</p>
-          <label class="field"><span>Ajans başına asistan</span><select value=${max} onChange=${(e) => setMax(e.target.value)}>${Array.from({ length: 11 }, (_, n) => html`<option value=${String(n)}>${n === 0 ? 'Asistan eklenemez' : `${n} kişi`}</option>`)}</select></label>`
+          <label class="field"><span>Ajans başına asistan</span><select value=${max} onChange=${(e) => setMax(e.target.value)}>${(max === '0' ? [0] : []).concat(Array.from({ length: 10 }, (_, i) => i + 1)).map((n) => html`<option value=${String(n)}>${n === 0 ? 'Asistan eklenemez' : `${n} kişi`}</option>`)}</select></label>`
       : html`<p class="muted">Oranlar kesir olarak yazılır (0.25 = %25). Uygulama değeri denetler; uymayan değer nedeniyle reddedilir.</p>
           <label class="field"><span>Değer (JSON)</span><textarea rows="10" class="num" value=${text} onInput=${(e) => setText(e.target.value)}></textarea></label>`}
     <label class="field" style="margin-top:10px"><span>Gerekçe (3–300) *</span><input value=${reason} maxlength="300" onInput=${(e) => setReason(e.target.value)} /></label>
