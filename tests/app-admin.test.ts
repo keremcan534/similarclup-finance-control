@@ -91,6 +91,20 @@ const fakeApp = createServer(async (req, res) => {
     const b = JSON.parse(body.toString('utf8'));
     return json(200, { url: `${appBase}/api/media/f/giftsource/u1/linked.svga`, link: b.url, kind: 'giftsource', type: 'application/x-svga', bytes: 4000, video: 'source', svga: true });
   }
+  // Bağ işaretleri (the app's bond-looks.mjs): Çift's Lv3 design, and an SVGA turned into its two pictures.
+  if (req.method === 'GET' && url.pathname === '/api/admin/bond-looks') {
+    return json(200, {
+      kinds: [{ kind: 'cift', label: 'Çift' }, { kind: 'kanka', label: 'Kanka' }],
+      levels: 20,
+      looks: [{ kind: 'cift', level: 3, art: { url: `${appBase}/api/media/f/shopframe/u1/kalp.png`, v: '0123456789ab', px: 256 }, motion: { url: `${appBase}/api/media/f/shopframe/u1/kalp.webp`, v: 'ba9876543210', px: 256, bytes: 90_000 }, size: 1.5, updatedAt: null }],
+      limits: { artBytes: 4_194_304, artPxMin: 64, artPxMax: 1024, servePx: 512, serveBytes: 524_288, motionBytes: 3_145_728, motionPxMin: 64, motionPxMax: 512, sizeMin: 1, sizeMax: 3, types: ['image/png', 'image/webp'] },
+      storage: true,
+      svga: true,
+    });
+  }
+  if (req.method === 'POST' && url.pathname === '/api/admin/bond-looks/svga') {
+    return json(200, { art: `${appBase}/api/media/f/shopframe/u1/bond-x.png`, motion: `${appBase}/api/media/f/shopframe/u1/bond-x.webp`, px: 256, bytes: 120_000 });
+  }
   // İz türleri (the app's mark-kinds.mjs): a kind with its overlay at the app's storage address.
   if (req.method === 'GET' && url.pathname === '/api/admin/mark-kinds') {
     return json(200, {
@@ -749,6 +763,50 @@ test('İz türleri: Hediyeler yetkisiyle; dört uç uygulamaya aynen gider ve de
   refuse = null;
   assert.equal(unknown.status, 400);
   assert.match(unknown.json.error, /diye bir iz türü yok/);
+});
+
+test('Bağ işaretleri: Hediyeler yetkisiyle; uçlar uygulamaya aynen gider, denetime yazılır; resimler shopframe olarak aynı yetkiyle yüklenir; SVGA çevrilir', async () => {
+  for (const [method, path] of [['GET', '/api/admin/bond-looks'], ['POST', '/api/admin/bond-looks/save'], ['POST', '/api/admin/bond-looks/clear']]) {
+    assert.deepEqual(APP_ROUTES.find(([m, p]) => m === method && p === path)?.[2], 'app.gifts', `${method} ${path}`);
+  }
+  env.as('operations_manager', 'ops2@test.local');
+  env.as('read_only', 'ro2@test.local');
+  env.db.run("INSERT INTO roles (key, name, scope, permissions) VALUES ('sansli2', 'Şanslı ekibi 2', 'platform', '[\"app.lucky\"]') ON CONFLICT (key) DO NOTHING");
+  env.as('sansli2', 'sansli2@test.local');
+  const ops = await loginAs('ops2@test.local');
+  const ro = await loginAs('ro2@test.local');
+  const lucky = await loginAs('sansli2@test.local');
+  const r = await call('GET', '/api/app/bond-looks', undefined, ops);
+  assert.equal(r.status, 200, JSON.stringify(r.json));
+  assert.equal(seen.at(-1)!.path, '/api/admin/bond-looks');
+  // The pictures' addresses as this server's, for the page to show.
+  assert.equal(r.json.looks[0].motion.url, '/api/app/media/f/shopframe/u1/kalp.webp');
+  for (const h of [ro, lucky]) assert.equal((await call('GET', '/api/app/bond-looks', undefined, h)).status, 403);
+  for (const [path, body] of [
+    ['/api/app/bond-looks/save', { kind: 'cift', level: 5, art: `${appBase}/api/media/f/shopframe/u1/new.png`, size: 2 }],
+    ['/api/app/bond-looks/clear', { kind: 'cift', level: 5 }],
+  ] as const) {
+    const out = await call('POST', path, body, ops);
+    assert.equal(out.status, 200, `${path}: ${JSON.stringify(out.json)}`);
+    assert.equal(seen.at(-1)!.path, path.replace('/api/app/', '/api/admin/'));
+    assert.deepEqual(JSON.parse(seen.at(-1)!.body), body);
+    const log = env.db.get('SELECT actor FROM audit_logs WHERE action = ? ORDER BY id DESC LIMIT 1', `app${path.slice('/api/app'.length).replace(/\//g, '.')}`);
+    assert.ok(log, path);
+    assert.match(log.actor, /ops2@test\.local/);
+    for (const h of [ro, lucky]) assert.equal((await call('POST', path, body, h)).status, 403, path);
+  }
+  // A picture goes to the app's storage as shopframe with Hediyeler too (Mağaza's kind).
+  const up = await fetch(`${base}/api/app/upload?kind=shopframe`, { method: 'POST', headers: { ...ops, 'content-type': 'image/png' }, body: ICON });
+  assert.equal(up.status, 200);
+  assert.equal((await fetch(`${base}/api/app/upload?kind=shopframe`, { method: 'POST', headers: { ...lucky, 'content-type': 'image/png' }, body: ICON })).status, 403);
+  // An SVGA: the app answers both pictures; the page gets them through this server too.
+  const svga = await call('POST', '/api/app/bond-looks/svga', { source: `${appBase}/api/media/f/giftsource/u1/kalp.svga` }, ops);
+  assert.equal(svga.status, 200, JSON.stringify(svga.json));
+  assert.equal(seen.at(-1)!.path, '/api/admin/bond-looks/svga');
+  assert.equal(svga.json.art, `${appBase}/api/media/f/shopframe/u1/bond-x.png`);
+  assert.equal(svga.json.motionPreview, '/api/app/media/f/shopframe/u1/bond-x.webp');
+  assert.ok(env.db.get("SELECT 1 FROM audit_logs WHERE action = 'app.bond-looks.svga'"));
+  assert.equal((await call('POST', '/api/app/bond-looks/svga', { source: 'x' }, lucky)).status, 403);
 });
 
 test("uygulamanın PANEL_ROUTES'u: panelin çağırdığı her uç orada (uygulamanın deposu yanındaysa)", (t) => {

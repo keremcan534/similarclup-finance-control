@@ -491,14 +491,14 @@ export function AppShop() {
 }
 
 /** A picture's size in the browser (a picked file, before the app's server measures it). */
-async function sizeOf(src) {
+export async function sizeOf(src) {
   const img = new Image();
   img.src = src;
   await img.decode();
   return { w: img.naturalWidth, h: img.naturalHeight };
 }
 /** A picked WebP's first bytes: whether it moves (VP8X's animation flag) and can be transparent; null: not a WebP. */
-async function webpFlags(file) {
+export async function webpFlags(file) {
   const b = new Uint8Array(await file.slice(0, 32).arrayBuffer());
   const tag = (i) => String.fromCharCode(...b.slice(i, i + 4));
   if (b.length < 21 || tag(0) !== 'RIFF' || tag(8) !== 'WEBP') return null;
@@ -508,7 +508,7 @@ async function webpFlags(file) {
  * A moving WebP's first frame as a PNG, for a frame that came without its still picture (older phones, "Düşük veri
  * modu" and small photos show the still one): the browser draws the first frame of an animated picture not on show.
  */
-async function stillOf(file) {
+export async function stillOf(file) {
   const url = URL.createObjectURL(file);
   try {
     const img = new Image();
