@@ -24,6 +24,7 @@ import { AppAgencies } from './pages/app-agencies.js';
 import { AppAgencyStaff } from './pages/app-agency-staff.js';
 import { AppEconomy, AppJeton } from './pages/app-economy.js';
 import { AppSanctions } from './pages/app-sanctions.js';
+import { AppBonds } from './pages/app-bond-looks.js';
 
 // The menu by subject, the app's own work first. Each page: [route, label, permission, page, words it is found by].
 // Routes never change (links and bookmarks keep working); only where a page sits and what it is called do.
@@ -45,6 +46,7 @@ const NAV = [
     ['app-shop', 'Mağaza', 'app.shop', AppShop, 'mağaza çerçeve giriş efekti ejderha video svga isim plakası fiyat satış'],
     ['app-economy', 'Mağaza eşyaları (kişiye)', 'app.economy', AppEconomy, 'mağaza eşya çerçeve vip giriş efekti binek balon ver geri al kişi'],
     ['app-lucky', 'Şanslı hediye ayarı', 'app.lucky', AppLucky, 'şanslı lucky çanta olasılık ödül yeni paket ikon video'],
+    ['app-bonds', 'Bağlar', 'app.gifts', AppBonds, 'bağ ilişki çift kardeş seviye ikon svga resim hareketli işaret koltuk'],
     ['app-rocket', 'Oda roketi', 'app.rocket', AppRocket, 'roket oda hediye seviye hedef ödül kalkış çekiliş jeton'],
   ]],
   ['levels', 'Seviye ve VIP', '⭐', [

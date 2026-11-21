@@ -239,12 +239,14 @@ const UPLOADS: Record<string, Permission[]> = {
   // Mağaza's frames, bubbles, icons; Hediyeler › Bağ işaretleri's pictures.
   shopframe: ['app.shop', 'app.gifts'],
   notice: ['app.notices'],
+  // A sanction's screenshot (Yaptırımlar › Kanıt).
+  evidence: ['app.sanctions', 'app.sanctions_full'],
 };
 /** The permissions that may open the app's stored files through here (every page that shows them). */
 // The app serves these files to anyone with the address (media.mjs GET /api/media/f/…); the panel still asks for a
 // page that shows them: gift art and a mark kind's overlay, a Şanslı package's icon and video, a reported post's or
 // room's picture, a ticket's photo, a notice's or event's picture.
-const FILE_PERMS: Permission[] = ['app.gifts', 'app.lucky', 'app.emojis', 'app.shop', 'app.complaints', 'app.support', 'app.notices', 'app.events'];
+const FILE_PERMS: Permission[] = ['app.gifts', 'app.lucky', 'app.emojis', 'app.shop', 'app.complaints', 'app.support', 'app.notices', 'app.events', 'app.sanctions', 'app.sanctions_full'];
 
 const off = () => new HttpError(503, 'Uygulama bağlantısı ayarlı değil: sunucuda FC_APP_API_URL ve FC_APP_API_KEY gerekli', 'app_off');
 

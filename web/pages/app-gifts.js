@@ -49,6 +49,8 @@ export function typeOf(kind, file) {
   const e = ending(file.name);
   if (kind === 'gifticon' || kind === 'shopframe' || kind === 'markart') return t === 'image/png' || e === 'png' ? 'image/png' : t === 'image/webp' || e === 'webp' ? 'image/webp' : null;
   if (kind === 'giftvideo') return t === 'video/mp4' || e === 'mp4' ? 'video/mp4' : null;
+  if (kind === 'evidence')
+    return t === 'image/png' || e === 'png' ? 'image/png' : t === 'image/webp' || e === 'webp' ? 'image/webp' : t === 'image/jpeg' || e === 'jpg' || e === 'jpeg' ? 'image/jpeg' : null;
   if (e === 'svga') return 'application/x-svga';
   if (t === 'video/webm' || e === 'webm') return 'video/webm';
   if (t === 'video/quicktime' || e === 'mov') return 'video/quicktime';

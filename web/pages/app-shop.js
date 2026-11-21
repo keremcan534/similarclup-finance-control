@@ -622,8 +622,11 @@ function Editor({ item, kind, limits, convert, svga, onClose, onSaved }) {
   const [seatColor, setSeatColor] = useState(() => item?.look?.color ?? limits.lookDefault?.seat?.color ?? '#D5DAE1');
   // A bubble's or wave's colours (and style); a bubble's picture's size and corners.
   const [look, setLook] = useState(() => {
+    // Only a bubble's or a wave's (a seat color's look is one color, kept in seatColor: copying its missing colours
+    // threw, and "Yeni koltuk rengi" opened nothing).
+    if (!looks) return null;
     const l = item?.look ?? limits.lookDefault?.[kind] ?? null;
-    return l ? { ...l, colors: [...l.colors] } : null;
+    return l ? { ...l, colors: [...(l.colors ?? [])] } : null;
   });
   const [dims, setDims] = useState(() => (item?.look?.slice ? { w: item.look.slice.w, h: item.look.slice.h } : null));
   const [slice, setSlice] = useState(() => (item?.look?.slice ? { t: item.look.slice.t, r: item.look.slice.r, b: item.look.slice.b, l: item.look.slice.l } : null));

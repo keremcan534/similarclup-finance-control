@@ -5,7 +5,7 @@
 // level: a still picture (a transparent PNG or WebP) and/or a moving one (an animated WebP, or an SVGA the app's server
 // turns into both, as Mağaza's frames), how big it is drawn, and a preview between two sample seats. The rules are in
 // web/bond-looks.js.
-import { Badge, Button, Loading, Modal, Table, act, dateTimeTr, html, post, toast, useApi, useApp, useEffect, useRef, useState } from '../lib.js';
+import { Badge, Button, Loading, Modal, Page, Table, act, dateTimeTr, html, post, toast, useApi, useApp, useEffect, useRef, useState } from '../lib.js';
 import { LIMITS, SIZES, designedCount, levelRows, saveBody, showsText, sizeText } from '../bond-looks.js';
 import { upload } from './app-gifts.js';
 import { sizeOf, stillOf, webpFlags } from './app-shop.js';
@@ -204,4 +204,16 @@ function LookEditor({ kind, label, level, own, from, limits, svga, onClose, onSa
       <${Button} kind="primary" disabled=${!!busy || (!art && !motion)} onClick=${save}>Kaydet</${Button}>
     </div>
   </${Modal}>`;
+}
+
+/**
+ * Uygulama › Bağlar: the same editor as Hediyeler › Bağ işaretleri, on a page of its own in the menu (owners, 21 Nov
+ * 2026: "Bağlar bölümünde yaptığımız çalışma yönetim paneline gelmemiş": it was a tab of Hediyeler).
+ */
+export function AppBonds() {
+  const { meta } = useApp();
+  const state = useApi(meta.app_link ? '/api/app/bond-looks' : null);
+  return html`<${Page} title="Bağlar" subtitle="Her bağ türünün (Çift, Kardeş, …) seviye seviye işareti: ikon, resim, hareketli resim ve SVGA. İki kişi yan yana mikrofonda otururken ve profildeki Bağlar satırında görünür.">
+    ${!meta.app_link ? html`<div class="empty">Uygulama bağlantısı ayarlı değil.</div>` : html`<${BondLooks} state=${state} />`}
+  </${Page}>`;
 }

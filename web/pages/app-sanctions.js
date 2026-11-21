@@ -4,6 +4,7 @@
 // button shows only when the app would accept it. Kişi (search, a person's record, devices, applying, lifting,
 // evidence), Onay bekleyenler (a second person approves a heavy sanction), İtirazlar, Kurallar (the automatic steps,
 // who may give what), all of it as the app's Yönetim had it.
+import { upload } from './app-gifts.js';
 import { Button, Card, ID_HINT, Loading, Modal, Page, Table, Tabs, act, dateTimeTr, get, html, num, personOf, post, toast, useApi, usePrompt, useState } from '../lib.js';
 
 /** A coloured label in the panel's badge styles (ok, warn, bad, info, muted). */
@@ -65,6 +66,12 @@ const RISK = [
 /** Room-only mutes are given from inside the room in the app; here the platform-wide ones. */
 const GLOBAL = (t) => !t.startsWith('mute_room_');
 
+/** A screenshot picked in a form ("Göz at"): uploaded to the app's storage as an evidence file. */
+const SHOT_ACCEPT = 'image/png,image/jpeg,image/webp';
+const shotUpload = (file) => upload('evidence', file);
+/** The evidence a form gives: a screenshot by its uploaded file, else the text written; none when empty. */
+const evidenceOf = (kind, file, text) => (kind === 'screenshot' ? (file ? { kind, content: file } : null) : text?.trim() ? { kind: kind || 'note', content: text.trim() } : null);
+
 export function AppSanctions() {
   const meta = useApi('/api/app/sanctions/meta');
   const [tab, setTab] = useState('person');
@@ -119,6 +126,7 @@ function Person({ meta, perms }) {
 function Record({ id, meta, perms, onClose }) {
   const rec = useApi(`/api/app/sanctions/user?id=${encodeURIComponent(id)}`);
   const [ask, prompt] = usePrompt();
+  const [showEv, setShowEv] = useState(null);
   const done = (text) => (r) => r && (toast(text), rec.reload());
   const types = meta.types.filter((t) => GLOBAL(t.type));
   const apply = async (person, devices) => {
@@ -138,8 +146,9 @@ function Record({ id, meta, perms, onClose }) {
         ...(first.usePolicy ? [] : [{ name: 'minutes', label: 'Süre', type: 'select', options: lengthOptions(meta, first.type), def: lengthDefault(meta, first.type) }]),
         { name: 'description', label: 'Kişiye gösterilecek gerekçe', type: 'text', wide: true },
         { name: 'note', label: 'İç not', type: 'textarea', wide: true },
-        { name: 'evidenceKind', label: 'Kanıt türü', type: 'select', options: [['screenshot', 'Ekran görüntüsü bağlantısı'], ['link', 'Bağlantı'], ['message', 'Mesaj metni'], ['note', 'Not']], def: 'screenshot' },
-        { name: 'evidence', label: 'Kanıt', type: 'textarea', wide: true },
+        { name: 'evidenceKind', label: 'Kanıt türü', type: 'select', options: [['screenshot', 'Ekran görüntüsü'], ['link', 'Bağlantı'], ['message', 'Mesaj metni'], ['note', 'Not']], def: 'screenshot' },
+        { name: 'evidenceFile', label: 'Ekran görüntüsü (Göz at)', type: 'file', accept: SHOT_ACCEPT, upload: shotUpload, wide: true, show: (x) => x.evidenceKind === 'screenshot' },
+        { name: 'evidence', label: 'Kanıt', type: 'textarea', wide: true, show: (x) => x.evidenceKind !== 'screenshot' },
         ...(first.type === 'mute_global_text' ? [{ name: 'includeDm', label: 'Özel mesajlar da kapansın', type: 'checkbox' }] : []),
         ...(first.type === 'mute_global_voice' ? [{ name: 'includeCalls', label: 'Aramalar da kapansın', type: 'checkbox' }] : []),
       ],
@@ -154,7 +163,7 @@ function Record({ id, meta, perms, onClose }) {
       description: v.description ?? '',
       note: v.note ?? '',
       // Güncelleme 8: without evidence it waits for a Süper yönetici (the app's sanctions.mjs).
-      ...(v.evidence?.trim() ? { evidence: [{ kind: v.evidenceKind || 'note', content: v.evidence.trim() }] } : {}),
+      ...(evidenceOf(v.evidenceKind, v.evidenceFile, v.evidence) ? { evidence: [evidenceOf(v.evidenceKind, v.evidenceFile, v.evidence)] } : {}),
       ...(v.includeDm ? { includeDm: true } : {}),
       ...(v.includeCalls ? { includeCalls: true } : {}),
       ...(first.type === 'device_ban' ? { deviceIds: devices.map((d) => d.id) } : {}),
@@ -169,12 +178,16 @@ function Record({ id, meta, perms, onClose }) {
   const evidence = async (s) => {
     const v = await ask('Kanıt ekle', {
       fields: [
-        { name: 'kind', label: 'Tür', type: 'select', required: true, options: [['note', 'Not'], ['link', 'Bağlantı'], ['screenshot', 'Ekran görüntüsü bağlantısı']], def: 'note' },
-        { name: 'content', label: 'İçerik', type: 'textarea', required: true, wide: true },
+        { name: 'kind', label: 'Tür', type: 'select', required: true, options: [['screenshot', 'Ekran görüntüsü'], ['note', 'Not'], ['link', 'Bağlantı'], ['message', 'Mesaj metni']], def: 'screenshot' },
+        { name: 'file', label: 'Ekran görüntüsü (Göz at)', type: 'file', accept: SHOT_ACCEPT, upload: shotUpload, wide: true, show: (x) => x.kind === 'screenshot' },
+        { name: 'content', label: 'İçerik', type: 'textarea', wide: true, show: (x) => x.kind !== 'screenshot' },
       ],
       ok: 'Ekle',
     });
-    if (v) done('Kanıt eklendi')(await act(() => post('/api/app/sanctions/evidence', { id: s.id, kind: v.kind, content: v.content })));
+    if (!v) return;
+    const e = evidenceOf(v.kind, v.file, v.content);
+    if (!e) return toast(v.kind === 'screenshot' ? 'Önce ekran görüntüsünü seçin' : 'Kanıtın içeriğini yazın', 'error');
+    done('Kanıt eklendi')(await act(() => post('/api/app/sanctions/evidence', { id: s.id, ...e })));
   };
   const risk = async (d) => {
     const v = await ask(`Cihaz #${d.id}: risk`, {
@@ -188,6 +201,7 @@ function Record({ id, meta, perms, onClose }) {
   };
   return html`<${Modal} title="Kişinin kaydı" onClose=${onClose} wide>
     ${prompt}
+    ${showEv && html`<${EvidenceList} s=${showEv} onClose=${() => setShowEv(null)} />`}
     <${Loading} state=${rec}>${(x) => {
       const person = x.user;
       const devices = x.devices ?? [];
@@ -209,7 +223,7 @@ function Record({ id, meta, perms, onClose }) {
               { key: 'len', label: 'Süre', render: (s) => (s.permanent ? 'Süresiz' : `${dateTimeTr(s.startAt)} → ${dateTimeTr(s.endAt)}`) },
               { key: 'status', label: 'Durum', render: (s) => html`<${Tag} c=${statusOf(s)[0]} label=${statusOf(s)[1]} />${s.appealStatus ? html` <span class="muted">İtiraz: ${APPEAL[s.appealStatus] ?? s.appealStatus}</span>` : ''}` },
               { key: 'by', label: 'Veren', render: (s) => html`${s.createdBy?.name ?? '—'}${s.approvedBy ? html`<br /><span class="muted">Onay: ${s.approvedBy.name}</span>` : ''}` },
-              { key: 'ev', label: 'Kanıt', render: (s) => (s.evidence?.length ? num(s.evidence.length) : '—') },
+              { key: 'ev', label: 'Kanıt', render: (s) => (s.evidence?.length ? html`<button type="button" class="btn link" onClick=${() => setShowEv(s)}>${num(s.evidence.length)} · Gör</button>` : '—') },
               {
                 key: 'a',
                 label: '',
@@ -257,9 +271,30 @@ function Record({ id, meta, perms, onClose }) {
 }
 const minutesOf = (s) => (s.endAt && s.startAt ? Math.round((Date.parse(s.endAt) - Date.parse(s.startAt)) / 60_000) : null);
 
+/** A sanction's evidence: each piece as it was added; a screenshot drawn (opens full size), a link to open. */
+function EvidenceList({ s, onClose }) {
+  const KIND = { screenshot: 'Ekran görüntüsü', link: 'Bağlantı', message: 'Mesaj', note: 'Not', report: 'Şikâyet' };
+  const file = (c) => /^\/api\/app\/media\/f\//.test(c);
+  return html`<${Modal} title="Kanıtlar" onClose=${onClose} wide>
+    <div class="stack" style="gap:12px">
+      ${(s.evidence ?? []).map(
+        (e) => html`<div key=${e.id} class="stack" style="gap:4px;border-bottom:1px solid var(--line,#eee);padding-bottom:8px">
+          <small class="muted">${KIND[e.kind] ?? e.kind}${e.by ? ` · ${e.by}` : ''}${e.at ? ` · ${dateTimeTr(e.at)}` : ''}</small>
+          ${file(e.content)
+            ? html`<a href=${e.content} target="_blank" rel="noopener"><img src=${e.content} alt="Kanıt" style="max-width:100%;max-height:420px;border-radius:8px" /></a>`
+            : /^https?:\/\//.test(e.content)
+              ? html`<a href=${e.content} target="_blank" rel="noopener noreferrer">${e.content}</a>`
+              : html`<div style="white-space:pre-wrap">${e.content}</div>`}
+        </div>`,
+      )}
+    </div>
+  </${Modal}>`;
+}
+
 function Pending({ meta, full }) {
   const list = useApi('/api/app/sanctions/pending');
   const [ask, prompt] = usePrompt();
+  const [showEv, setShowEv] = useState(null);
   const decide = async (s, approve) => {
     const v = await ask(approve ? 'Yaptırımı onayla' : 'Öneriyi reddet', { label: approve ? 'Onay notu' : 'Ret nedeni', ok: approve ? 'Onayla' : 'Reddet' });
     if (v) {
@@ -269,6 +304,7 @@ function Pending({ meta, full }) {
   };
   return html`<div style="margin-top:10px">
     ${prompt}
+    ${showEv && html`<${EvidenceList} s=${showEv} onClose=${() => setShowEv(null)} />`}
     ${!full && html`<p class="muted">Onaylamak tam yaptırım yetkisi ister; burada yalnız görürsün.</p>`}
     <${Loading} state=${list}>${(x) => html`<${Table}
       empty="Onay bekleyen yaptırım yok"
@@ -281,7 +317,7 @@ function Pending({ meta, full }) {
         { key: 'at', label: 'Ne zaman', render: (s) => dateTimeTr(s.createdAt) },
         { key: 'note', label: 'Not', render: (s) => s.note || s.reasonText || '—' },
         // Güncelleme 8: one given without evidence is a Süper yönetici's to decide.
-        { key: 'ev', label: 'Kanıt', render: (s) => (s.needsSuper ? html`<${Tag} c="warn" label="Kanıtsız · Süper yönetici onaylar" />` : s.evidence?.length ? num(s.evidence.length) : '—') },
+        { key: 'ev', label: 'Kanıt', render: (s) => (s.needsSuper ? html`<${Tag} c="warn" label="Kanıtsız · Süper yönetici onaylar" />` : s.evidence?.length ? html`<button type="button" class="btn link" onClick=${() => setShowEv(s)}>${num(s.evidence.length)} · Gör</button>` : '—') },
         {
           key: 'a',
           label: '',
