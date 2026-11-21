@@ -107,7 +107,9 @@ export function catalogCosts(db: Db, acc: Acc, from: string, to: string) {
   for (const it of items) {
     const usesQuery =
       it.kind === 'game'
-        ? "SELECT COUNT(*) AS n, COALESCE(-SUM(units),0) AS coins FROM wallet_transactions WHERE type = 'game_entry' AND item_ref = ? AND booked_on BETWEEN ? AND ?"
+        ? // The app sends a coin game's round as a coin_spend named by the game's id (its finance-sync.mjs): uses were
+          // counted from game_entry alone and always came out 0 (owners, 22 Nov 2026).
+          "SELECT COUNT(*) AS n, COALESCE(-SUM(units),0) AS coins FROM wallet_transactions WHERE type IN ('game_entry','coin_spend') AND item_ref = ? AND booked_on BETWEEN ? AND ?"
         : "SELECT COUNT(*) AS n, COALESCE(-SUM(units),0) AS coins FROM wallet_transactions WHERE type IN ('gift_send','coin_spend') AND item_ref = ? AND booked_on BETWEEN ? AND ?";
     const u = db.get(usesQuery, it.code, from, to)!;
     const oneOff = it.acquired_on && it.acquired_on >= from && it.acquired_on <= to ? BigInt(it.license_cost_minor) + BigInt(it.production_cost_minor) : 0n;

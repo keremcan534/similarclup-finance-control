@@ -14,6 +14,7 @@ import { pipeline } from 'node:stream/promises';
 
 import { audit, can, need, type Ctx, type Permission } from './context.ts';
 import { HttpError, bad, type Router } from './lib/http.ts';
+import { lastSync, syncFromApp } from './app-sync.ts';
 
 export type AppLink = { url: string; key: string } | null;
 
@@ -121,7 +122,7 @@ export const APP_ROUTES: [string, string, Permission | Permission[]][] = [
   // Kullanıcılar: search, ban (and lifting it), room level, deleting, an invite's coins back
   ['GET', '/api/admin/users', 'app.users'],
   // An account by the ID on the person's profile in the app (their own number): every page's account fields
-  ['GET', '/api/admin/lookup', ['app.users', 'app.refunds', 'app.notices', 'app.agencies', 'app.agency_ledger', 'app.agency_staff', 'app.sanctions', 'app.sanctions_full', 'app.economy', 'app.jeton']],
+  ['GET', '/api/admin/lookup', ['app.users', 'app.refunds', 'app.notices', 'app.agencies', 'app.agency_ledger', 'app.agency_staff', 'app.sanctions', 'app.sanctions_full', 'app.economy', 'app.jeton', 'app.jeton_load']],
   ['POST', '/api/admin/users/delete', 'app.users'],
   ['POST', '/api/admin/users/room-level', 'app.users'],
   // Profil izleri (the app's profile-marks.mjs): a person's marks (who left each, until when, how it came off), and
@@ -220,7 +221,11 @@ export const APP_ROUTES: [string, string, Permission | Permission[]][] = [
   ['GET', '/api/admin/economy/reviews', ['app.economy', 'app.refunds']],
   // Jeton Noktası: an account made a bank or back, a bank's stock sold to it (critical)
   ['POST', '/api/admin/jeton/bank', 'app.jeton'],
-  ['POST', '/api/admin/jeton/wholesale', 'app.jeton'],
+  // Jeton üretimi (toptan) and Yönetim jeton yükleme: the Süper yönetici alone (owners, 22 Nov 2026).
+  ['POST', '/api/admin/jeton/wholesale', 'app.jeton_load'],
+  ['GET', '/api/admin/jeton/loads', 'app.jeton_load'],
+  ['POST', '/api/admin/jeton/load', 'app.jeton_load'],
+  ['POST', '/api/admin/jeton/reverse', 'app.jeton_load'],
 ];
 /** POSTs that only compute (nothing changes in the app): no row in this panel's audit log. */
 const COMPUTE_ONLY = new Set(['/api/admin/agency/simulate', '/api/admin/levels/preview']);
@@ -239,12 +244,14 @@ const UPLOADS: Record<string, Permission[]> = {
   // Mağaza's frames, bubbles, icons; Hediyeler › Bağ işaretleri's pictures.
   shopframe: ['app.shop', 'app.gifts'],
   notice: ['app.notices'],
+  // A sanction's screenshot (Yaptırımlar › Kanıt).
+  evidence: ['app.sanctions', 'app.sanctions_full'],
 };
 /** The permissions that may open the app's stored files through here (every page that shows them). */
 // The app serves these files to anyone with the address (media.mjs GET /api/media/f/…); the panel still asks for a
 // page that shows them: gift art and a mark kind's overlay, a Şanslı package's icon and video, a reported post's or
 // room's picture, a ticket's photo, a notice's or event's picture.
-const FILE_PERMS: Permission[] = ['app.gifts', 'app.lucky', 'app.emojis', 'app.shop', 'app.complaints', 'app.support', 'app.notices', 'app.events'];
+const FILE_PERMS: Permission[] = ['app.gifts', 'app.lucky', 'app.emojis', 'app.shop', 'app.complaints', 'app.support', 'app.notices', 'app.events', 'app.sanctions', 'app.sanctions_full'];
 
 const off = () => new HttpError(503, 'Uygulama bağlantısı ayarlı değil: sunucuda FC_APP_API_URL ve FC_APP_API_KEY gerekli', 'app_off');
 
@@ -297,6 +304,15 @@ export async function appCall(ctx: Ctx, link: AppLink, method: string, path: str
 
 /** The /api/app/… routes of APP_ROUTES; a change is also a row in this panel's own audit log. */
 export function appRoutes(r: Router<Ctx>, link: AppLink) {
+  // Ajans / BD / Yayıncı from the app (app-sync.ts): the pages' "Uygulamadan eşitle", and when it last ran.
+  r.add('POST', '/api/parties/sync-from-app', async (_req, ctx) => {
+    need(ctx, 'parties.edit');
+    return { summary: await syncFromApp(ctx, link), last: lastSync(ctx) };
+  });
+  r.add('GET', '/api/parties/sync-from-app', async (_req, ctx) => {
+    need(ctx, 'parties.view');
+    return { last: lastSync(ctx), linked: !!link };
+  });
   // A gift's file from a link (Hediyeler, "ya da bağlantı yapıştır"): the app downloads it once (up to 5 minutes for
   // a big source) and stores it as if uploaded. Answers the address to save as the app gave it, and `preview`, the
   // same file through this server.

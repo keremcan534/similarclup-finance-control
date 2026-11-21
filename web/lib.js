@@ -367,12 +367,46 @@ export function Field({ f, value, set }) {
     case 'password':
       input = html`<input type="password" autocomplete="new-password" ...${common} />`;
       break;
+    case 'file':
+      // `upload(file)` resolves with the address to save (e.g. app-gifts upload); the field's value is that address.
+      input = html`<${FilePick} id=${id} value=${value} set=${set} upload=${f.upload} accept=${f.accept} />`;
+      break;
     default:
       input = html`<input type="text" ...${common} />`;
   }
   return html`<label class=${`field ${f.type === 'checkbox' ? 'inline' : ''} ${f.wide ? 'wide' : ''}`} for=${id}>
     <span>${f.label}${f.required ? ' *' : ''}</span>${input}${f.hint && html`<small class="muted">${f.hint}</small>`}
   </label>`;
+}
+
+/** "Göz at": picks a file, uploads it at once and keeps its address; shows the picked picture and can take it off. */
+function FilePick({ id, value, set, upload, accept }) {
+  const [state, setState] = useState(value ? 'done' : 'idle');
+  const [shown, setShown] = useState(null);
+  const [err, setErr] = useState(null);
+  const pick = async (e) => {
+    const file = e.target.files?.[0];
+    e.target.value = '';
+    if (!file) return;
+    setErr(null);
+    setState('busy');
+    try {
+      const url = await upload(file);
+      setShown(URL.createObjectURL(file));
+      set(url);
+      setState('done');
+    } catch (x) {
+      setErr(x.message);
+      setState('idle');
+    }
+  };
+  return html`<div class="row gap wrap" style="align-items:center">
+    <input id=${id} type="file" accept=${accept} onChange=${pick} disabled=${state === 'busy'} />
+    ${state === 'busy' && html`<small class="muted">Yükleniyor…</small>`}
+    ${state === 'done' && shown && html`<img src=${shown} alt="Seçilen dosya" style="max-height:72px;max-width:120px;border-radius:6px" />`}
+    ${state === 'done' && html`<button type="button" class="btn link" onClick=${() => (set(''), setShown(null), setState('idle'))}>Kaldır</button>`}
+    ${err && html`<small style="color:var(--danger,#c0392b)">${err}</small>`}
+  </div>`;
 }
 
 /** Asks for a reason (required for critical actions) and resolves with it, or null on cancel. */

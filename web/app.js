@@ -24,6 +24,8 @@ import { AppAgencies } from './pages/app-agencies.js';
 import { AppAgencyStaff } from './pages/app-agency-staff.js';
 import { AppEconomy, AppJeton } from './pages/app-economy.js';
 import { AppSanctions } from './pages/app-sanctions.js';
+import { AppBonds } from './pages/app-bond-looks.js';
+import { AppJetonLoad } from './pages/app-jeton-load.js';
 
 // The menu by subject, the app's own work first. Each page: [route, label, permission, page, words it is found by].
 // Routes never change (links and bookmarks keep working); only where a page sits and what it is called do.
@@ -45,6 +47,7 @@ const NAV = [
     ['app-shop', 'Mağaza', 'app.shop', AppShop, 'mağaza çerçeve giriş efekti ejderha video svga isim plakası fiyat satış'],
     ['app-economy', 'Mağaza eşyaları (kişiye)', 'app.economy', AppEconomy, 'mağaza eşya çerçeve vip giriş efekti binek balon ver geri al kişi'],
     ['app-lucky', 'Şanslı hediye ayarı', 'app.lucky', AppLucky, 'şanslı lucky çanta olasılık ödül yeni paket ikon video'],
+    ['app-bonds', 'Bağlar', 'app.gifts', AppBonds, 'bağ ilişki çift kardeş seviye ikon svga resim hareketli işaret koltuk'],
     ['app-rocket', 'Oda roketi', 'app.rocket', AppRocket, 'roket oda hediye seviye hedef ödül kalkış çekiliş jeton'],
   ]],
   ['levels', 'Seviye ve VIP', '⭐', [
@@ -60,7 +63,7 @@ const NAV = [
     ['app-agency-staff', 'Ajans personeli', 'app.agency_staff', AppAgencyStaff, 'personel rol bd operasyon puan ihlal itiraz arka plan'],
     ['app-payouts', 'Ajans ödemeleri', 'app.payouts', AppPayouts, 'ajans ödeme komisyon dekont'],
     ['statements', 'Hakedişler', 'statements.view', Statements, 'hakediş dönem ödeme'],
-    ['rules', 'Komisyon kuralları', 'rules.view', Rules, 'komisyon kural oran'],
+    ['rules', 'Komisyon kuralları (finans)', 'rules.view', Rules, 'komisyon kural oran'],
     ['agencies', 'Ajans hesapları (finans)', 'parties.view', (p) => html`<${Parties} type="agency" ...${p} />`, 'ajans finans taraf'],
     ['bds', 'BD hesapları (finans)', 'parties.view', (p) => html`<${Parties} type="bd" ...${p} />`, 'bd finans taraf'],
     ['publishers', 'Yayıncılar (finans)', 'parties.view', (p) => html`<${Parties} type="publisher" ...${p} />`, 'yayıncı finans taraf'],
@@ -68,6 +71,7 @@ const NAV = [
   ['money', 'Para', '💰', [
     ['app-withdrawals', 'Para çekme', 'app.withdrawals', AppWithdrawals, 'para çekme elmas nakit iban ödeme talebi'],
     ['app-refunds', 'İadeler ve cüzdan', 'app.refunds', AppRefunds, 'iade cüzdan bakiye jeton coin satın alma google play'],
+    ['app-jeton-load', 'Yönetim jeton yükleme', 'app.jeton_load', AppJetonLoad, 'jeton yükle yükleme üret üretim kişiye coin bakiye tl hesapla geri al'],
     ['app-jeton', 'Jeton Noktası', 'app.jeton', AppJeton, 'jeton noktası coins bank bayi toptan satış'],
     ['ledger', 'İşlem defteri', 'ledger.view', Ledger, 'işlem defter kayıt gelir satış'],
     ['channels', 'Ödeme kanalları', 'ledger.view', Channels, 'ödeme kanal google apple'],

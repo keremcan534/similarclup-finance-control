@@ -107,6 +107,26 @@ function ChannelFees({ ch, meta, onClose }) {
 }
 
 // ---- technical services ----------------------------------------------------------------
+/**
+ * The services the app reports on its own every day, as provider `oracle` (its finance-sync.mjs: person-minutes of
+ * the voice rooms and calls). Picked from a list rather than typed (owners, 22 Nov 2026: "dakika başı 0.00015 USD
+ * konuşandan ve dinleyenden nasıl gireceğim"); another service can still be typed.
+ */
+const APP_PROVIDER = 'oracle';
+const APP_SERVICES = [
+  ['oda_konusan_dk', 'Sesli oda: konuşan dakika (mikrofonu açık kişi × dakika)'],
+  ['oda_dinleyen_dk', 'Sesli oda: dinleyen dakika (odada olup konuşmayan kişi × dakika)'],
+  ['sesli_gorusme_dk', 'Bire bir sesli görüşme dakikası'],
+  ['goruntulu_gorusme_dk', 'Görüntülü görüşme dakikası'],
+];
+const OTHER = '__other';
+const serviceFields = [
+  { name: 'service', label: 'Servis', type: 'select', options: [...APP_SERVICES, [OTHER, 'Başka bir servis (anahtarını yazın)']], required: true, def: APP_SERVICES[0][0] },
+  { name: 'service_other', label: 'Servis anahtarı (örn. storage_gb)', show: (v) => v.service === OTHER },
+];
+const serviceOf = (v) => (v.service === OTHER ? String(v.service_other ?? '').trim() : v.service);
+const serviceName = (key) => APP_SERVICES.find(([k]) => k === key)?.[1] ?? key;
+
 export function Costs() {
   const { can, meta } = useApp();
   const [tab, setTab] = useState('month');
@@ -146,9 +166,13 @@ export function Costs() {
         { name: 'active', label: 'Aktif', type: 'checkbox', def: true },
       ]}
     />`}
-    ${tab === 'tariffs' && html`<${Card} title="Tarifeler" actions=${can('costs.edit') && html`<${Button} onClick=${() => setForm('tariff')}>Yeni tarife sürümü</${Button}>`}>
+    ${tab === 'tariffs' && html`<div class="note">
+      <strong>Sesli oda ve görüşme maliyeti:</strong> Uygulama her gün sesli odalarda konuşan ve dinleyen dakikaları, sesli ve görüntülü görüşme dakikalarını <strong>Oracle</strong> sağlayıcısı adına bu panele gönderir. Örneğin dakika başı 0,00015 USD için: <em>Yeni tarife sürümü</em> → Sağlayıcı: Oracle → Servis: "Sesli oda: konuşan dakika" → Para birimi USD → Kota üstü birim fiyat 0.00015. Dinleyen dakika için aynısını "Sesli oda: dinleyen dakika" ile ikinci tarife olarak girin. Ay sonunda kullanım × fiyat tahmini maliyet olur.
+      ${!(providers.data?.rows ?? []).some((p) => p.code === APP_PROVIDER) && can('costs.edit') && html`<div style="margin-top:6px"><span class="bad">Oracle sağlayıcısı tanımlı değil; uygulamanın gönderdiği dakikalar şu an reddediliyor.</span> <${Button} onClick=${async () => (await act(() => post('/api/providers', { code: APP_PROVIDER, name: 'Oracle (sunucu ve sesli oda)', category: 'Sesli oda altyapısı', active: true }), 'Oracle sağlayıcısı eklendi')) && providers.reload()}>Oracle sağlayıcısını ekle</${Button}></div>`}
+    </div>
+    <${Card} title="Tarifeler" actions=${can('costs.edit') && html`<${Button} onClick=${() => setForm('tariff')}>Yeni tarife sürümü</${Button}>`}>
       <${Loading} state=${tariffs}>${(d) => html`<${Table} dense columns=${[
-        { key: 'provider', label: 'Sağlayıcı' }, { key: 'service', label: 'Servis' }, { key: 'unit', label: 'Birim' },
+        { key: 'provider', label: 'Sağlayıcı' }, { key: 'service', label: 'Servis', render: (r) => serviceName(r.service) }, { key: 'unit', label: 'Birim' },
         { key: 'fixed_monthly_minor', label: 'Sabit aylık', money: 'currency' },
         { key: 'included_quantity', label: 'Dahil kota', align: 'right' },
         { key: 'unit_price', label: 'Kota üstü birim fiyat', align: 'right', render: (r) => (r.tiers ? 'kademeli' : `${r.unit_price} ${r.currency}`) },
@@ -173,8 +197,8 @@ export function Costs() {
       <div class="note">Aynı sağlayıcı+servis için önceki tarife bu tarihte kapanır.</div>
       <${Form} fields=${[
         { name: 'provider_id', label: 'Sağlayıcı', type: 'select', options: provOpts, required: true },
-        { name: 'service', label: 'Servis anahtarı (örn. voice_minutes, storage_gb)', required: true },
-        { name: 'unit', label: 'Kullanım birimi (dakika, GB, istek…)', required: true },
+        ...serviceFields,
+        { name: 'unit', label: 'Kullanım birimi (dakika, GB, istek…)', required: true, def: 'dakika' },
         { name: 'currency', label: 'Para birimi', type: 'select', options: fiat(meta), required: true, def: 'USD' },
         { name: 'fixed_monthly', label: 'Sabit aylık ücret', type: 'money' },
         { name: 'included_quantity', label: 'Dahil kullanım kotası', type: 'decimal', def: '0' },
@@ -185,17 +209,21 @@ export function Costs() {
         { name: 'valid_from', label: 'Geçerlilik başlangıcı', type: 'date', required: true, def: monthStart() },
       ]} onCancel=${() => setForm(null)} onSubmit=${async (v) => {
         const tiers = v.tiers ? v.tiers.split(/\n/).map((l) => l.split(/[;,\t]/)).filter((x) => x.length >= 2).map(([from, unit_price]) => ({ from: from.trim(), unit_price: unit_price.trim() })) : [];
-        (await act(() => post('/api/tariffs', { ...v, provider_id: Number(v.provider_id), tiers, payment_terms_days: Number(v.payment_terms_days || 0) }), 'Tarife kaydedildi')) && (setForm(null), tariffs.reload());
+        const { service_other, ...rest } = v;
+        (await act(() => post('/api/tariffs', { ...rest, service: serviceOf(v), provider_id: Number(v.provider_id), tiers, payment_terms_days: Number(v.payment_terms_days || 0) }), 'Tarife kaydedildi')) && (setForm(null), tariffs.reload());
       }} />
     </${Modal}>`}
     ${form === 'usage' && html`<${Modal} title="Kullanım gir" onClose=${() => setForm(null)}>
       <${Form} fields=${[
         { name: 'provider_code', label: 'Sağlayıcı', type: 'select', options: (providers.data?.rows ?? []).map((p) => [p.code, p.name]), required: true },
-        { name: 'service', label: 'Servis anahtarı', required: true },
+        ...serviceFields,
         { name: 'period', label: 'Dönem (YYYY-AA)', required: true, def: period },
         { name: 'quantity', label: 'Miktar', type: 'decimal', required: true },
         { name: 'note', label: 'Not / kaynak', wide: true },
-      ]} onCancel=${() => setForm(null)} onSubmit=${async (v) => (await act(() => post('/api/usage', { ...v, occurred_at: `${v.period}-01` }), 'Kaydedildi')) && (setForm(null), usage.reload())} />
+      ]} onCancel=${() => setForm(null)} onSubmit=${async (v) => {
+        const { service_other, ...rest } = v;
+        (await act(() => post('/api/usage', { ...rest, service: serviceOf(v), occurred_at: `${v.period}-01` }), 'Kaydedildi')) && (setForm(null), usage.reload());
+      }} />
     </${Modal}>`}
     ${form === 'invoice' && html`<${Modal} title="Fatura gir" onClose=${() => setForm(null)}>
       <${Form} fields=${[
@@ -245,7 +273,7 @@ export function Catalog() {
       ]}
       fields=${[
         { name: 'kind', label: 'Tür', type: 'select', options: [['game', 'Oyun'], ['gift', 'Hediye'], ['emoji', 'Emoji'], ['animation', 'Animasyon']], required: true },
-        { name: 'code', label: 'Kod (Similar Club öğe kodu)', required: true, immutable: true },
+        { name: 'code', label: 'Kod (Similar Club öğe kodu)', required: true, immutable: true, hint: 'Oyun: slot, jackpot, olympus, fish, rocket, super777, jungle, goldtree, foodwheel, magiccard, pinata, ruzgar-gulu… · Hediye: hediyenin kimliği (örn. g4) · Mağaza eşyası: ürün kodu' },
         { name: 'name', label: 'Ad', required: true },
         { name: 'provider', label: 'Sağlayıcı' },
         { name: 'coin_price', label: 'Jeton fiyatı', type: 'number', def: '0' },
