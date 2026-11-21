@@ -5,6 +5,7 @@ import { createApp } from './app.ts';
 import { bootstrap, saveCredentials } from './bootstrap.ts';
 import { evaluateAlerts } from './domain/alerts.ts';
 import { generateRecurring } from './domain/costs.ts';
+import { SYNC_USER, syncFromApp } from './app-sync.ts';
 
 const cfg = config();
 const db = openDb(cfg.dbPath);
@@ -29,6 +30,19 @@ const housekeeping = () => {
 };
 setTimeout(housekeeping, 5_000);
 setInterval(housekeeping, 60 * 60_000).unref();
+
+// Hourly too: Ajans / BD / Yayıncı from the app (app-sync.ts), when the app is linked.
+const appSync = async () => {
+  if (!cfg.appLink) return;
+  try {
+    const s = await syncFromApp({ db, user: SYNC_USER, integration: null, now: () => new Date() }, cfg.appLink);
+    if (s.added || s.left) console.log(`[${new Date().toISOString()}] uygulamadan eşitlendi: ${s.added} yeni, ${s.left} ajanstan ayrılan`);
+  } catch (e) {
+    console.warn('Uygulamadan eşitleme yapılamadı:', (e as Error).message);
+  }
+};
+setTimeout(appSync, 15_000);
+setInterval(appSync, 60 * 60_000).unref();
 
 const stop = () => {
   db.close();

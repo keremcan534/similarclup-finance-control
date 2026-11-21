@@ -63,7 +63,7 @@ const NAV = [
     ['app-agency-staff', 'Ajans personeli', 'app.agency_staff', AppAgencyStaff, 'personel rol bd operasyon puan ihlal itiraz arka plan'],
     ['app-payouts', 'Ajans ödemeleri', 'app.payouts', AppPayouts, 'ajans ödeme komisyon dekont'],
     ['statements', 'Hakedişler', 'statements.view', Statements, 'hakediş dönem ödeme'],
-    ['rules', 'Komisyon kuralları', 'rules.view', Rules, 'komisyon kural oran'],
+    ['rules', 'Komisyon kuralları (finans)', 'rules.view', Rules, 'komisyon kural oran'],
     ['agencies', 'Ajans hesapları (finans)', 'parties.view', (p) => html`<${Parties} type="agency" ...${p} />`, 'ajans finans taraf'],
     ['bds', 'BD hesapları (finans)', 'parties.view', (p) => html`<${Parties} type="bd" ...${p} />`, 'bd finans taraf'],
     ['publishers', 'Yayıncılar (finans)', 'parties.view', (p) => html`<${Parties} type="publisher" ...${p} />`, 'yayıncı finans taraf'],

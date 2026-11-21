@@ -1,4 +1,4 @@
-import { Badge, Button, Card, Loading, Modal, Page, Table, Tabs, act, dateTimeTr, html, money, post, put, useApi, useApp, usePrompt, useState } from '../lib.js';
+import { Badge, Button, Card, Loading, Modal, Page, Table, Tabs, act, dateTimeTr, html, money, num, post, put, useApi, useApp, usePrompt, useState } from '../lib.js';
 import { typeLabel } from './ledger.js';
 
 const BEN = { agency: 'Ajans', bd: 'BD', publisher: 'Yayıncı', provider: 'Sağlayıcı', other: 'Diğer' };
@@ -18,6 +18,24 @@ export function describe(c) {
   return `${c.tx_types.map(typeLabel).join(', ')} → ${BEN[c.beneficiary.type]}${c.beneficiary.from ? ` (${FROM[c.beneficiary.from]})` : c.beneficiary.name ? ` (${c.beneficiary.name})` : ''} · matrah ${c.base} · ${how} · aşama ${c.stage}${caps ? ` · ${caps}` : ''}`;
 }
 
+/**
+ * What the owners asked about (22 Nov 2026: "ne yaptığı net değil"): the app pays agencies by its own rates (Ajans
+ * merkezi); these rules are only the finance book's calculation and change nothing in the app. The app's rates now,
+ * from the agencies the panel read from the app (server/app-sync.ts), so the two can be compared at a glance.
+ */
+function AppRates() {
+  const a = useApi('/api/agencies?limit=500');
+  const rows = (a.data?.rows ?? []).filter((x) => x.app_id && x.status === 'active');
+  const rates = rows.map((x) => x.app_rate).filter((x) => typeof x === 'number');
+  const lo = rates.length ? Math.min(...rates) : null;
+  const hi = rates.length ? Math.max(...rates) : null;
+  const pct = (x) => `%${(x * 100).toLocaleString('tr-TR', { maximumFractionDigits: 1 })}`;
+  return html`<div class="note">
+    <strong>Önemli:</strong> Ajansların gerçekten aldığı komisyonu <strong>uygulama</strong> öder ve oranı <a href="#/app-agencies">Ajans merkezi</a>'nden değişir. Bu sayfadaki kurallar yalnız finans defterinin hesabıdır; burada yapılan değişiklik ajansın kazancını değiştirmez.
+    ${rates.length ? html`<br />Uygulamada şu an ${num(rows.length)} aktif ajansın oranı ${lo === hi ? pct(lo) : `${pct(lo)} ile ${pct(hi)} arasında`}. Defterin hesabı bununla aynı olsun diye ajans kuralını bu oranla kurun.` : html`<br /><span class="muted">Uygulamanın ajansları henüz eşitlenmedi (Ajanslar › Ajans hesapları › Uygulamadan eşitle).</span>`}
+  </div>`;
+}
+
 export function Rules({ query }) {
   const { can } = useApp();
   const [tab, setTab] = useState(query.get('tab') ?? 'rules');
@@ -26,10 +44,11 @@ export function Rules({ query }) {
   const [open, setOpen] = useState(null);
   const [editor, setEditor] = useState(null);
   return html`<${Page}
-    title="Komisyon kuralları"
-    subtitle="Oranlar, matrahlar, kademeler ve koşullar burada yönetilir; değişiklik yeni sürüm oluşturur, geçmiş hesaplar değişmez."
+    title="Komisyon kuralları (finans defteri)"
+    subtitle="Finans defterinin kendi hesabı: her işlemden ajansa, BD'ye ya da yayıncıya ne kadar düştüğünü burada hesaplatırsınız. Değişiklik yeni sürüm oluşturur, geçmiş hesaplar değişmez."
     actions=${can('rules.edit') && html`<${Button} kind="primary" onClick=${() => setEditor({ isNew: true })}>Yeni kural</${Button}>`}
   >
+    <${AppRates} />
     <${Tabs} tabs=${[['rules', 'Kurallar'], ['issues', 'Hesaplama sorunları'], ['help', 'Nasıl çalışır']]} value=${tab} onChange=${setTab} />
     ${tab === 'rules' && html`<${Loading} state=${rules}>${(d) => html`<${Table}
       onRow=${(r) => setOpen(r.id)}

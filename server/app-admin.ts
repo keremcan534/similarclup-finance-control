@@ -14,6 +14,7 @@ import { pipeline } from 'node:stream/promises';
 
 import { audit, can, need, type Ctx, type Permission } from './context.ts';
 import { HttpError, bad, type Router } from './lib/http.ts';
+import { lastSync, syncFromApp } from './app-sync.ts';
 
 export type AppLink = { url: string; key: string } | null;
 
@@ -303,6 +304,15 @@ export async function appCall(ctx: Ctx, link: AppLink, method: string, path: str
 
 /** The /api/app/… routes of APP_ROUTES; a change is also a row in this panel's own audit log. */
 export function appRoutes(r: Router<Ctx>, link: AppLink) {
+  // Ajans / BD / Yayıncı from the app (app-sync.ts): the pages' "Uygulamadan eşitle", and when it last ran.
+  r.add('POST', '/api/parties/sync-from-app', async (_req, ctx) => {
+    need(ctx, 'parties.edit');
+    return { summary: await syncFromApp(ctx, link), last: lastSync(ctx) };
+  });
+  r.add('GET', '/api/parties/sync-from-app', async (_req, ctx) => {
+    need(ctx, 'parties.view');
+    return { last: lastSync(ctx), linked: !!link };
+  });
   // A gift's file from a link (Hediyeler, "ya da bağlantı yapıştır"): the app downloads it once (up to 5 minutes for
   // a big source) and stores it as if uploaded. Answers the address to save as the app gave it, and `preview`, the
   // same file through this server.

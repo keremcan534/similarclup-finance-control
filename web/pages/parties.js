@@ -1,4 +1,4 @@
-import { Badge, Button, Card, DateRange, Form, Loading, Modal, Page, Table, act, dateTr, decMoney, html, minorToInput, money, monthStart, num, post, put, qs, today, useApi, useApp, usePrompt, useState } from '../lib.js';
+import { Badge, Button, Card, DateRange, Form, Loading, Modal, Page, Table, act, dateTimeTr, dateTr, decMoney, html, minorToInput, money, monthStart, num, post, put, qs, today, useApi, useApp, usePrompt, useState } from '../lib.js';
 
 const CFG = {
   agency: {
@@ -17,7 +17,10 @@ const CFG = {
       { key: 'name', label: 'Ad' },
       { key: 'contact_name', label: 'Yetkili' },
       { key: 'bd_id', label: 'BD' },
+      // The rate the app pays the agency now (Ajans merkezi), as last read from the app.
+      { key: 'app_rate', label: 'Uygulamadaki oran', render: (r) => (r.app_rate === null || r.app_rate === undefined ? html`<span class="muted">—</span>` : `%${num(r.app_rate * 100, 1)}`) },
       { key: 'status', label: 'Durum', render: (r) => html`<${Badge} s=${r.status} />` },
+      { key: 'src', label: 'Kaynak', render: (r) => (r.app_id ? 'Uygulama' : html`<span class="muted">Elle</span>`) },
     ],
   },
   bd: {
@@ -34,6 +37,7 @@ const CFG = {
       { key: 'name', label: 'Ad' },
       { key: 'email', label: 'E-posta' },
       { key: 'status', label: 'Durum', render: (r) => html`<${Badge} s=${r.status} />` },
+      { key: 'src', label: 'Kaynak', render: (r) => (r.app_id ? 'Uygulama' : html`<span class="muted">Elle</span>`) },
     ],
   },
   publisher: {
@@ -50,6 +54,7 @@ const CFG = {
       { key: 'name', label: 'Ad' },
       { key: 'agency_id', label: 'Ajans' },
       { key: 'status', label: 'Durum', render: (r) => html`<${Badge} s=${r.status} />` },
+      { key: 'src', label: 'Kaynak', render: (r) => (r.synced_at ? 'Uygulama' : html`<span class="muted">Elle</span>`) },
     ],
   },
 };
@@ -69,7 +74,8 @@ export function Parties({ type }) {
     title=${cfg.title}
     actions=${html`<input placeholder="Ara" value=${q} onChange=${(e) => setQ(e.target.value)} />${can('parties.edit') && html`<${Button} kind="primary" onClick=${() => setEdit({})}>Yeni</${Button}>`}`}
   >
-    ${type === 'publisher' && html`<div class="note">Yayıncılar Similar Club kullanıcı id’siyle eşleşir. Entegrasyonda tanınmayan bir id gelirse "Eşleşmemiş" olarak açılır; ajansını atayın.</div>`}
+    <${AppSync} onDone=${() => s.reload()} />
+    ${type === 'publisher' && html`<div class="note">Yayıncılar Similar Club kullanıcı id’siyle eşleşir; ajansları uygulamadan gelir. Uygulamada ajansı olmayan biri "Ajanssız" görünür.</div>`}
     <${Loading} state=${s}>${(d) => html`<${Table} columns=${columns} rows=${d.rows} onRow=${(r) => setOpen(r)} />`}</${Loading}>
     ${edit && html`<${Modal} title=${edit.id ? 'Düzenle' : 'Yeni kayıt'} onClose=${() => setEdit(null)}>
       <${Form}
@@ -87,6 +93,31 @@ export function Parties({ type }) {
     </${Modal}>`}
     ${open && html`<${PartyDetail} type=${type} party=${open} onClose=${() => setOpen(null)} onEdit=${() => (setEdit(open), setOpen(null))} />`}
   </${Page}>`;
+}
+
+/**
+ * The lists come from the app (server/app-sync.ts): every hour on its own, or now with the button. What it does, in
+ * words: this is the finance book's copy of the app's agency network; the real rates are changed in Ajans merkezi.
+ */
+function AppSync({ onDone }) {
+  const { can } = useApp();
+  const st = useApi('/api/parties/sync-from-app');
+  const [busy, setBusy] = useState(false);
+  const run = async () => {
+    setBusy(true);
+    const r = await act(() => post('/api/parties/sync-from-app', {}), 'Uygulamadan eşitlendi');
+    setBusy(false);
+    if (r) (st.reload(), onDone());
+  };
+  const last = st.data?.last;
+  const s = last?.summary && typeof last.summary === 'object' ? last.summary : null;
+  return html`<div class="note">
+    <strong>Bu liste uygulamadan gelir.</strong> Ajanslar, BD'ler ve yayıncılar Similar Club'daki ajans ağından saatte bir kendiliğinden eşitlenir. Ajansın gerçek komisyon oranı uygulamadadır ve <a href="#/app-agencies">Ajans merkezi</a>'nden değişir; buradaki liste ve hesaplar finans defteri içindir, uygulamada hiçbir şeyi değiştirmez.
+    <div class="row gap wrap" style="margin-top:6px;align-items:center">
+      ${last ? html`<small class="muted">Son eşitleme: ${dateTimeTr(last.at)}${last.ok ? (s ? ` · ${num(s.agencies)} ajans, ${num(s.bds)} BD, ${num(s.publishers)} yayıncı${s.added ? `, ${num(s.added)} yeni` : ''}` : '') : ` · olmadı: ${last.summary}`}</small>` : html`<small class="muted">Henüz eşitlenmedi.</small>`}
+      ${can('parties.edit') && st.data?.linked && html`<${Button} onClick=${run} disabled=${busy}>${busy ? 'Eşitleniyor…' : 'Uygulamadan eşitle'}</${Button}>`}
+    </div>
+  </div>`;
 }
 
 function PartyDetail({ type, party, onClose, onEdit }) {
