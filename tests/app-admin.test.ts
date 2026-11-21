@@ -486,9 +486,13 @@ test('Yönetim\'in kalanı: yaptırımlar, ajans personeli, mağaza eşyaları, 
   }
   assert.ok(seen.at(-1)!.user.perms.includes('app.sanctions_full'));
   assert.equal(await post('/api/app/jeton/wholesale', { bank: 'b', coins: 1000, paymentRef: 'DEKONT-1', ref: 'r7654321' }, ops), 403);
-  // The finance manager: Jeton Noktası; no sanctions, no staff.
+  // The finance manager: Jeton Noktası accounts; making coins and loading them to people is the Süper yönetici's
+  // alone (app.jeton_load, the owners' call); no sanctions, no staff.
   assert.equal(await post('/api/app/jeton/bank', { user: 'b', enabled: true }, fin), 200);
-  assert.equal(await post('/api/app/jeton/wholesale', { bank: 'b', coins: 1000, paymentRef: 'DEKONT-1', ref: 'r7654321' }, fin), 200);
+  assert.equal(await post('/api/app/jeton/wholesale', { bank: 'b', coins: 1000, paymentRef: 'DEKONT-1', ref: 'r7654321' }, fin), 403);
+  assert.equal(await post('/api/app/jeton/load', { bank: 'b', to: 'u', coins: 1000, valueTl: 50, ref: 'r7654322' }, fin), 403);
+  assert.equal(await post('/api/app/jeton/reverse', { transfer: 1 }, fin), 403);
+  assert.equal(await get('/api/app/jeton/loads', fin), 403);
   for (const p of ['/api/app/sanctions/meta', '/api/app/agency/staff']) assert.equal(await get(p, fin), 403, `fin ${p}`);
   // Read only: none of it.
   for (const p of ['/api/app/sanctions/meta', '/api/app/agency/roles', '/api/app/economy/reviews']) assert.equal(await get(p, ro), 403, `ro ${p}`);

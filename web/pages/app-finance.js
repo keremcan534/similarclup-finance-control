@@ -222,7 +222,19 @@ function shown(s, v) {
   if (s.type === 'set') return v.length ? v.map((x) => s.bounds.labels?.[x] ?? x).join(', ') : 'Hiçbiri';
   if (s.type === 'campaign') return `%${v.percent} · ${v.label} · ${dateTimeTr(v.startsAt)} → ${dateTimeTr(v.endsAt)}`;
   if (s.type === 'int' || s.type === 'number') return num(v, s.bounds.decimals ?? 0);
+  if (s.type === 'packs') return packsText(s, v);
   return String(v);
+}
+/** Jeton paketleri in their order: each pack's coins, its extra coins and its first-purchase gift. */
+function packsText(s, v) {
+  const rows = packRows(s, v);
+  return rows.map((p) => `${num(p.coins)}${p.extra ? ` +${num(p.extra)}` : ''}${p.first ? ` (ilk +${num(p.first)})` : ''}`).join(' · ');
+}
+/** The packs as set up (or the app's own values), in their order. */
+function packRows(s, v) {
+  return s.bounds.packs
+    .map((p, i) => ({ id: p.id, coins: p.coins, tl: p.tl, label: p.label, extra: v?.[p.id]?.extra ?? 0, first: v?.[p.id]?.first ?? p.firstBonus, own: v?.[p.id]?.first ?? null, order: v?.[p.id]?.order ?? i + 1, i }))
+    .sort((a, b) => a.order - b.order || a.i - b.i);
 }
 
 /** A saved value in the history: null is the default. */
@@ -231,7 +243,7 @@ function saved(v) {
   if (v === '') return 'boş';
   if (typeof v === 'number') return num(v, Number.isInteger(v) ? 0 : 2);
   if (Array.isArray(v)) return v.length ? v.join(', ') : 'hiçbiri';
-  if (typeof v === 'object') return v.percent !== undefined ? `%${v.percent} · ${v.label}` : JSON.stringify(v);
+  if (typeof v === 'object') return v.percent !== undefined ? `%${v.percent} · ${v.label}` : Object.values(v)[0]?.order !== undefined ? 'jeton paketleri ayarı' : JSON.stringify(v);
   return String(v);
 }
 
@@ -289,6 +301,14 @@ export function AppSettings() {
 const local = (iso) => (iso ? new Date(new Date(iso).getTime() - new Date().getTimezoneOffset() * 60_000).toISOString().slice(0, 16) : '');
 function SettingEditor({ s, onClose, onSave }) {
   const start = s.value ?? s.effective;
+  // Jeton paketleri: one row per pack, in its order (moved with ↑ ↓).
+  const [packs, setPacks] = useState(() => (s.type === 'packs' ? packRows(s, start).map((p) => ({ ...p, extra: String(p.extra), first: String(p.first) })) : []));
+  const movePack = (i, d) => setPacks((l) => {
+    const n = [...l];
+    [n[i], n[i + d]] = [n[i + d], n[i]];
+    return n;
+  });
+  const setPack = (i, k, x) => setPacks((l) => l.map((p, j) => (j === i ? { ...p, [k]: x } : p)));
   const [v, setV] = useState(s.type === 'campaign' ? (start ? { ...start, startsAt: local(start.startsAt), endsAt: local(start.endsAt) } : { percent: s.bounds.percent.min, startsAt: '', endsAt: '', label: '' }) : start ?? (s.type === 'set' ? [] : ''));
   const [reason, setReason] = useState('');
   const b = s.bounds ?? {};
@@ -300,6 +320,10 @@ function SettingEditor({ s, onClose, onSave }) {
     // Empty text is a value of its own (no notice; Yönetim back in the app); "Varsayılana dön" is the default.
     if (s.type === 'text') return String(v).trim();
     if (s.type === 'version') return String(v).trim() || null;
+    if (s.type === 'packs') {
+      const whole = (x) => Number(String(x).replace(/[^\d]/g, '') || 0);
+      return Object.fromEntries(packs.map((p, i) => [p.id, { extra: whole(p.extra), first: whole(p.first) === (s.bounds.packs.find((x) => x.id === p.id)?.firstBonus ?? 0) ? null : whole(p.first), order: i + 1 }]));
+    }
     return v;
   };
   let input;
@@ -312,6 +336,19 @@ function SettingEditor({ s, onClose, onSave }) {
       <label class="field"><span>Başlangıç</span><input type="datetime-local" value=${v.startsAt} onInput=${(e) => setV({ ...v, startsAt: e.target.value })} /></label>
       <label class="field"><span>Bitiş</span><input type="datetime-local" value=${v.endsAt} onInput=${(e) => setV({ ...v, endsAt: e.target.value })} /></label>
     </div></div>`;
+  else if (s.type === 'packs')
+    input = html`<table class="table dense"><thead><tr><th>Sıra</th><th>Paket</th><th>Ek jeton (her alımda)</th><th>İlk alım hediyesi</th><th>Bir alımda toplam</th></tr></thead><tbody>
+      ${packs.map(
+        (p, i) => html`<tr key=${p.id}>
+          <td class="nowrap">${i + 1}. <button type="button" class="btn link" disabled=${i === 0} onClick=${() => movePack(i, -1)} aria-label="Yukarı">↑</button><button type="button" class="btn link" disabled=${i === packs.length - 1} onClick=${() => movePack(i, 1)} aria-label="Aşağı">↓</button></td>
+          <td><strong>${num(p.coins)} jeton</strong><br /><small class="muted">${num(p.tl, 2)} TL (Google Play fiyatı)</small></td>
+          <td><input inputmode="numeric" style="width:110px" value=${p.extra} onInput=${(e) => setPack(i, 'extra', e.target.value)} /></td>
+          <td><input inputmode="numeric" style="width:110px" value=${p.first} onInput=${(e) => setPack(i, 'first', e.target.value)} /></td>
+          <td class="num">${num(p.coins + Number(String(p.extra).replace(/[^\d]/g, '') || 0))}${Number(String(p.first).replace(/[^\d]/g, '') || 0) ? html`<br /><small class="muted">ilk alımda +${num(Number(String(p.first).replace(/[^\d]/g, '')))}</small>` : ''}</td>
+        </tr>`,
+      )}
+    </tbody></table>
+    <p class="note">Paketin kendi jetonu ve fiyatı Google Play'deki ürüne bağlı, burada değişmez. Ek jeton ve ilk alım hediyesi en çok paketin kendi jetonu kadar olabilir. Gizlemek için "Gizli paketler" ayarını kullanın.</p>`;
   else if (s.type === 'text') input = html`<textarea rows="3" maxlength=${b.max} value=${v ?? ''} onInput=${(e) => setV(e.target.value)}></textarea>`;
   else input = html`<input value=${v ?? ''} inputmode=${s.type === 'version' ? 'text' : 'decimal'} onInput=${(e) => setV(e.target.value)} />`;
   const range = s.type === 'int' || s.type === 'number' ? `${num(b.min, b.decimals ?? 0)}–${num(b.max, b.decimals ?? 0)}${b.step ? `, ${num(b.step, b.decimals ?? 0)}'er` : ''}` : '';
