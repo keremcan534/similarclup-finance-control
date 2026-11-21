@@ -133,11 +133,13 @@ function Record({ id, meta, perms, onClose }) {
     });
     if (!first) return;
     const v = await ask(`${person.name}: ${types.find((t) => t.type === first.type)?.label ?? first.type}`, {
-      text: first.type === 'device_ban' ? `Kişinin bilinen ${devices.length} cihazının hepsine uygulanır.` : 'Gerekçe kişiye gösterilir; iç not yalnız yetkililere.',
+      text: `${first.type === 'device_ban' ? `Kişinin bilinen ${devices.length} cihazının hepsine uygulanır. ` : 'Gerekçe kişiye gösterilir; iç not yalnız yetkililere. '}Kanıt ekle (ekran görüntüsü bağlantısı, mesaj, not): kanıtsız yaptırım Süper yönetici onaylayana kadar başlamaz; Süper yönetici kanıtsız da verebilir.`,
       fields: [
         ...(first.usePolicy ? [] : [{ name: 'minutes', label: 'Süre', type: 'select', options: lengthOptions(meta, first.type), def: lengthDefault(meta, first.type) }]),
         { name: 'description', label: 'Kişiye gösterilecek gerekçe', type: 'text', wide: true },
         { name: 'note', label: 'İç not', type: 'textarea', wide: true },
+        { name: 'evidenceKind', label: 'Kanıt türü', type: 'select', options: [['screenshot', 'Ekran görüntüsü bağlantısı'], ['link', 'Bağlantı'], ['message', 'Mesaj metni'], ['note', 'Not']], def: 'screenshot' },
+        { name: 'evidence', label: 'Kanıt', type: 'textarea', wide: true },
         ...(first.type === 'mute_global_text' ? [{ name: 'includeDm', label: 'Özel mesajlar da kapansın', type: 'checkbox' }] : []),
         ...(first.type === 'mute_global_voice' ? [{ name: 'includeCalls', label: 'Aramalar da kapansın', type: 'checkbox' }] : []),
       ],
@@ -151,12 +153,14 @@ function Record({ id, meta, perms, onClose }) {
       ...(first.usePolicy ? { usePolicy: true } : { minutes: v.minutes === '' ? null : Number(v.minutes) }),
       description: v.description ?? '',
       note: v.note ?? '',
+      // Güncelleme 8: without evidence it waits for a Süper yönetici (the app's sanctions.mjs).
+      ...(v.evidence?.trim() ? { evidence: [{ kind: v.evidenceKind || 'note', content: v.evidence.trim() }] } : {}),
       ...(v.includeDm ? { includeDm: true } : {}),
       ...(v.includeCalls ? { includeCalls: true } : {}),
       ...(first.type === 'device_ban' ? { deviceIds: devices.map((d) => d.id) } : {}),
     };
     const r = await act(() => post('/api/app/sanctions', body));
-    if (r) done(r.sanctions.some((s) => s.status === 'pending') ? 'Yaptırım önerildi: başka bir yetkilinin onayını bekliyor' : 'Yaptırım uygulandı')(r);
+    if (r) done(r.sanctions.some((s) => s.needsSuper) ? 'Kanıt eklenmedi: yaptırım Süper yönetici onayını bekliyor' : r.sanctions.some((s) => s.status === 'pending') ? 'Yaptırım önerildi: başka bir yetkilinin onayını bekliyor' : 'Yaptırım uygulandı')(r);
   };
   const lift = async (s) => {
     const v = await ask('Yaptırımı kaldır', { text: `${s.reason ?? s.reasonCode} · ${lengthText(s.permanent ? null : minutesOf(s))}`, label: 'Kaldırma nedeni' });
@@ -276,6 +280,8 @@ function Pending({ meta, full }) {
         { key: 'by', label: 'Öneren', render: (s) => s.createdBy?.name ?? '—' },
         { key: 'at', label: 'Ne zaman', render: (s) => dateTimeTr(s.createdAt) },
         { key: 'note', label: 'Not', render: (s) => s.note || s.reasonText || '—' },
+        // Güncelleme 8: one given without evidence is a Süper yönetici's to decide.
+        { key: 'ev', label: 'Kanıt', render: (s) => (s.needsSuper ? html`<${Tag} c="warn" label="Kanıtsız · Süper yönetici onaylar" />` : s.evidence?.length ? num(s.evidence.length) : '—') },
         {
           key: 'a',
           label: '',

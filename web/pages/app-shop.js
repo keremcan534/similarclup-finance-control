@@ -628,6 +628,10 @@ function Editor({ item, kind, limits, convert, svga, onClose, onSaved }) {
   const [dims, setDims] = useState(() => (item?.look?.slice ? { w: item.look.slice.w, h: item.look.slice.h } : null));
   const [slice, setSlice] = useState(() => (item?.look?.slice ? { t: item.look.slice.t, r: item.look.slice.r, b: item.look.slice.b, l: item.look.slice.l } : null));
   const setColor = (i, c) => setLook((x) => ({ ...x, colors: x.colors.map((y, j) => (j === i ? c : y)) }));
+  // Süre paketleri (Güncelleme 8): the item's other durations, each with its own price (at most 3; not for a seat
+  // color, not for a permanent item). An app server before them answers no `plans`: the editor hides them.
+  const [plans, setPlans] = useState(() => (item?.plans ?? []).map((p) => ({ days: String(p.days), price: String(p.price) })));
+  const plansKnown = !item || Array.isArray(item.plans);
   const [v, setV] = useState(() => ({
     name: item?.name ?? '',
     price: item?.price ?? '',
@@ -781,6 +785,11 @@ function Editor({ item, kind, limits, convert, svga, onClose, onSaved }) {
     const body = seat
       ? { name: v.name, ...(isDefault ? {} : { price: Number(v.price), days: Number(v.days), enabled: v.enabled }), ...(seatColor !== item?.look?.color ? { look: { color: seatColor } } : {}) }
       : { name: v.name, price: Number(v.price), days: Number(v.days), minVip: Number(v.minVip), enabled: v.enabled };
+    if (!seat && plansKnown) {
+      const list = plans.filter((p) => p.days !== '' || p.price !== '').map((p) => ({ days: Number(p.days), price: Number(p.price) }));
+      const was = JSON.stringify(item?.plans ?? []);
+      if (JSON.stringify(list) !== was) body.plans = Number(v.days) ? list : [];
+    }
     if (own && kind === 'frame')
       Object.assign(body, {
         hole: Number(v.hole),
@@ -837,6 +846,17 @@ function Editor({ item, kind, limits, convert, svga, onClose, onSaved }) {
       <label class="field"><span>Süre (gün; 0 = süresiz)</span><input type="number" min="0" max=${limits.daysMax} value=${v.days} disabled=${isDefault} onInput=${(e) => set('days', e.target.value)} /></label>
       ${!seat && html`<label class="field"><span>VIP seviyesi (0 = herkes)</span><input type="number" min="0" max=${limits.vipMax} value=${v.minVip} onInput=${(e) => set('minVip', e.target.value)} /></label>`}
     </div>
+    ${!seat && plansKnown && html`<div style="margin-top:8px">
+      <div class="muted" style="font-size:12px;margin-bottom:4px">Süre paketleri: ana sürenin yanında en fazla 3 süre (ör. 7, 15, 30 gün), her biri kendi fiyatıyla. Yeni uygulama süreyi seçtirir; eski APK yalnız ana süreyi satar.${Number(v.days) ? '' : ' Süresiz üründe paket olmaz.'}</div>
+      ${plans.map(
+        (p, i) => html`<div class="row gap" key=${i} style="align-items:center;margin-bottom:4px">
+          <input type="number" min="1" max=${limits.daysMax} placeholder="gün" value=${p.days} style="width:80px" aria-label=${`Paket ${i + 1} günü`} onInput=${(e) => setPlans((l) => l.map((x, j) => (j === i ? { ...x, days: e.target.value } : x)))} /><span class="muted">gün</span>
+          <input type="number" min="1" placeholder="jeton" value=${p.price} style="width:120px" aria-label=${`Paket ${i + 1} fiyatı`} onInput=${(e) => setPlans((l) => l.map((x, j) => (j === i ? { ...x, price: e.target.value } : x)))} /><span class="muted">jeton</span>
+          <button type="button" class="btn link" onClick=${() => setPlans((l) => l.filter((_, j) => j !== i))}>Kaldır</button>
+        </div>`,
+      )}
+      ${plans.length < 3 && Number(v.days) > 0 && html`<button type="button" class="btn link" onClick=${() => setPlans((l) => [...l, { days: '', price: '' }])}>+ Süre paketi ekle</button>`}
+    </div>`}
     ${!isDefault && html`<label class="field inline" style="margin-top:6px"><span>Satışta</span><input type="checkbox" checked=${v.enabled} onChange=${(e) => set('enabled', e.target.checked)} /></label>`}
     ${isDefault && html`<p class="note">Her odanın ücretsiz, varsayılan rengi: fiyatı ve süresi olmaz, satıştan kalkmaz. Adı ve rengi değişir.</p>`}
     ${seat && !isDefault && html`<p class="note">Oda sahibi bu rengi odası için alır; süre bitince oda varsayılan renge döner (0 gün: süresiz). Fiyatı ya da süreyi değiştirmek önceden alanları etkilemez.</p>`}
