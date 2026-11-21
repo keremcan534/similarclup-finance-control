@@ -174,16 +174,33 @@ function VipLevels({ doc, set, edit }) {
 }
 
 function NobleLevels({ doc, set, edit }) {
-  return html`<${Card} title="Kademeler">
-    <p class="muted">Rütbe jetonla satın alınır ve süresi dolunca biter; seviye düşmesi yoktur. Yüksek kademe sürerken düşüğü alınamaz.</p>
+  // Rütbe's packages (21 Nov 2026): the main term (the one older APKs buy) and at most two more (7 and 90 days by
+  // default), each with its own price; the app shows the saving against the shortest one's daily rate.
+  const plansOf = (l) => l.plans ?? [];
+  const perDay = (price, days) => (days > 0 ? Math.round(price / days) : 0);
+  return html`<${Card} title="Kademeler ve paketler">
+    <p class="muted">Rütbe jetonla satın alınır ve süresi dolunca biter; seviye düşmesi yoktur. Yüksek kademe sürerken düşüğü alınamaz; aynı kademe yeniden alınınca süresi uzar (en fazla 365 gün). Ana süre eski APK'ların sattığı pakettir; yanına en fazla iki paket daha eklenir (uygulama 7, 30 ve 90 gün önerir). Uygulama her paketin indirimini en kısa paketin günlük fiyatına göre gösterir.</p>
     <div class="table-wrap"><table class="dense levels">
-      <thead><tr><th>Kademe</th><th>Ad</th><th class="r">Fiyat (jeton)</th><th class="r">Süre (gün)</th></tr></thead>
+      <thead><tr><th>Kademe</th><th>Ad</th><th class="r">Ana süre (gün)</th><th class="r">Ana fiyat (jeton)</th><th>Diğer paketler (gün · jeton)</th></tr></thead>
       <tbody>${doc.levels.map(
         (l, i) => html`<tr key=${i}>
           <td>${l.level}</td>
           <td>${cell(`Kademe ${l.level} adı`, html`<input value=${l.name} maxlength="24" disabled=${!edit} onInput=${(e) => set((d) => (d.levels[i].name = e.target.value))} />`)}</td>
-          <td class="r"><div class="row gap">${cell(`Kademe ${l.level} fiyatı`, html`<input type="number" min="1" step="1" value=${l.price} disabled=${!edit} style="text-align:right" onInput=${(e) => set((d) => (d.levels[i].price = toNumber(e.target.value)))} />`)}<small class="muted readable">${num(l.price)}</small></div></td>
-          <td class="r">${cell(`Kademe ${l.level} süresi`, html`<input type="number" min="1" max="365" step="1" value=${l.days} disabled=${!edit} style="text-align:right" onInput=${(e) => set((d) => (d.levels[i].days = toNumber(e.target.value)))} />`)}</td>
+          <td class="r">${cell(`Kademe ${l.level} süresi`, html`<input type="number" min="1" max="365" step="1" value=${l.days} disabled=${!edit} style="text-align:right;width:70px" onInput=${(e) => set((d) => (d.levels[i].days = toNumber(e.target.value)))} />`)}</td>
+          <td class="r"><div class="row gap">${cell(`Kademe ${l.level} fiyatı`, html`<input type="number" min="1" step="1" value=${l.price} disabled=${!edit} style="text-align:right" onInput=${(e) => set((d) => (d.levels[i].price = toNumber(e.target.value)))} />`)}<small class="muted readable">${num(l.price)} · günü ${num(perDay(l.price, l.days))}</small></div></td>
+          <td>
+            ${plansOf(l).map(
+              (p, j) => html`<div class="row gap" key=${j} style="margin-bottom:4px;align-items:center">
+                ${cell(`Kademe ${l.level} paket ${j + 1} günü`, html`<input type="number" min="1" max="365" step="1" value=${p.days} disabled=${!edit} style="text-align:right;width:64px" onInput=${(e) => set((d) => (d.levels[i].plans[j].days = toNumber(e.target.value)))} />`)}
+                <span class="muted">gün</span>
+                ${cell(`Kademe ${l.level} paket ${j + 1} fiyatı`, html`<input type="number" min="1" step="1" value=${p.price} disabled=${!edit} style="text-align:right;width:110px" onInput=${(e) => set((d) => (d.levels[i].plans[j].price = toNumber(e.target.value)))} />`)}
+                <small class="muted readable">${num(p.price)} · günü ${num(perDay(p.price, p.days))}</small>
+                ${edit && html`<button type="button" class="btn link" onClick=${() => set((d) => d.levels[i].plans.splice(j, 1))}>Kaldır</button>`}
+              </div>`,
+            )}
+            ${edit && plansOf(l).length < 2 && html`<button type="button" class="btn link" onClick=${() => set((d) => (d.levels[i].plans = [...(d.levels[i].plans ?? []), { days: 7, price: d.levels[i].price }]))}>+ Paket ekle</button>`}
+            ${!plansOf(l).length && !edit && html`<span class="muted">Yalnız ana süre</span>`}
+          </td>
         </tr>`,
       )}</tbody>
     </table></div>
