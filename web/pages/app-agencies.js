@@ -568,6 +568,7 @@ const SETTING_TEXT = {
   parent_min_rate: 'Üst ajansın asgari payı',
   parent_zero: 'Üst ajans payını sıfırlama',
   parent_sees_sub_earnings: 'Üst ajans alt ajansın kazancını görür',
+  parent_sees_subs: 'Üst ajans referans ajanslarının yayıncılarını ve rakamlarını görür',
   bd_policy: 'BD payı',
   suspension_policy: 'Askıya alma kuralı',
   assistant_policy: 'Ajans asistanı',
