@@ -33,7 +33,7 @@ export const sec = (ms) => (ms / 1000).toLocaleString('tr-TR', { maximumFraction
 export const size = (n) => (n < 1024 * 1024 ? `${Math.max(1, Math.round(n / 1024))} KB` : `${mb(n)} MB`);
 const ending = (name) => (/\.([A-Za-z0-9]{1,8})$/.exec(name ?? '')?.[1] ?? '').toLowerCase();
 /** What "Değiştirildi" names, as the app answers it (`changed`). */
-const FIELD_TR = { name: 'ad', emoji: 'emoji', price: 'fiyat', cat: 'raf / VIP', enabled: 'rafta / kapalı', icon: 'ikon', video: 'video', mark: 'profil izi', global: 'global' };
+const FIELD_TR = { name: 'ad', emoji: 'emoji', price: 'fiyat', cat: 'raf / VIP', enabled: 'rafta / kapalı', icon: 'ikon', video: 'video', mark: 'profil izi', global: 'global', soon: 'yakında' };
 const changedText = (g) => (g.changed ?? []).map((f) => FIELD_TR[f] ?? f).join(', ');
 const KINDS = [
   ['all', 'Hepsi'],
@@ -201,6 +201,7 @@ export function AppGifts({ query }) {
               ${shelfNote(g) ? html` <${Badge} s=${g.enabled ? 'active' : 'passive'} label=${shelfNote(g)} />` : ''}
               ${otherChanges(g).length > 0 ? html` <${Badge} s="warning" label=${`Değiştirildi: ${otherChanges(g).map((f) => FIELD_TR[f] ?? f).join(', ')}`} />` : ''}
               ${g.global ? html` <${Badge} s=${globalNote(g, d.globalMinPrice) ? 'warning' : 'info'} label="Global" />` : ''}
+              ${g.soon ? html` <${Badge} s="passive" label="Yakında" />` : ''}
               ${globalNote(g, d.globalMinPrice) ? html` <small class="muted">${globalNote(g, d.globalMinPrice)}</small>` : ''}
               <br /><small class="muted">${g.id}${g.iconLink || g.videoLink ? ' · 🔗 bağlantıdan' : ''}${g.builtin && g.changed?.includes('name') ? ` · uygulamada: ${g.original.name}` : ''}${markText(g.mark, kinds.data?.kinds) ? ` · ${markText(g.mark, kinds.data?.kinds)}` : ''}</small></div>`,
           },
@@ -399,6 +400,7 @@ function Editor({ gift, admin, kinds: kindsAnswer, kindsMode = 'unknown', hidden
     emoji: gift?.emoji ?? '',
     enabled: gift ? gift.enabled : true,
     global: gift?.global === true,
+    soon: gift?.soon === true,
   });
   // Profil izi: { role: 'none'|'leave'|'clean', kind, amount, unit } (amount '': the kind's, else the Canlı ayar's).
   const [mark, setMark] = useState(() => markForm(gift?.mark));
@@ -554,6 +556,8 @@ function Editor({ gift, admin, kinds: kindsAnswer, kindsMode = 'unknown', hidden
       if (gift) {
         const patch = {};
         for (const k of ['name', 'price', 'cat', 'minSvip', 'enabled']) if (fields[k] !== gift[k]) patch[k] = fields[k];
+        // Yakında (the app server's soon, 22 Nov 2026): only on the app's own gifts, only on a server that answers it.
+        if (gift.soon !== undefined && !!v.soon !== (gift.soon === true)) patch.soon = !!v.soon;
         if ((fields.emoji || (app ? o.emoji : '🎁')) !== gift.emoji) patch.emoji = fields.emoji;
         if (iconAt) patch.icon = iconAt;
         // Back to the app's picture.
@@ -593,10 +597,11 @@ function Editor({ gift, admin, kinds: kindsAnswer, kindsMode = 'unknown', hidden
     <div class="form"><div class="grid2">
       <label class="field"><span>Ad *</span><input value=${v.name} maxlength=${L.nameMax} onInput=${set('name')} placeholder="Ör. Altın Yıldız" />${was(v.name.trim() !== o?.name, o?.name)}</label>
       <label class="field"><span>Fiyat (jeton) *</span><input inputmode="numeric" value=${v.price} onInput=${(e) => setV({ ...v, price: e.target.value.replace(/[^\d]/g, '') })} placeholder="Ör. 9999" /><small class="muted">${isBondGift(gift) ? 'Bağ isteğinin fiyatı. Değişiklik yeni isteklerden itibaren geçer; bekleyen istekler kendi fiyatını tutar. Fiyat uygulamanınkinden farklıyken eski APK\'lar bağ isteği gönderemez, güncelleme ister.' : `1–${num(L.priceMax)} jeton; değişiklik yeni gönderimlerden itibaren geçer.`}</small>${was(price !== o?.price, `${num(o?.price)} jeton`)}</label>
-      <label class="field"><span>Raf</span><select value=${v.cat} disabled=${isBondGift(gift)} onChange=${set('cat')}>${CATS.map(([k, l]) => html`<option value=${k}>${l}</option>`)}</select>${was(v.cat !== o?.cat, `${CAT[o?.cat]}${o?.cat === 'privilege' ? ` · VIP ${o.minSvip}+` : ''}`)}</label>
+      <label class="field"><span>Raf</span><select value=${v.cat} onChange=${set('cat')}>${(isBondGift(gift) ? CATS.filter(([k]) => k === 'family' || k === 'couple') : CATS).map(([k, l]) => html`<option value=${k}>${l}</option>`)}</select>${isBondGift(gift) ? html`<small class="muted">Bağ hediyesi Aile ve Dost ya da Çift rafında olur.</small>` : ''}${was(v.cat !== o?.cat, `${CAT[o?.cat]}${o?.cat === 'privilege' ? ` · VIP ${o.minSvip}+` : ''}`)}</label>
       ${v.cat === 'privilege' && html`<label class="field"><span>En düşük VIP seviyesi</span><select value=${v.minSvip} onChange=${set('minSvip')}>${Array.from({ length: L.svipMax }, (_, i) => html`<option value=${String(i + 1)}>VIP ${i + 1}</option>`)}</select></label>`}
       <label class="field"><span>Emoji ${app ? '' : '(isteğe bağlı)'}</span><input value=${v.emoji} maxlength="8" onInput=${set('emoji')} placeholder=${app ? o.emoji : '🎁'} /><small class="muted">Sohbet satırlarında ve ikon yüklenmeden önce görünür.</small>${was(v.emoji.trim() && v.emoji.trim() !== o?.emoji, o?.emoji)}</label>
       <label class="field inline"><span>Rafta (herkes görür)</span><input type="checkbox" checked=${v.enabled} onChange=${set('enabled')} />${was(!!v.enabled !== o?.enabled, o?.enabled ? 'rafta' : 'duraklatılmış')}</label>
+      ${gift?.soon !== undefined && html`<label class="field inline wide"><span><b>Yakında</b> (rafta soluk görünür, üstünde "Yakında" yazar, gönderilemez${isBondGift(gift) ? '; bu bağ türü için yeni istek de gönderilemez, kurulmuş bağlar sürer' : ''})<br /><small class="muted">Eski APK'lar Yakında hediyeyi rafta hiç görmez.</small></span><input type="checkbox" checked=${v.soon} onChange=${set('soon')} />${was(!!v.soon !== !!o?.soon, o?.soon ? 'yakında' : 'açık')}</label>`}
       ${!box.hidden && html`<label class="field inline wide"><span><b>Global hediye</b> (ülkedeki bütün odalarda duyurulur: gönderenin ve alıcının adıyla)<br /><small class="muted">${box.hint}</small></span><input type="checkbox" checked=${v.global} disabled=${box.disabled} onChange=${set('global')} />${was(!!v.global !== !!o?.global, o?.global ? 'global' : 'global değil')}</label>`}
     </div></div>
 

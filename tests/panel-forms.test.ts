@@ -478,3 +478,14 @@ test('Bağ işaretleri: tasarımı olmayan seviye bir alttakini gösterir; kayde
   assert.match(bondLooks.saveBody('cift', 4, null, { art: null, motion: null, size: 1 }).error, /durağan resim ya da hareketli/);
   assert.equal(bondLooks.sizeText(1.5), '1,5×');
 });
+
+// Yakında (the app server's soon, 22 Nov 2026): the gifts page shows it and turns it on or off for the app's own gifts;
+// a bond gift's shelf is Aile ve Dost or Çift.
+test('Hediyeler sayfası: Yakında seçimi ve bağ hediyesinin rafı', async () => {
+  const { readFile } = await import('node:fs/promises');
+  const page = await readFile(new URL('../web/pages/app-gifts.js', import.meta.url), 'utf8');
+  assert.match(page, /if \(gift\.soon !== undefined && !!v\.soon !== \(gift\.soon === true\)\) patch\.soon = !!v\.soon;/);
+  assert.match(page, /<b>Yakında<\/b> \(rafta soluk görünür, üstünde "Yakında" yazar, gönderilemez/);
+  assert.match(page, /\$\{g\.soon \? html` <\$\{Badge\} s="passive" label="Yakında" \/>` : ''\}/);
+  assert.match(page, /isBondGift\(gift\) \? CATS\.filter\(\(\[k\]\) => k === 'family' \|\| k === 'couple'\) : CATS/);
+});
