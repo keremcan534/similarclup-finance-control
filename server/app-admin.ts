@@ -119,6 +119,8 @@ export const APP_ROUTES: [string, string, Permission | Permission[]][] = [
   ['GET', '/api/admin/alerts', 'app.reports'],
   ['GET', '/api/admin/finance-sync', 'app.reports'],
   ['GET', '/api/admin/money-check', 'app.reports'],
+  // Sunucu kapasitesi: the app's machine measured on it (its server-load.mjs), for the capacity calculator.
+  ['GET', '/api/admin/capacity', 'costs.view'],
   // Kullanıcılar: search, ban (and lifting it), room level, deleting, an invite's coins back
   ['GET', '/api/admin/users', 'app.users'],
   // An account by the ID on the person's profile in the app (their own number): every page's account fields

@@ -9,6 +9,7 @@ import { Lucky } from './pages/lucky.js';
 import { Expenses, Cash } from './pages/expenses.js';
 import { Reports } from './pages/reports.js';
 import { Simulation } from './pages/simulation.js';
+import { Capacity } from './pages/capacity.js';
 import { Alerts } from './pages/alerts.js';
 import { Integrations, Users, Audit, Settings, Account } from './pages/admin.js';
 import { AppGifts } from './pages/app-gifts.js';
@@ -82,6 +83,7 @@ const NAV = [
     ['cash', 'Nakit ve bütçe', 'reports.view', Cash, 'nakit bütçe kasa'],
     ['simulation', 'Büyüme simülasyonu', 'simulation.use', Simulation, 'simülasyon büyüme tahmin'],
     ['costs', 'Sunucu ve servisler', 'costs.view', Costs, 'maliyet sunucu servis fatura'],
+    ['capacity', 'Sunucu kapasitesi', 'costs.view', Capacity, 'sunucu kapasite oracle trafik kaç kişi simülasyon'],
     ['catalog', 'Oyun, hediye, PK maliyeti', 'costs.view', Catalog, 'maliyet katalog pk oyun hediye'],
     ['lucky', 'Şanslı hediye maliyeti', 'lucky.view', Lucky, 'lucky gift şanslı maliyet'],
     ['expenses', 'Genel giderler', 'expenses.view', Expenses, 'gider masraf'],
