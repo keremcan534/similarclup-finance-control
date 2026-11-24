@@ -27,6 +27,8 @@ const KINDS = [
   ['bubble', 'Sohbet balonları'],
   ['wave', 'Ses dalgaları'],
   ['seat', 'Koltuk renkleri'],
+  // The app's rides (Çarşı shows them with the entry effects): only an app server that lists them has the tab.
+  ['ride', 'Binekler'],
 ];
 const NEW_LABEL = { entry: 'Yeni giriş efekti', frame: 'Yeni çerçeve', bubble: 'Yeni sohbet balonu', wave: 'Yeni ses dalgası', seat: 'Yeni koltuk rengi' };
 const KIND_HELP = {
@@ -34,6 +36,7 @@ const KIND_HELP = {
   frame: 'Çerçeve resmi saydam, kare PNG ya da WebP olmalı; fotoğraf ortadaki boşluğa oturur.',
   bubble: 'Balon iki renkle ya da bir resimle olur. Resmin köşeleri bozulmaz, ortası mesaja göre uzar.',
   wave: 'Dalga, konuşanın koltuğundaki halkadır; sese göre büyür. Stil ve renk seçilir; Parıltı stilinde dönen şekiller resim olabilir.',
+  ride: 'Binekler (Scooter, Spor Araba, Özel Jet) uygulamanın kendisinin: Çarşı’da giriş efektleriyle durur. Adı, fiyatı, süresi, VIP seviyesi ve satışta olup olmadığı buradan değişir; yenisi eklenmez.',
   seat: 'Odadaki boş mikrofonların rengi. Oda sahibi rengi odası için alır; süresi bitince oda varsayılan renge döner. Varsayılan renk her odanın, ücretsiz.',
 };
 /** Soft colours to start from (the app's own seat colours and a few more in the same tone). */
@@ -416,10 +419,10 @@ export function AppShop() {
 
   return html`<${Page}
     title="Mağaza"
-    subtitle="Giriş efektleri, çerçeveler, sohbet balonları, ses dalgaları ve koltuk renkleri: uygulamanın kendileri ve sizin eklediğiniz. Değişiklikler sunucuda hemen geçerli; yeni APK'da telefonlar mağazayı buradan gösterir."
+    subtitle="Giriş efektleri, çerçeveler, sohbet balonları, ses dalgaları, koltuk renkleri ve binekler: uygulamanın kendileri ve sizin eklediğiniz. Değişiklikler sunucuda hemen geçerli; yeni APK'da telefonlar mağazayı buradan gösterir."
     actions=${editing &&
     html`${kind === 'frame' && list.data?.limits?.motionPxMin && html`<${Button} onClick=${() => setBulk(true)}>Toplu çerçeve ekle</${Button}>`}
-      <${Button} kind="primary" onClick=${() => setEdit({ kind })}>${NEW_LABEL[kind]}</${Button}>`}
+      ${NEW_LABEL[kind] && html`<${Button} kind="primary" onClick=${() => setEdit({ kind })}>${NEW_LABEL[kind]}</${Button}>`}`}
   >
     <${Loading} state=${list}>${(d) => {
       const w = searchable(q.trim());
@@ -428,7 +431,7 @@ export function AppShop() {
       return html`
         ${!d.storage && html`<div class="empty bad">Uygulamanın dosya deposu açık değil: resim ve video yüklenemez.</div>`}
         <${Tabs}
-          tabs=${KINDS.filter(([k]) => k !== 'seat' || d.limits.seatDefault).map(([k, l]) => [k, `${l} (${d.items.filter((x) => x.kind === k).length})`])}
+          tabs=${KINDS.filter(([k]) => (k !== 'seat' || d.limits.seatDefault) && (k !== 'ride' || d.items.some((x) => x.kind === 'ride'))).map(([k, l]) => [k, `${l} (${d.items.filter((x) => x.kind === k).length})`])}
           value=${kind}
           onChange=${setKind}
         />
@@ -874,7 +877,7 @@ function Editor({ item, kind, limits, convert, svga, onClose, onSaved }) {
     ${!isDefault && html`<label class="field inline" style="margin-top:6px"><span>Satışta</span><input type="checkbox" checked=${v.enabled} onChange=${(e) => set('enabled', e.target.checked)} /></label>`}
     ${isDefault && html`<p class="note">Her odanın ücretsiz, varsayılan rengi: fiyatı ve süresi olmaz, satıştan kalkmaz. Adı ve rengi değişir.</p>`}
     ${seat && !isDefault && html`<p class="note">Oda sahibi bu rengi odası için alır; süre bitince oda varsayılan renge döner (0 gün: süresiz). Fiyatı ya da süreyi değiştirmek önceden alanları etkilemez.</p>`}
-    ${!own && !seat && html`<p class="note">Uygulamanın kendi eşyasının görünüşü uygulamada. Yeni görünüşle bir eşya için "${NEW_LABEL[kind]}" ekleyin.</p>`}
+    ${!own && !seat && html`<p class="note">Uygulamanın kendi eşyasının görünüşü uygulamada.${NEW_LABEL[kind] ? ` Yeni görünüşle bir eşya için "${NEW_LABEL[kind]}" ekleyin.` : ''}</p>`}
     ${seat &&
     html`<div class="row gap wrap" style="align-items:flex-start;margin-top:10px">
       <div class="seat-stage">
