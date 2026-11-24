@@ -694,6 +694,35 @@ test('Profil izleri: Kullanıcılar yetkisiyle görülür ve kaldırılır; kald
   assert.equal(no.json.error, 'Geçersiz iz türü');
 });
 
+test('Özel albüm: Kullanıcılar yetkisiyle görülür ve fotoğraf kaldırılır; kaldırma denetim kaydına yazılır; ret cümlesi aynen', async () => {
+  for (const [method, path] of [['GET', '/api/admin/private-album'], ['POST', '/api/admin/private-album/remove']]) {
+    assert.deepEqual(APP_ROUTES.find(([m, p]) => m === method && p === path)?.[2], 'app.users', `${method} ${path}`);
+  }
+  env.as('operations_manager', 'ops-album@test.local');
+  env.as('finance_manager', 'fin-album@test.local');
+  const ops = await loginAs('ops-album@test.local');
+  const fin = await loginAs('fin-album@test.local');
+  const user = '6f1c2a3b-4d5e-4f60-8a7b-9c0d1e2f3a4d';
+  const r = await call('GET', `/api/app/private-album?user=${user}`, undefined, ops);
+  assert.equal(r.status, 200, JSON.stringify(r.json));
+  assert.equal(r.json.path, `/api/admin/private-album?user=${user}`);
+  const body = { user, id: 7, reason: 'Şikâyet: uygunsuz' };
+  const out = await call('POST', '/api/app/private-album/remove', body, ops);
+  assert.equal(out.status, 200, JSON.stringify(out.json));
+  assert.equal(seen.at(-1)!.path, '/api/admin/private-album/remove');
+  assert.deepEqual(JSON.parse(seen.at(-1)!.body), body);
+  const log = env.db.get("SELECT actor, after FROM audit_logs WHERE action = 'app.private-album.remove' ORDER BY id DESC LIMIT 1")!;
+  assert.match(log.actor, /ops-album@test\.local/);
+  assert.deepEqual(JSON.parse(log.after).body, body);
+  assert.equal((await call('GET', `/api/app/private-album?user=${user}`, undefined, fin)).status, 403);
+  assert.equal((await call('POST', '/api/app/private-album/remove', body, fin)).status, 403);
+  refuse = { status: 404, error: 'Fotoğraf bulunamadı' };
+  const no = await call('POST', '/api/app/private-album/remove', body, ops);
+  refuse = null;
+  assert.equal(no.status, 404);
+  assert.equal(no.json.error, 'Fotoğraf bulunamadı');
+});
+
 test('Ses tanıtımı: Kullanıcılar yetkisiyle dinlenir ve kaldırılır; kaldırma denetim kaydına yazılır; ret cümlesi aynen', async () => {
   for (const [method, path] of [['GET', '/api/admin/voice'], ['POST', '/api/admin/voice/clear']]) {
     assert.deepEqual(APP_ROUTES.find(([m, p]) => m === method && p === path)?.[2], 'app.users', `${method} ${path}`);

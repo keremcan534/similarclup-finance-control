@@ -135,6 +135,10 @@ export const APP_ROUTES: [string, string, Permission | Permission[]][] = [
   // off with a reason. Kullanıcılar, and a reported person in Şikâyetler.
   ['GET', '/api/admin/voice', 'app.users'],
   ['POST', '/api/admin/voice/clear', 'app.users'],
+  // Özel albüm (the app's private-album.mjs): a streamer's paid photos (taken-down ones too, with who opened it and
+  // for how much), and taking an offensive one down with a reason. Kullanıcılar, and a reported person in Şikâyetler.
+  ['GET', '/api/admin/private-album', 'app.users'],
+  ['POST', '/api/admin/private-album/remove', 'app.users'],
   ['POST', '/api/admin/ban', 'app.users'],
   ['POST', '/api/admin/referrals/revoke', 'app.users'],
   // Şikâyetler and a reported room's pictures

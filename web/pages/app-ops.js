@@ -86,13 +86,14 @@ export function AppUsers() {
     after('Hesap silindi')(await act(() => post('/api/app/users/delete', { id: u.id })));
   const [marks, setMarks] = useState(null);
   const [voice, setVoice] = useState(null);
+  const [privateAlbum, setPrivateAlbum] = useState(null);
   const removeTests = async (n) =>
     confirm(`Sunucu denemesinin açtığı ${n} hesap ("Test A", "Test B") silinir. Gerçek kişilere dokunulmaz. Bu işlem geri alınamaz.`) &&
     after((r) => `${num(r.deleted)} deneme hesabı silindi`)(await act(() => post('/api/app/users/delete', { tests: true })));
   const d = list.data;
   return html`<${Page}
     title="Kullanıcılar"
-    subtitle="Uygulamanın hesapları: ad, kullanıcı adı, e-posta ya da ID ile arama (kişinin profilindeki ID, odasının ID'si de aynı; özel ID ve eski 8 haneli oda ID'si de bulunur); askıya alma, oda seviyesi, davet ödülünü geri alma, hesap silme; profil izleri (Kaka gibi): kim bıraktı, ne zaman, kaldırma; ses tanıtımı: dinleme, kaldırma. Yetkili hesapları (yönetici, moderatör) buradan değiştirilemez."
+    subtitle="Uygulamanın hesapları: ad, kullanıcı adı, e-posta ya da ID ile arama (kişinin profilindeki ID, odasının ID'si de aynı; özel ID ve eski 8 haneli oda ID'si de bulunur); askıya alma, oda seviyesi, davet ödülünü geri alma, hesap silme; profil izleri (Kaka gibi): kim bıraktı, ne zaman, kaldırma; ses tanıtımı: dinleme, kaldırma; özel albüm: fotoğraflar, kaç kişi açtı, kaldırma. Yetkili hesapları (yönetici, moderatör) buradan değiştirilemez."
     actions=${can('app.users') && d?.tests > 0 && html`<${Button} kind="danger" onClick=${() => removeTests(d.tests)}>Deneme hesaplarını sil (${num(d.tests)})</${Button}>`}
   >
     ${prompt}
@@ -122,6 +123,7 @@ export function AppUsers() {
                 <${Button} onClick=${() => level(u)}>Oda seviyesi</${Button}>`}
                 <${Button} onClick=${() => setMarks(u)}>Profil izleri</${Button}>
                 <${Button} onClick=${() => setVoice(u)}>Ses tanıtımı</${Button}>
+                <${Button} onClick=${() => setPrivateAlbum(u)}>Özel albüm</${Button}>
                 ${!STAFF(u.role) && html`<${Button} kind="ghost" onClick=${() => revoke(u)}>Davet ödülü</${Button}>
                 <${Button} kind="ghost" onClick=${() => remove(u)}>Sil</${Button}>`}
               </span>`,
@@ -135,7 +137,45 @@ export function AppUsers() {
       </div>`}</${Loading}>
     ${marks && html`<${ProfileMarks} user=${marks} onClose=${() => setMarks(null)} />`}
     ${voice && html`<${ProfileVoice} user=${voice} onClose=${() => setVoice(null)} />`}
+    ${privateAlbum && html`<${PrivateAlbum} user=${privateAlbum} onClose=${() => setPrivateAlbum(null)} />`}
   </${Page}>`;
+}
+
+// ---- Özel albüm -----------------------------------------------------------------------------------------
+/**
+ * A streamer's Özel albüm (the app's private-album.mjs: photos others open with coins, the price in Canlı ayarlar ›
+ * Özel albüm): every photo, taken-down ones too, how many opened it and the coins they paid. A photo comes down with a
+ * reason; it stops showing to everyone, even those who opened the album, and stays here as the record. The app's
+ * audit log records it.
+ */
+export function PrivateAlbum({ user, onClose }) {
+  const { can } = useApp();
+  const data = useApi(`/api/app/private-album?user=${encodeURIComponent(user.id)}`);
+  const [ask, prompt] = usePrompt();
+  const take = async (p) => {
+    const v = await ask('Fotoğrafı kaldır', {
+      text: `${user.name ?? 'Kişi'}: bu fotoğraf özel albümden hemen kalkar; albümü açmış olanlar da görmez. Kayıt için burada kalır. Kaldırma uygulamanın denetim kaydına yazılır.`,
+      fields: [{ name: 'reason', label: 'Neden (isteğe bağlı, en çok 200 karakter; ör. şikâyet: uygunsuz)', type: 'textarea', wide: true }],
+      ok: 'Fotoğrafı kaldır',
+    });
+    if (!v) return;
+    const r = await act(() => post('/api/app/private-album/remove', { user: user.id, id: p.id, ...(v.reason.trim() ? { reason: v.reason.trim().slice(0, 200) } : {}) }));
+    if (r) {
+      toast(r.removed ? 'Fotoğraf kaldırıldı' : 'Fotoğraf zaten kaldırılmıştı');
+      data.reload();
+    }
+  };
+  return html`<${Modal} title=${`Özel albüm: ${user.name ?? ''}`} wide onClose=${onClose}>
+    ${prompt}
+    <${Loading} state=${data}>${(d) => html`
+      <p class="muted">${d.can ? 'Ajanstaki onaylı yayıncı: özel albümü açık.' : 'Şu an ajansta onaylı yayıncı değil: albümü satılmıyor (önceden açanlar görmeye devam eder).'} Fiyat (herkese aynı): ${d.price > 0 ? `${num(d.price)} jeton` : 'kapalı (0)'} · Canlı ayarlar › Özel albüm. ${num(d.unlocks)} kişi açtı, toplam ${num(d.coins)} jeton.</p>
+      <${Table} dense empty="Bu kişinin özel albümünde fotoğraf yok" columns=${[
+        { key: 'url', label: 'Fotoğraf', render: (p) => html`<${Pic} src=${p.url} size=${72} />` },
+        { key: 'at', label: 'Eklendi', render: (p) => dateTimeTr(p.at) },
+        { key: 'state', label: 'Durum', render: (p) => (p.removed ? html`<${Badge} s="closed" label="Kaldırıldı" /><br /><small class="muted">${dateTimeTr(p.removed.at)}${p.removed.by ? ` · ${p.removed.by}` : ''}${p.removed.reason ? ` · ${p.removed.reason}` : ''}</small>` : html`<${Badge} s="pending" label="Görünüyor" />`) },
+        { key: 'a', label: '', render: (p) => can('app.users') && !p.removed && html`<${Button} kind="danger" onClick=${() => take(p)}>Kaldır</${Button}>` },
+      ]} rows=${d.photos} />`}</${Loading}>
+  </${Modal}>`;
 }
 
 // ---- Ses tanıtımı ---------------------------------------------------------------------------------------
@@ -247,6 +287,7 @@ export function AppComplaints() {
   const [room, setRoom] = useState(null);
   const [marks, setMarks] = useState(null);
   const [voice, setVoice] = useState(null);
+  const [privateAlbum, setPrivateAlbum] = useState(null);
   const [ask, prompt] = usePrompt();
   const handle = async (r, body, text) => (await act(() => post('/api/app/reports/handle', { id: r.id, ...body }))) && (toast(text), list.reload());
   const dismiss = (r) => confirm('Şikâyet işlem yapılmadan kapatılır.') && handle(r, { status: 'dismissed' }, 'Şikâyet kapatıldı');
@@ -267,7 +308,7 @@ export function AppComplaints() {
     confirm(`${targetName(r)} ${r.target.bannedForever ? 'için ömür boyu ban da kaldırılır ve ' : ''}hemen yeniden giriş yapabilir.`) &&
     (await act(() => post('/api/app/ban', { user: r.target.id, days: null }))) &&
     (toast('Askı kaldırıldı'), list.reload());
-  return html`<${Page} title="Şikâyetler" subtitle="Kullanıcıların kişi, oda, mesaj, an, yorum ve aile şikâyetleri: sorun yok, işlem yapıldı, askıya alma (kişide), içeriği kaldırma (an ve yorumda), şikâyet edilen odanın görselleri, şikâyet edilen kişinin profil izleri ve ses tanıtımı.">
+  return html`<${Page} title="Şikâyetler" subtitle="Kullanıcıların kişi, oda, mesaj, an, yorum ve aile şikâyetleri: sorun yok, işlem yapıldı, askıya alma (kişide), içeriği kaldırma (an ve yorumda), şikâyet edilen odanın görselleri, şikâyet edilen kişinin profil izleri, ses tanıtımı ve özel albümü.">
     ${prompt}
     <${Chips} value=${status} options=${R_STATUS} onChange=${setStatus} />
     <${Loading} state=${list}>${(d) => html`<${Table}
@@ -306,6 +347,7 @@ export function AppComplaints() {
               ${r.target.type === 'user' && (r.target.bannedUntil || r.target.bannedForever) && can('app.users') && html`<${Button} kind="ghost" onClick=${() => unban(r)}>Askıyı kaldır</${Button}>`}
               ${r.target.type === 'user' && r.target.id && can('app.users') && html`<${Button} kind="ghost" onClick=${() => setMarks({ id: r.target.id, name: targetName(r) })}>Profil izleri</${Button}>`}
               ${r.target.type === 'user' && r.target.id && can('app.users') && html`<${Button} kind="ghost" onClick=${() => setVoice({ id: r.target.id, name: targetName(r) })}>Ses tanıtımı</${Button}>`}
+              ${r.target.type === 'user' && r.target.id && can('app.users') && html`<${Button} kind="ghost" onClick=${() => setPrivateAlbum({ id: r.target.id, name: targetName(r) })}>Özel albüm</${Button}>`}
             </span>`,
         },
       ]}
@@ -314,6 +356,7 @@ export function AppComplaints() {
     ${room && html`<${RoomPictures} room=${room} onClose=${() => setRoom(null)} />`}
     ${marks && html`<${ProfileMarks} user=${marks} onClose=${() => setMarks(null)} />`}
     ${voice && html`<${ProfileVoice} user=${voice} onClose=${() => setVoice(null)} />`}
+    ${privateAlbum && html`<${PrivateAlbum} user=${privateAlbum} onClose=${() => setPrivateAlbum(null)} />`}
   </${Page}>`;
 }
 
