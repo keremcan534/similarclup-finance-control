@@ -18,7 +18,7 @@ import { AppLevels } from './pages/app-levels.js';
 import { AppLevelRewards } from './pages/app-level-rewards.js';
 import { AppShop } from './pages/app-shop.js';
 import { AppRocket } from './pages/app-rocket.js';
-import { AppPayouts, AppRefunds, AppReports, AppSettings, AppWithdrawals } from './pages/app-finance.js';
+import { AppPayouts, AppRefunds, AppReports, AppSettings, AppWithdrawals, SETTING_SECTIONS } from './pages/app-finance.js';
 import { AppLucky } from './pages/app-lucky.js';
 import { AppComplaints, AppEvents, AppNotices, AppSupport, AppUsers } from './pages/app-ops.js';
 import { AppAgencies } from './pages/app-agencies.js';
@@ -90,8 +90,13 @@ const NAV = [
     ['lucky', 'Şanslı hediye maliyeti', 'lucky.view', Lucky, 'lucky gift şanslı maliyet'],
     ['expenses', 'Genel giderler', 'expenses.view', Expenses, 'gider masraf'],
   ]],
+  // Canlı ayarlar by subject (app-finance.js SETTING_SECTIONS); app-settings stays the overview (old links work).
+  ['live', 'Canlı ayarlar', '🎛️', [
+    ['app-settings', 'Genel bakış ve arama', 'app.settings', (p) => html`<${AppSettings} ...${p} />`, 'canlı ayar ara kur kampanya fiyat duyuru acil kapat yönetim sitesi'],
+    ...SETTING_SECTIONS.map(([k, name, , groups, about]) => [`app-settings-${k}`, name, 'app.settings', (p) => html`<${AppSettings} section=${k} ...${p} />`, `canlı ayar ${groups.join(' ')} ${about}`.toLocaleLowerCase('tr-TR')]),
+    ['app-settings-gecmis', 'Geçmiş ve geri alma', 'app.settings', (p) => html`<${AppSettings} section="gecmis" ...${p} />`, 'canlı ayar geçmiş geri al değişiklik kim neden'],
+  ]],
   ['settings', 'Ayarlar', '⚙️', [
-    ['app-settings', 'Canlı ayarlar', 'app.settings', AppSettings, 'canlı ayar kur kampanya fiyat duyuru acil kapat yönetim sitesi'],
     ['users', 'Panel kullanıcıları ve rolleri', 'users.manage', Users, 'panel kullanıcı rol yetki hesap aç personel moderatör çalışan'],
     ['settings', 'Panel ayarları', 'reports.view', Settings, 'ayar para birimi kur çift onay vergi dönem yedek'],
     ['integrations', 'Entegrasyonlar', 'integrations.manage', Integrations, 'entegrasyon anahtar api'],
@@ -100,6 +105,8 @@ const NAV = [
   ]],
 ];
 const ROUTES = Object.fromEntries(NAV.flatMap(([, , , items]) => items.map(([k, label, perm, C]) => [k, { label, perm, C }])));
+// Canlı ayarlar › Diğer: settings of a group no subject names yet; reached from the overview's card, not the menu.
+ROUTES['app-settings-diger'] = { label: 'Canlı ayarlar · Diğer', perm: 'app.settings', C: (p) => html`<${AppSettings} section="diger" ...${p} />` };
 
 function useHash() {
   const read = () => {

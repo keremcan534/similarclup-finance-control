@@ -265,14 +265,39 @@ function saved(v) {
   return String(v);
 }
 
-export function AppSettings() {
+/**
+ * Canlı ayarlar by subject (owners, 24 Nov 2026: one long page was too much): each subject a page of its own in the
+ * menu, with the app's setting groups under it. A group the list doesn't name yet (a new one from the app) shows
+ * under "Diğer", so nothing is ever hidden. [key, name, icon, groups, what it is about].
+ */
+export const SETTING_SECTIONS = [
+  ['para', 'Para ve kur', '💱', ['Jeton değeri', 'Çevirme kuru', 'Ödemeler', 'Para çekme sınırları', 'Jeton Noktası', 'VIP'], 'Jeton değeri, kurlar, elmas değeri, ödemeler, yayıncı bonusu, çekim sınırları, VIP koruma dönemi'],
+  ['magaza', 'Mağaza ve paketler', '🛍️', ['Hediyeler ve paketler', 'Kampanya', 'Yeni üye ödülleri', 'Çantam', 'Özel albüm'], 'Jeton paketleri, gizli hediye ve ürünler, kampanya, hoş geldin ve davet ödülleri, özel albüm'],
+  ['gorusme', 'Görüşme ve mesaj', '💬', ['Birebir ve eşleşme', 'Otomatik mesaj', 'SimilarClub Sistem'], 'Mesaj ve arama fiyatları, eşleşme, kalp seviyeleri, otomatik mesaj, sistem bildirimleri'],
+  ['odalar', 'Odalar ve etkinlikler', '🎙️', ['Odalar', 'Oda seviyeleri', 'Oda süslemesi', 'Etkinlikler'], 'Oda seviyeleri ve sınırları, patron koltuğu, oda süslemesi, etkinlik kuralları'],
+  ['aile', 'Aile ve bağlar', '👪', ['Aile', 'Aile görevleri', 'Aile sandıkları', 'Bağlar', 'Koruma'], 'Aile kuralları, görev puanları, sandıklar, temalar, bağlar ve koruma'],
+  ['oyun', 'Oyun ve şanslı hediyeler', '🎲', ['Oyun Salonu', 'Şanslı çanta', 'Kazanç duyurusu', 'Global hediye'], 'Oyun Salonu, şanslı çanta, kazanç ve global hediye duyuruları'],
+  ['profil', 'Profil', '🪪', ['Profil rozetleri', 'Profil izleri'], 'Madalya ve unvan kuralları, profil izlerinin süresi'],
+  ['sistem', 'Sistem ve güvenlik', '🛡️', ['Acil durum', 'Zorunlu sürüm', 'SMS', 'Yönetim'], 'Acil durum anahtarları ve duyuru, zorunlu sürüm, SMS sınırı, yönetim sitesi'],
+];
+const NAMED = new Set(SETTING_SECTIONS.flatMap(([, , , g]) => g));
+/** The groups of section `key` that the app has, in the list's order; 'diger': the ones no section names. */
+const groupsOf = (key, all) => (key === 'diger' ? all.filter((g) => !NAMED.has(g)) : (SETTING_SECTIONS.find(([k]) => k === key)?.[3] ?? []).filter((g) => all.includes(g)));
+const sectionOfGroup = (g) => SETTING_SECTIONS.find(([, , , gs]) => gs.includes(g)) ?? ['diger', 'Diğer', '📁'];
+const searchText = (v) => String(v ?? '').toLocaleLowerCase('tr-TR');
+
+/**
+ * Canlı ayarlar. `section`: a subject's page (its groups); 'gecmis': the history; none: the overview (search over
+ * every setting, the subjects with their counts, the latest changes).
+ */
+export function AppSettings({ section = null }) {
   const { can } = useApp();
-  const [tab, setTab] = useState('settings');
   const data = useApi('/api/app/live-settings');
-  const history = useApi(tab === 'history' ? '/api/app/live-settings/history?limit=30' : null);
+  const history = useApi(section === 'gecmis' || !section ? `/api/app/live-settings/history?limit=${section ? 30 : 5}` : null);
   const [edit, setEdit] = useState(null);
+  const [q, setQ] = useState('');
   const [ask, prompt] = usePrompt();
-  const groups = data.data ? [...new Set(data.data.settings.map((s) => s.group))] : [];
+  const all = data.data ? [...new Set(data.data.settings.map((s) => s.group))] : [];
   /** A save or a rollback: a preview first; a big change needs a second yes. */
   const apply = async (path, body) => {
     try {
@@ -294,24 +319,62 @@ export function AppSettings() {
     const v = await ask('Bu değişikliği geri al', { text: 'Her ayar bu değişiklikten hemen önceki değerine döner (önce önizlenir).', label: 'Neden', ok: 'Önizle' });
     if (v) apply('/api/app/live-settings/rollback', { batch: b.batch, reason: v.reason, baseV: data.data.v });
   };
-  return html`<${Page} title="Canlı ayarlar" subtitle="Uygulamanın kurulum gerektirmeden değişen ayarları: kur, kampanya, gizli hediye ve paketler, fiyatlar, sınırlar, acil durum anahtarları. Her kayıt önce önizlenir, nedenle yazılır, uygulamadaki yöneticilere bildirilir ve geri alınabilir.">
+  const sec = SETTING_SECTIONS.find(([k]) => k === section);
+  const title = section === 'gecmis' ? 'Canlı ayarlar · Geçmiş' : section === 'diger' ? 'Canlı ayarlar · Diğer' : sec ? `Canlı ayarlar · ${sec[1]}` : 'Canlı ayarlar';
+  const subtitle = sec
+    ? `${sec[4]}. Her kayıt önce önizlenir, nedenle yazılır, uygulamadaki yöneticilere bildirilir ve Geçmiş'ten geri alınabilir.`
+    : section === 'gecmis'
+      ? 'Son 30 değişiklik: kim, ne zaman, neden, önce ve sonra. Bir değişikliği geri almak önce önizlenir.'
+      : 'Uygulamanın kurulum gerektirmeden değişen ayarları, konularına göre. Bir ayarı aramak için yazın ya da bir konuyu açın.';
+  /** One group's table (a card). */
+  const groupCard = (d, g, rows = d.settings.filter((s) => s.group === g)) => html`<${Card} title=${g}><${Table} dense columns=${[
+    // Long help and reasons wrap, so "Şu an" and Değiştir stay on screen.
+    { key: 'label', label: 'Ayar', render: (s) => html`<div style="white-space:normal;min-width:280px;max-width:560px"><strong>${s.label}</strong><br /><small class="muted">${s.help}</small></div>` },
+    { key: 'effective', label: 'Şu an', render: (s) => html`<div style="white-space:normal;max-width:380px">${shown(s, s.effective)}${s.invalid ? html` <span class="badge bad">kayıt geçersiz, varsayılan kullanılıyor</span>` : ''}</div>` },
+    { key: 'changedAt', label: 'Son değişiklik', render: (s) => (s.changedAt ? html`<div style="white-space:normal;max-width:260px">${dateTimeTr(s.changedAt)}<br /><small class="muted">${s.changedBy?.name ?? ''}${s.reason ? ` · ${s.reason}` : ''}</small></div>` : html`<span class="muted">varsayılan</span>`) },
+    { key: 'a', label: '', render: (s) => can('app.settings') && !d.safeMode && html`<${Button} onClick=${() => setEdit(s)}>Değiştir</${Button}>` },
+  ]} rows=${rows} /></${Card}>`;
+  const historyTable = (h) => html`<${Table} empty="Kayıt yok" columns=${[
+    { key: 'at', label: 'Zaman', render: (b) => html`${dateTimeTr(b.at)}<br /><small class="muted">${b.by?.name ?? ''}</small>` },
+    { key: 'reason', label: 'Neden', render: (b) => html`${b.reason}${b.rollbackOf ? html` <span class="badge">geri alma</span>` : ''}` },
+    { key: 'changes', label: 'Değişiklikler', render: (b) => b.changes.map((c) => html`<div>${c.label}: ${saved(c.before)} → ${saved(c.after)}</div>`) },
+    { key: 'a', label: '', render: (b) => can('app.settings') && html`<${Button} onClick=${() => rollback(b)}>Geri al</${Button}>` },
+  ]} rows=${h.batches} />`;
+  const words = searchText(q).split(/\s+/).filter(Boolean);
+  const hit = (s) => words.every((w) => searchText(`${s.label} ${s.help} ${s.group} ${s.key}`).includes(w));
+  return html`<${Page} title=${title} subtitle=${subtitle}>
     ${prompt}
-    <${Tabs} tabs=${[['settings', 'Ayarlar'], ['history', 'Geçmiş']]} value=${tab} onChange=${setTab} />
-    ${tab === 'settings' && html`<${Loading} state=${data}>${(d) => html`
+    ${section === 'gecmis'
+      ? html`<${Loading} state=${history}>${historyTable}</${Loading}>`
+      : html`<${Loading} state=${data}>${(d) => html`
       ${d.safeMode && html`<p class="note bad">Uygulamanın sunucusu güvenli modda (LIVE_SAFE_MODE): kayıtlı ayarlar kullanılmıyor ve kaydedilemez.</p>`}
-      ${groups.map((g) => html`<${Card} title=${g}><${Table} dense columns=${[
-        // Long help and reasons wrap, so "Şu an" and Değiştir stay on screen.
-        { key: 'label', label: 'Ayar', render: (s) => html`<div style="white-space:normal;min-width:280px;max-width:560px"><strong>${s.label}</strong><br /><small class="muted">${s.help}</small></div>` },
-        { key: 'effective', label: 'Şu an', render: (s) => html`${shown(s, s.effective)}${s.invalid ? html` <span class="badge bad">kayıt geçersiz, varsayılan kullanılıyor</span>` : ''}` },
-        { key: 'changedAt', label: 'Son değişiklik', render: (s) => (s.changedAt ? html`<div style="white-space:normal;max-width:260px">${dateTimeTr(s.changedAt)}<br /><small class="muted">${s.changedBy?.name ?? ''}${s.reason ? ` · ${s.reason}` : ''}</small></div>` : html`<span class="muted">varsayılan</span>`) },
-        { key: 'a', label: '', render: (s) => can('app.settings') && !d.safeMode && html`<${Button} onClick=${() => setEdit(s)}>Değiştir</${Button}>` },
-      ]} rows=${d.settings.filter((s) => s.group === g)} /></${Card}>`)}`}</${Loading}>`}
-    ${tab === 'history' && html`<${Loading} state=${history}>${(h) => html`<${Table} empty="Kayıt yok" columns=${[
-      { key: 'at', label: 'Zaman', render: (b) => html`${dateTimeTr(b.at)}<br /><small class="muted">${b.by?.name ?? ''}</small>` },
-      { key: 'reason', label: 'Neden', render: (b) => html`${b.reason}${b.rollbackOf ? html` <span class="badge">geri alma</span>` : ''}` },
-      { key: 'changes', label: 'Değişiklikler', render: (b) => b.changes.map((c) => html`<div>${c.label}: ${saved(c.before)} → ${saved(c.after)}</div>`) },
-      { key: 'a', label: '', render: (b) => can('app.settings') && html`<${Button} onClick=${() => rollback(b)}>Geri al</${Button}>` },
-    ]} rows=${h.batches} />`}</${Loading}>`}
+      ${section
+        ? html`
+          ${groupsOf(section, all).length > 1 && html`<div class="row gap wrap" style="margin-bottom:10px">${groupsOf(section, all).map((g) => html`<a class="chip" href=${`#/${location.hash.replace(/^#\/?/, '').split('?')[0]}`} onClick=${(e) => (e.preventDefault(), document.getElementById(`grp-${g}`)?.scrollIntoView({ behavior: 'smooth', block: 'start' }))}>${g} <small class="muted">${d.settings.filter((s) => s.group === g).length}</small></a>`)}</div>`}
+          ${groupsOf(section, all).map((g) => html`<div id=${`grp-${g}`}>${groupCard(d, g)}</div>`)}
+          ${!groupsOf(section, all).length && html`<p class="muted">Bu konuda ayar yok.</p>`}`
+        : html`
+          <input type="search" placeholder="Ayarlarda ara: ör. kur, bonus, mikrofon, kampanya" value=${q} onInput=${(e) => setQ(e.target.value)} style="width:100%;max-width:560px;margin-bottom:14px" aria-label="Ayarlarda ara" />
+          ${words.length
+            ? (() => {
+                const found = d.settings.filter(hit);
+                const by = [...new Set(found.map((s) => s.group))];
+                return found.length ? by.map((g) => groupCard(d, `${sectionOfGroup(g)[1]} › ${g}`, found.filter((s) => s.group === g))) : html`<p class="muted">"${q}" ile eşleşen ayar yok.</p>`;
+              })()
+            : html`
+              <div class="kpis">
+                ${[...SETTING_SECTIONS, ...(groupsOf('diger', all).length ? [['diger', 'Diğer', '📁', groupsOf('diger', all), 'Henüz bir konuya yerleşmemiş ayarlar']] : [])].map(([k, name, icon, , about]) => {
+                  const gs = groupsOf(k, all);
+                  const n = d.settings.filter((s) => gs.includes(s.group)).length;
+                  const changed = d.settings.filter((s) => gs.includes(s.group) && s.changedAt).length;
+                  return html`<a class="kpi" href=${`#/app-settings-${k}`} style="text-decoration:none;color:inherit">
+                    <span class="kpi-l">${icon} ${name}</span>
+                    <strong class="kpi-v num">${num(n)} ayar</strong>
+                    <small class="muted">${changed ? `${num(changed)} değiştirildi · ` : ''}${about}</small>
+                  </a>`;
+                })}
+              </div>
+              <${Card} title="Son değişiklikler" actions=${html`<a href="#/app-settings-gecmis">Tüm geçmiş</a>`}><${Loading} state=${history}>${historyTable}</${Loading}></${Card}>`}`}`}</${Loading}>`}
     ${edit && data.data && html`<${SettingEditor} s=${edit} onClose=${() => setEdit(null)} onSave=${async (value, reason) => (await apply('/api/app/live-settings', { changes: { [edit.key]: value }, reason, baseV: data.data.v })) && setEdit(null)} />`}
   </${Page}>`;
 }
