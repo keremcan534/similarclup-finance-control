@@ -189,6 +189,9 @@ export const APP_ROUTES: [string, string, Permission | Permission[]][] = [
   ['POST', '/api/admin/agency/transition', 'app.agencies'],
   ['GET', '/api/admin/agency/audit', 'app.agencies'],
   ['POST', '/api/admin/agency/simulate', 'app.agencies'],
+  // Ajans seviyeleri (the app's agency-levels.mjs): every agency's week; closing the last week now.
+  ['GET', '/api/admin/agency/levels', 'app.agencies'],
+  ['POST', '/api/admin/agency/levels/run', 'app.agency_ledger'],
   ['GET', '/api/admin/agency/report', 'app.agencies'],
   ['GET', '/api/admin/agency/bd-report', 'app.agencies'],
   // The agency commission ledger and the network's rules (critical): a recalculation, a manual income, a reversal,
