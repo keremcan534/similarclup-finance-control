@@ -63,6 +63,9 @@ test('yeni Şanslı paket: kimlik lkN, ad ayrı, fiyat ve simge sınırları; ka
   assert.deepEqual(odds.packageProblems(p, gifts), []);
   const problems = (x: object) => odds.packageProblems({ ...p, ...x }, gifts).join(' | ');
   assert.match(problems({ id: 'lk1' }), /“lk1” kimliği başka bir pakette var/);
+  // Alıcı payı %10 (the default): a 9-coin package would give the recipient no whole diamond; at %20 it does.
+  assert.match(problems({ price: '9' }), /fiyat en az 10 jeton/);
+  assert.deepEqual(odds.packageProblems({ ...p, price: '9' }, gifts, 20), []);
   assert.match(problems({ id: 'yonca' }), /"lk" ile başlamalı/);
   assert.match(problems({ id: 'LK5' }), /"lk" ile başlamalı/);
   // Names compared as the app compares them: Turkish lower case (İ and i alike).
