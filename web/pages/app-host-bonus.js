@@ -14,7 +14,7 @@ export function AppHostBonus() {
 
   const pay = async (d) => {
     const v = await ask(`${d.label} haftasını öde`, {
-      text: 'Bu hafta bonus kapalıyken kapandı. Şimdiki baremlerle, hafta sonunda ajansa bağlı olan ve bareme ulaşan her yayıncıya bonusu elmas olarak yüklenir ve SimilarClub Sistem’den bildirim gider.',
+      text: 'Bu hafta bonus kapalıyken kapandı. Şimdiki baremlerle, ajansa bağlı ya da yönetim yayıncısı olup bareme ulaşan her yayıncıya bonusu elmas olarak yüklenir ve SimilarClub Sistem’den bildirim gider.',
       label: 'Neden',
       ok: 'Öde',
     });
@@ -39,7 +39,7 @@ export function AppHostBonus() {
     }
   };
 
-  return html`<${Page} title="Yayıncı haftalık bonusu" subtitle="Ajansa bağlı yayıncılar, haftada (Pazartesi 00:00 – Pazar 23:59:59, Türkiye saati) kazandıkları elmasla ulaştıkları baremin bonusunu her Pazartesi 00:00’da elmas olarak alır; bildirim SimilarClub Sistem’den gider. Bonustan ajans komisyonu çıkmaz. Baremler ve açma/kapama: Canlı ayarlar › Yayıncı haftalık bonusu.">
+  return html`<${Page} title="Yayıncı haftalık bonusu" subtitle="Ajansa bağlı yayıncılar ve yönetim yayıncıları (kayıttan 3 gün sonra ajansı olmayan ya da ajanstan düşen), haftada (Pazartesi 00:00 – Pazar 23:59:59, Türkiye saati) kazandıkları elmasla ulaştıkları baremin bonusunu her Pazartesi 00:00’da elmas olarak alır; bildirim SimilarClub Sistem’den gider. Bonustan ajans komisyonu çıkmaz. Baremler ve açma/kapama: Canlı ayarlar › Yayıncı haftalık bonusu.">
     ${prompt}
     <${Loading} state=${data}>${(d) => html`
       ${!d.on && html`<p class="note bad">Bonus şu an kapalı: kapalıyken biten hafta ödenmez (atlanır). Atlanan haftayı bu sayfadan ödeyebilirsiniz.</p>`}
@@ -58,7 +58,7 @@ export function AppHostBonus() {
           empty=${d.preview ? 'Henüz bareme ulaşan yayıncı yok' : d.run && !d.run.on ? 'Bu hafta atlandı; bonus ödenmedi' : 'Bu hafta bonus alan yok'}
           columns=${[
             { key: 'name', label: 'Yayıncı', render: (r) => html`${r.name}<br /><small class="muted">${r.userId}</small>` },
-            { key: 'agency', label: 'Ajans', render: (r) => r.agency || '—' },
+            { key: 'agency', label: 'Ajans', render: (r) => (r.kind === 'management' ? html`<span class="muted">Yönetim yayıncısı</span>` : r.agency || '—') },
             { key: 'earned', label: 'Haftalık kazanç', align: 'right', render: (r) => `${num(r.earned)} 💎` },
             { key: 'tierFrom', label: 'Barem', align: 'right', render: (r) => num(r.tierFrom) },
             { key: 'bonus', label: 'Bonus', align: 'right', render: (r) => `${num(r.bonus)} 💎` },

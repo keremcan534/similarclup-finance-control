@@ -386,7 +386,7 @@ function SettingEditor({ s, onClose, onSave }) {
       )}
     </tbody></table>
     <div class="row gap"><${Button} disabled=${tiers.length >= (b.maxTiers ?? 30)} onClick=${() => setTiers((l) => [...l, { from: '', bonus: '' }])}>Barem ekle</${Button}></div>
-    <p class="note">Yayıncı, haftada (Pazartesi 00:00 – Pazar 23:59:59) ulaştığı en yüksek baremin bonusunu alır; ilk baremin altında bonus yok. Baremler küçükten büyüğe, bonus bir öncekinden az olamaz. Değişiklik, kapanmamış haftaya (bu haftaya) uygulanır.</p>`;
+    <p class="note">Ajansa bağlı yayıncı ve yönetim yayıncısı, haftada (Pazartesi 00:00 – Pazar 23:59:59) ulaştığı en yüksek baremin bonusunu alır; ilk baremin altında bonus yok. Baremler küçükten büyüğe, bonus bir öncekinden az olamaz. Değişiklik, kapanmamış haftaya (bu haftaya) uygulanır.</p>`;
   else if (s.type === 'text') input = html`<textarea rows="3" maxlength=${b.max} value=${v ?? ''} onInput=${(e) => setV(e.target.value)}></textarea>`;
   else input = html`<input value=${v ?? ''} inputmode=${s.type === 'version' ? 'text' : 'decimal'} onInput=${(e) => setV(e.target.value)} />`;
   const range = s.type === 'int' || s.type === 'number' ? `${num(b.min, b.decimals ?? 0)}–${num(b.max, b.decimals ?? 0)}${b.step ? `, ${num(b.step, b.decimals ?? 0)}'er` : ''}` : '';
