@@ -1,11 +1,25 @@
-import { Badge, Button, Card, Form, Loading, Modal, Page, Table, Tabs, act, dateTimeTr, dateTr, html, minorToInput, money, monthStart, post, qs, today, useApi, useApp, usePrompt, useState } from '../lib.js';
+import { Badge, Button, Card, Form, Loading, Modal, Page, Table, Tabs, act, addDays, dateTimeTr, dateTr, html, minorToInput, money, monthStart, post, qs, today, useApi, useApp, usePrompt, useState, weekStart } from '../lib.js';
 
 const PARTY = { agency: 'Ajans', bd: 'BD', publisher: 'Yayıncı' };
 const KIND = { commission: 'Komisyon', salary: 'Sabit maaş', min_guarantee_topup: 'Garanti tamamlaması', bonus: 'Bonus / prim', deduction: 'Kesinti', adjustment: 'Düzeltme', carryover: 'Devreden bakiye' };
 
 const lastMonth = () => {
-  const end = new Date(Date.parse(monthStart()) - 864e5).toISOString().slice(0, 10);
+  const end = addDays(monthStart(), -1);
   return { from: monthStart(end), to: end };
+};
+/**
+ * Ready periods for a hakediş. The app's week (owners, 24 Nov 2026) is Monday 00:00 to Sunday 23:59:59, Türkiye time;
+ * the book's days turn at Türkiye's midnight too (server context.ts trDay).
+ */
+const PERIODS = () => {
+  const t = today();
+  const mon = weekStart(t);
+  return [
+    ['Geçen hafta', { from: addDays(mon, -7), to: addDays(mon, -1) }],
+    ['Bu hafta', { from: mon, to: addDays(mon, 6) }],
+    ['Geçen ay', lastMonth()],
+    ['Bu ay', { from: monthStart(t), to: addDays(monthStart(addDays(monthStart(t), 31)), -1) }],
+  ];
 };
 
 export function Statements() {
@@ -14,6 +28,7 @@ export function Statements() {
   const s = useApi(`/api/statements${qs({ ...f, limit: 500 })}`);
   const [open, setOpen] = useState(null);
   const [calc, setCalc] = useState(false);
+  const [range, setRange] = useState(lastMonth);
   const [adj, setAdj] = useState(false);
   const [tab, setTab] = useState('list');
   const adjustments = useApi(tab === 'adjustments' && can('statements.calculate') ? '/api/adjustments' : null);
@@ -47,13 +62,17 @@ export function Statements() {
       : html`<${Loading} state=${adjustments}>${(d) => html`<${Table} dense columns=${[{ key: 'booked_on', label: 'Tarih', render: (a) => dateTr(a.booked_on) }, { key: 'party', label: 'Taraf', render: (a) => `${PARTY[a.party_type]} #${a.party_id}` }, { key: 'kind', label: 'Tür' }, { key: 'amount_minor', label: 'Tutar', money: 'currency' }, { key: 'reason', label: 'Gerekçe' }]} rows=${d.rows} />`}</${Loading}>`}
     ${open && html`<${StatementDetail} id=${open} onClose=${() => setOpen(null)} onChange=${s.reload} />`}
     ${calc && html`<${Modal} title="Hakediş hesapla" onClose=${() => setCalc(false)}>
-      <div class="note">Tek bir taraf seçilmezse o türdeki tüm aktif taraflar hesaplanır. Hesaplanmış (onaylanmamış) hakedişler yeniden hesaplanır; onaylılar korunur.</div>
+      <div class="note">Tek bir taraf seçilmezse o türdeki tüm aktif taraflar hesaplanır. Hesaplanmış (onaylanmamış) hakedişler yeniden hesaplanır; onaylılar korunur. Hafta Pazartesi 00:00 – Pazar 23:59:59, günler Türkiye saatiyle.</div>
+      <div class="row gap wrap" style="margin-bottom:8px">
+        ${PERIODS().map(([label, r]) => html`<button type="button" class=${`chip ${range.from === r.from && range.to === r.to ? 'on' : ''}`} onClick=${() => setRange(r)}>${label}</button>`)}
+      </div>
       <${Form}
+        key=${`${range.from}:${range.to}`}
         fields=${[
           { name: 'party_type', label: 'Taraf türü', type: 'select', options: Object.entries(PARTY), required: true, def: 'publisher' },
           { name: 'party_id', label: 'Tek taraf id (boş = hepsi)', type: 'number' },
-          { name: 'from', label: 'Dönem başı', type: 'date', required: true, def: lastMonth().from },
-          { name: 'to', label: 'Dönem sonu', type: 'date', required: true, def: lastMonth().to },
+          { name: 'from', label: 'Dönem başı', type: 'date', required: true, def: range.from },
+          { name: 'to', label: 'Dönem sonu', type: 'date', required: true, def: range.to },
         ]}
         submitLabel="Hesapla"
         onCancel=${() => setCalc(false)}

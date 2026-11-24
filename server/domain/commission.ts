@@ -11,7 +11,7 @@
 // refunds add reversal rows. Nothing is ever recomputed in place.
 
 import type { Db, Row } from '../db.ts';
-import { audit, currency, type Ctx } from '../context.ts';
+import { audit, currency, trDay, type Ctx } from '../context.ts';
 import { bad } from '../lib/http.ts';
 import { FormulaError, evaluate, validateFormula } from '../lib/formula.ts';
 import { HUNDRED, MoneyError, ROUNDING_MODES, ZERO, dec, divRound, fmt, fromMinor, isDecString, mul, pctOf, toMinor, type Dec, type RoundingMode } from '../lib/money.ts';
@@ -555,6 +555,6 @@ export function findConflicts(db: Db, cfg: RuleConfig, ruleId: number | null): {
 
 /** "Örnek işlemle simülasyon": evaluates a draft config against a sample transaction without storing anything. */
 export function previewRule(db: Db, cfg: RuleConfig, sample: Row, code = 'TASLAK') {
-  const tx = { id: 0, type: cfg.tx_types?.[0] ?? 'purchase', occurred_at: new Date().toISOString(), booked_on: new Date().toISOString().slice(0, 10), ...sample } as Tx;
+  const tx = { id: 0, type: cfg.tx_types?.[0] ?? 'purchase', occurred_at: new Date().toISOString(), booked_on: trDay(new Date()), ...sample } as Tx;
   return calculate(db, cfg.tx_kind ?? 'financial', tx, [{ id: 0, rule_id: 0, code, version: 0, config: cfg }]);
 }

@@ -170,7 +170,12 @@ export const dateTr = (v) => (v ? String(v).slice(0, 10).split('-').reverse().jo
 export const dateTimeTr = (v) => (v ? `${dateTr(v)} ${String(v).slice(11, 16)}` : '—');
 /** Text as searched: Turkish lower case without accents (ş → s, İ → i), so "sikayet" finds "Şikâyetler". */
 export const searchable = (t) => String(t ?? '').toLocaleLowerCase('tr').normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/ı/g, 'i');
-export const today = () => new Date().toISOString().slice(0, 10);
+/** Today in Türkiye (UTC+3): the app's days and week turn at Türkiye's midnight. */
+export const today = () => new Date(Date.now() + 3 * 3_600_000).toISOString().slice(0, 10);
+/** 'YYYY-MM-DD' `days` days from `d`. */
+export const addDays = (d, days) => new Date(Date.parse(d + 'T00:00:00Z') + days * 864e5).toISOString().slice(0, 10);
+/** The Monday of the week `d` is in: the app's week runs Monday 00:00 to Sunday 23:59:59, Türkiye time. */
+export const weekStart = (d = today()) => addDays(d, -((new Date(d + 'T00:00:00Z').getUTCDay() + 6) % 7));
 export const monthStart = (d = today()) => d.slice(0, 7) + '-01';
 
 const STATUS = {
@@ -298,7 +303,9 @@ export function DateRange({ value, onChange }) {
   const t = today();
   const presets = [
     ['Bugün', t, t],
-    ['7 gün', new Date(Date.now() - 6 * 864e5).toISOString().slice(0, 10), t],
+    ['Bu hafta', weekStart(t), t],
+    ['Geçen hafta', addDays(weekStart(t), -7), addDays(weekStart(t), -1)],
+    ['7 gün', addDays(t, -6), t],
     ['Bu ay', monthStart(t), t],
     ['Geçen ay', monthStart(new Date(Date.parse(monthStart(t)) - 864e5).toISOString().slice(0, 10)), new Date(Date.parse(monthStart(t)) - 864e5).toISOString().slice(0, 10)],
     ['Bu yıl', t.slice(0, 4) + '-01-01', t],

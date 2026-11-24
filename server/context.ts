@@ -83,7 +83,19 @@ export type Ctx = {
   now: () => Date;
 };
 
-export const today = (ctx: Ctx) => ctx.now().toISOString().slice(0, 10);
+/**
+ * The day a moment falls on in Türkiye (UTC+3 all year since 2016), 'YYYY-MM-DD'. The app's days and its week (owners,
+ * 24 Nov 2026: Monday 00:00 to Sunday 23:59:59, Türkiye time) turn at Türkiye's midnight, so the book's do too. A plain
+ * date ('2026-11-24', typed by staff) is that day already.
+ */
+export function trDay(at: string | number | Date): string {
+  if (typeof at === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(at)) return at;
+  const t = at instanceof Date ? at.getTime() : typeof at === 'number' ? at : Date.parse(at);
+  if (!Number.isFinite(t)) return String(at).slice(0, 10);
+  return new Date(t + 3 * 3_600_000).toISOString().slice(0, 10);
+}
+/** Today in Türkiye. */
+export const today = (ctx: Ctx) => trDay(ctx.now());
 export const nowIso = (ctx: Ctx) => ctx.now().toISOString();
 
 export function can(ctx: Ctx, perm: string): boolean {

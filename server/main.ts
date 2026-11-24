@@ -1,5 +1,5 @@
 import { config } from './config.ts';
-import type { Ctx } from './context.ts';
+import { trDay, type Ctx } from './context.ts';
 import { openDb } from './db.ts';
 import { createApp } from './app.ts';
 import { bootstrap, saveCredentials } from './bootstrap.ts';
@@ -20,7 +20,7 @@ createApp(db, cfg).listen(cfg.port, cfg.host, () => {
 const system: Ctx = { db, user: null, integration: null, now: () => new Date() };
 const housekeeping = () => {
   try {
-    const created = generateRecurring(system, new Date().toISOString().slice(0, 10));
+    const created = generateRecurring(system, trDay(new Date()));
     const alerts = evaluateAlerts(system);
     if (created || alerts.created) console.log(`[${new Date().toISOString()}] ${created} tekrarlanan gider, ${alerts.created} yeni uyarı`);
     for (const e of alerts.errors) console.warn('Uyarı kontrolü hatası:', e);
