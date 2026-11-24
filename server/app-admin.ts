@@ -69,6 +69,8 @@ export const APP_ROUTES: [string, string, Permission | Permission[]][] = [
   ['POST', '/api/admin/shop/reset', 'app.shop'],
   ['POST', '/api/admin/shop/delete', 'app.shop'],
   ['POST', '/api/admin/shop/order', 'app.shop'],
+  // Düzenle › Bölüm: a frame to Ses halkası (the app's shop-items.mjs moveToWave).
+  ['POST', '/api/admin/shop/move', 'app.shop'],
   // Seviyeler ve VIP (the app's levels-admin.mjs): every system's settings, the change preview, saving (a drop asks
   // for a confirm first), back to today's values, the level drops.
   // Oda roketi (the app's room-rocket.mjs): on / off, the levels' goals and prizes, the last launches.
