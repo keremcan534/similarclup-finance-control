@@ -29,6 +29,8 @@ const KINDS = [
   ['seat', 'Koltuk renkleri'],
   // The app's rides (Çarşı shows them with the entry effects): only an app server that lists them has the tab.
   ['ride', 'Binekler'],
+  // Özel ID and Takma isim (the app's own; owners 25 Nov 2026), the same way.
+  ['specialId', 'Özel ID'],
 ];
 const NEW_LABEL = { entry: 'Yeni giriş efekti', frame: 'Yeni çerçeve', bubble: 'Yeni sohbet balonu', wave: 'Yeni ses dalgası', seat: 'Yeni koltuk rengi' };
 const KIND_HELP = {
@@ -36,6 +38,7 @@ const KIND_HELP = {
   frame: 'Çerçeve resmi saydam, kare PNG ya da WebP olmalı; fotoğraf ortadaki boşluğa oturur.',
   bubble: 'Balon iki renkle ya da bir resimle olur. Resmin köşeleri bozulmaz, ortası mesaja göre uzar.',
   wave: 'Dalga, konuşanın koltuğundaki halkadır; sese göre büyür. Stil ve renk seçilir; Parıltı stilinde dönen şekiller resim olabilir.',
+  specialId: 'Özel numaralar (ID 777…) ve Takma isim uygulamanın kendisinin. Adı, fiyatı, VIP seviyesi, satışta ve Yakında olup olmadığı buradan değişir; yenisi eklenmez. Yakında: Çarşı’da “Yakında” etiketiyle durur, satın alınamaz.',
   ride: 'Binekler (Scooter, Spor Araba, Özel Jet) uygulamanın kendisinin: Çarşı’da giriş efektleriyle durur. Adı, fiyatı, süresi, VIP seviyesi ve satışta olup olmadığı buradan değişir; yenisi eklenmez.',
   seat: 'Odadaki boş mikrofonların rengi. Oda sahibi rengi odası için alır; süresi bitince oda varsayılan renge döner. Varsayılan renk her odanın, ücretsiz.',
 };
@@ -431,7 +434,7 @@ export function AppShop() {
       return html`
         ${!d.storage && html`<div class="empty bad">Uygulamanın dosya deposu açık değil: resim ve video yüklenemez.</div>`}
         <${Tabs}
-          tabs=${KINDS.filter(([k]) => (k !== 'seat' || d.limits.seatDefault) && (k !== 'ride' || d.items.some((x) => x.kind === 'ride'))).map(([k, l]) => [k, `${l} (${d.items.filter((x) => x.kind === k).length})`])}
+          tabs=${KINDS.filter(([k]) => (k !== 'seat' || d.limits.seatDefault) && ((k !== 'ride' && k !== 'specialId') || d.items.some((x) => x.kind === k))).map(([k, l]) => [k, `${l} (${d.items.filter((x) => x.kind === k).length})`])}
           value=${kind}
           onChange=${setKind}
         />
@@ -453,6 +456,7 @@ export function AppShop() {
           class=${`shop-card ${dragCard.class ?? ''}`}
           title=${html`<span>${x.name}</span> ${x.builtin ? html`<${Badge} s="info" label="Uygulamanın" />` : html`<${Badge} s="active" label="Eklenen" />`}
             ${!x.enabled && html` <${Badge} s="passive" label="Satışta değil" />`}
+            ${x.enabled && x.soon && html` <${Badge} s="pending" label="Yakında" />`}
             ${x.changed?.length > 0 && html` <${Badge} s="warning" label=${`Değiştirildi: ${x.changed.map((f) => FIELD_TR[f] ?? f).join(', ')}`} />`}
             ${x.art?.motion && html` <${Badge} s="info" label="Hareketli" />`}
             ${x.job?.status === 'processing' && html` <${Badge} s="pending" label="Video çevriliyor…" />`}
@@ -639,6 +643,8 @@ function Editor({ item, kind, limits, convert, svga, onClose, onSaved }) {
   // the look chosen here, and takes the frame off the shelf (whoever has it keeps wearing it). Only for a server that
   // knows the move (it sends the wave styles).
   const movable = !!item && kind === 'frame' && !!limits.waveStyles;
+  // Yakında (owners, 25 Nov 2026): only for an app server that knows it (its items say `soon`).
+  const soonKnown = !item || typeof item.soon === 'boolean';
   const [section, setSection] = useState('frame');
   const [waveLook, setWaveLook] = useState(() => ({ style: 'ripple', colors: [item?.color?.[0] ?? '#13D9DF'] }));
   const setWaveColor = (i, c) => setWaveLook((x) => ({ ...x, colors: x.colors.map((y, j) => (j === i ? c : y)) }));
@@ -652,6 +658,7 @@ function Editor({ item, kind, limits, convert, svga, onClose, onSaved }) {
     days: item ? (item.days ?? 0) : 30,
     minVip: item?.minVip ?? 0,
     enabled: item?.enabled ?? true,
+    soon: !!item?.soon,
     hole: item?.art?.hole ?? limits.holeDefault,
     holeX: item?.art?.at?.x ?? 0.5,
     holeY: item?.art?.at?.y ?? 0.5,
@@ -798,7 +805,7 @@ function Editor({ item, kind, limits, convert, svga, onClose, onSaved }) {
     // A seat color has no VIP level; the default one only its name and color. Its color goes when it changed.
     const body = seat
       ? { name: v.name, ...(isDefault ? {} : { price: Number(v.price), days: Number(v.days), enabled: v.enabled }), ...(seatColor !== item?.look?.color ? { look: { color: seatColor } } : {}) }
-      : { name: v.name, price: Number(v.price), days: Number(v.days), minVip: Number(v.minVip), enabled: v.enabled };
+      : { name: v.name, price: Number(v.price), days: Number(v.days), minVip: Number(v.minVip), enabled: v.enabled, ...(soonKnown && v.soon !== !!item?.soon ? { soon: v.soon } : {}) };
     if (!seat && plansKnown) {
       const list = plans.filter((p) => p.days !== '' || p.price !== '').map((p) => ({ days: Number(p.days), price: Number(p.price) }));
       const was = JSON.stringify(item?.plans ?? []);
@@ -875,6 +882,7 @@ function Editor({ item, kind, limits, convert, svga, onClose, onSaved }) {
       ${plans.length < 3 && Number(v.days) > 0 && html`<button type="button" class="btn link" onClick=${() => setPlans((l) => [...l, { days: '', price: '' }])}>+ Süre paketi ekle</button>`}
     </div>`}
     ${!isDefault && html`<label class="field inline" style="margin-top:6px"><span>Satışta</span><input type="checkbox" checked=${v.enabled} onChange=${(e) => set('enabled', e.target.checked)} /></label>`}
+    ${soonKnown && !seat && html`<label class="field inline" style="margin-top:6px" title="Çarşı’da “Yakında” etiketiyle durur, satın alınamaz"><span>Yakında (rafta görünür, satılmaz)</span><input type="checkbox" checked=${v.soon} onChange=${(e) => set('soon', e.target.checked)} /></label>`}
     ${isDefault && html`<p class="note">Her odanın ücretsiz, varsayılan rengi: fiyatı ve süresi olmaz, satıştan kalkmaz. Adı ve rengi değişir.</p>`}
     ${seat && !isDefault && html`<p class="note">Oda sahibi bu rengi odası için alır; süre bitince oda varsayılan renge döner (0 gün: süresiz). Fiyatı ya da süreyi değiştirmek önceden alanları etkilemez.</p>`}
     ${!own && !seat && html`<p class="note">Uygulamanın kendi eşyasının görünüşü uygulamada.${NEW_LABEL[kind] ? ` Yeni görünüşle bir eşya için "${NEW_LABEL[kind]}" ekleyin.` : ''}</p>`}
