@@ -274,7 +274,7 @@ export const SETTING_SECTIONS = [
   ['para', 'Para ve kur', '💱', ['Jeton değeri', 'Çevirme kuru', 'Ödemeler', 'Para çekme sınırları', 'Jeton Noktası', 'VIP'], 'Jeton değeri, kurlar, elmas değeri, ödemeler, yayıncı bonusu, çekim sınırları, VIP koruma dönemi'],
   ['magaza', 'Mağaza ve paketler', '🛍️', ['Hediyeler ve paketler', 'Kampanya', 'Yeni üye ödülleri', 'Çantam', 'Özel albüm'], 'Jeton paketleri, gizli hediye ve ürünler, kampanya, hoş geldin ve davet ödülleri, özel albüm'],
   ['gorusme', 'Görüşme ve mesaj', '💬', ['Birebir ve eşleşme', 'Otomatik mesaj', 'SimilarClub Sistem'], 'Mesaj ve arama fiyatları, eşleşme, kalp seviyeleri, otomatik mesaj, sistem bildirimleri'],
-  ['odalar', 'Odalar ve etkinlikler', '🎙️', ['Odalar', 'Oda seviyeleri', 'Oda süslemesi', 'Etkinlikler'], 'Oda seviyeleri ve sınırları, patron koltuğu, oda süslemesi, etkinlik kuralları'],
+  ['odalar', 'Odalar ve etkinlikler', '🎙️', ['Odalar', 'Oda seviyeleri', 'Oda süslemesi', 'Etkinlikler'], 'Oda seviyeleri ve sınırları, patron koltuğu, DJ modu, oda süslemesi, etkinlik kuralları'],
   ['aile', 'Aile ve bağlar', '👪', ['Aile', 'Aile görevleri', 'Aile sandıkları', 'Bağlar', 'Koruma'], 'Aile kuralları, görev puanları, sandıklar, temalar, bağlar ve koruma'],
   ['oyun', 'Oyun ve şanslı hediyeler', '🎲', ['Oyun Salonu', 'Şanslı çanta', 'Kazanç duyurusu', 'Global hediye'], 'Oyun Salonu, şanslı çanta, kazanç ve global hediye duyuruları'],
   ['profil', 'Profil', '🪪', ['Profil rozetleri', 'Profil izleri'], 'Madalya ve unvan kuralları, profil izlerinin süresi'],
