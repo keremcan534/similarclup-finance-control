@@ -58,7 +58,7 @@ export function AppAgencies() {
     ${tab === 'agencies' && html`<${Agencies} s=${s} />`}
     ${tab === 'applications' && html`<${Applications} />`}
     ${tab === 'transfers' && html`<${Transfers} s=${s} />`}
-    ${tab === 'levels' && html`<${Levels} s=${s} />`}
+    ${tab === 'levels' && html`<${Levels} />`}
     ${tab === 'report' && html`<${Report} />`}
     ${tab === 'simulate' && html`<${Simulate} s=${s} />`}
     ${tab === 'audit' && html`<${Audit} />`}
@@ -217,7 +217,7 @@ function AgencyDetail({ a, nodes, s, onClose, onChanged }) {
     <div class="kpis">
       <${Kpi} label="Durum" value=${STATUS[a.status]?.[1] ?? a.status} sub=${`${a.parentId ? 'alt ajans' : 'üst ajans'} · kod ${a.code ?? '—'}`} />
       <${Kpi} label="Bu haftanın oranı" value=${pct(a.rate)} sub=${a.tierName ? `geçen hafta ${a.tierName}` : 'haftalık seviyeden'} />
-      <${Kpi} label="Yayıncı" value=${num(a.streamers)} sub=${a.owner ? `yönetici ${a.owner}` : ''} />
+      <${Kpi} label="Yayıncı" value=${num(a.streamers)} sub=${a.owner ? `yönetici ${a.owner}${a.ownerNo ? ` · ID ${a.ownerNo}` : ''}` : ''} />
       <${Kpi} label="30 gün hacim" value=${`${dia(a.volume30)} elmas`} sub=${a.parentId ? '' : `ağın tamamı ${dia(a.orgVolume30)}`} />
       <${Kpi} label="30 gün kazanç" value=${`${dia(a.earned30)} elmas`} />
     </div>
@@ -231,7 +231,7 @@ function AgencyDetail({ a, nodes, s, onClose, onChanged }) {
       <p class="muted">Toplam ${pct(split.totalRate)} · havuz ${dia(split.pool)} elmas · platforma kalan ${dia(split.platformKeeps)} elmas</p>
     </${Card}>`}
     ${a.bd && html`<${Card} title="BD" actions=${bd !== 'open' && html`<${Button} onClick=${() => setBd('open')}>BD raporunu göster</${Button}>`}>
-      <p class="muted num">${a.bd}</p>
+      <p>${a.bdName ?? 'BD'}${a.bdNo ? html` <span class="muted num">· ID ${a.bdNo}</span>` : ''}</p>
       ${bd === 'open' && html`<${Loading} state=${bdReport}>${(r) => html`
         <p class="muted">BD payı ${pct(r.policy?.rate)} · ${num(r.agencies.length)} ajans</p>
         <${Table} dense empty="Dönem kaydı yok" columns=${[
@@ -363,9 +363,15 @@ function Transfers({ s }) {
  * Ajans seviyeleri (the app's agency-levels.mjs): every agency's week. The week running shows what would be settled
  * now; a closed week what was. The levels themselves: Defter ve kurallar › Haftalık ajans seviyeleri.
  */
-function Levels({ s }) {
+/**
+ * Ajans seviyeleri (the app's agency-levels.mjs): every agency's week, which level it is in and why, how many agencies
+ * sit in each level, and (the week running) what the next level still needs and how far the active-streamer rule is.
+ * Its own menu item (AppAgencyLevels) and a tab of Ajans merkezi.
+ */
+function Levels() {
   const { can } = useApp();
   const [week, setWeek] = useState('');
+  const [only, setOnly] = useState('');
   const d = useApi(`/api/app/agency/levels${week ? `?week=${week}` : ''}`);
   const run = async () => {
     if (!confirm('Geçen hafta kapanmadıysa şimdi kapatılır (uygulama bunu her Pazartesi 00:00’dan sonra kendisi yapar). Kapanmış hafta yeniden hesaplanmaz.')) return;
@@ -373,27 +379,65 @@ function Levels({ s }) {
     if (r) (toast(`${num(r.agencies ?? 0)} ajansın haftası kapandı`), d.reload());
   };
   const REASON = { new: 'Yeni ajans (sabit)', threshold: 'Elmas eşiği', active: 'Aktif yayıncı şartı tutmadı' };
-  const lv = s?.weekly_levels;
-  return html`<${Loading} state=${d}>${(x) => html`
+  return html`<${Loading} state=${d}>${(x) => {
+    const lv = x.levels;
+    const minActive = lv?.min_active ?? 0;
+    const count = (key) => x.rows.filter((r) => r.levelKey === key).length;
+    const rows = only ? x.rows.filter((r) => r.levelKey === only) : x.rows;
+    return html`
     <div class="row gap wrap" style="margin:12px 0">
       <button class=${`chip ${x.preview ? 'on' : ''}`} onClick=${() => setWeek(x.current)}>Bu hafta (${x.currentLabel})</button>
       ${x.weeks.map((w) => html`<button class=${`chip ${!x.preview && x.week === w.week ? 'on' : ''}`} onClick=${() => setWeek(w.week)}>${w.label}</button>`)}
       ${can('app.agency_ledger') && html`<${Button} onClick=${run}>Geçen haftayı şimdi kapat</${Button}>`}
     </div>
-    ${lv && html`<p class="muted">Seviyeler: ${lv.levels.map((l) => `${l.name} ${pct(l.rate)}${l.from ? ` (${dia(l.from)}+)` : ''}`).join(' · ')}. Seviye 1 ve üstü için haftada ${num(lv.min_active)} aktif yayıncı (en az ${num(lv.active_usd)} USD kazanan) gerekir; yoksa ${lv.levels[0].name}. Yeni ajans ilk ${num(lv.new_weeks)} hafta ${lv.levels.find((l) => l.key === lv.new_level)?.name ?? ''}.</p>`}
-    <p class="muted">${x.preview ? `${x.label}: hafta sürüyor, şu ana kadarki rakamlarla; hiçbir şey yazılmadı.` : `${x.label}: kapandı. Seviye farkı ajansların defterine tek satır olarak yazıldı.`}</p>
+    <p class="muted">${x.preview ? `${x.label}: hafta sürüyor; şu ana kadarki rakamlarla, şimdi bitse ne olurdu. Hiçbir şey yazılmadı.` : `${x.label}: kapandı. Seviye farkı ajansların defterine yazıldı.`} Seviye 1 ve üstü için haftada ${num(minActive)} aktif yayıncı (en az ${num(lv?.active_usd ?? 0)} USD kazanan) gerekir; yoksa ${lv?.levels[0]?.name ?? '0. seviye'}. Yeni ajans ilk ${num(lv?.new_weeks ?? 0)} hafta ${lv?.levels.find((l) => l.key === lv.new_level)?.name ?? ''}.</p>
+    ${lv && html`<div class="kpis">
+      ${lv.levels.map((l, i) => html`<button class=${`kpi ${only === l.key ? 'on' : ''}`} onClick=${() => setOnly(only === l.key ? '' : l.key)} title="Yalnız bu seviyedekiler">
+        <span class="kpi-l">${i}. ${l.name} · ${pct(l.rate)}</span>
+        <strong class="kpi-v num">${num(count(l.key))} ajans</strong>
+        <small class="muted">${i === 0 ? 'eşik yok' : `${dia(l.from)}${lv.levels[i + 1] ? ` – ${dia(lv.levels[i + 1].from - 1)}` : '+'} elmas`}${l.shown ? '' : ' · uygulamada adı görünmez'}</small>
+      </button>`)}
+    </div>`}
+    ${only && html`<p><button class="chip on" onClick=${() => setOnly('')}>Seviye süzgecini kaldır ✕</button></p>`}
     <${Table}
-      empty="Bu hafta geliri olan ajans yok"
+      empty=${only ? 'Bu seviyede ajans yok' : 'Bu hafta geliri olan ajans yok'}
       columns=${[
-        { key: 'name', label: 'Ajans', render: (r) => html`<strong>${r.name}</strong><br /><small class="muted">${r.code}</small>` },
+        { key: 'name', label: 'Ajans', render: (r) => html`<strong>${r.name}</strong><br /><small class="muted num">${r.code}</small>` },
         { key: 'base', label: 'Haftalık elmas', align: 'right', render: (r) => dia(r.base) },
-        { key: 'active', label: 'Aktif yayıncı', align: 'right', render: (r) => num(r.active) },
-        { key: 'level', label: 'Seviye', render: (r) => html`${r.levelName ?? r.levelKey} · ${pct(r.rate)}${r.shown ? '' : html`<br /><small class="muted">uygulamada adı görünmez</small>`}` },
-        { key: 'reason', label: 'Neden', render: (r) => REASON[r.reason] ?? r.reason },
-        { key: 'adjustment', label: 'Seviye farkı', align: 'right', render: (r) => (r.adjustment === null ? '—' : `${dia(r.adjustment)} elmas`) },
+        {
+          key: 'active',
+          label: 'Aktif yayıncı',
+          align: 'right',
+          render: (r) => html`<span class=${!r.isNew && r.active < minActive ? 'text-bad' : ''}>${num(r.active)} / ${num(r.minActive ?? minActive)}</span>`,
+        },
+        { key: 'level', label: 'Seviye', render: (r) => html`<strong>${r.levelName ?? r.levelKey}</strong> · ${pct(r.rate)}<br /><small class="muted">${REASON[r.reason] ?? r.reason}${r.reached ? ` · eşiği ${r.reached.name} (${pct(r.reached.rate)})` : ''}</small>` },
+        ...(x.preview
+          ? [
+              {
+                key: 'next',
+                label: 'Sonraki seviye',
+                render: (r) =>
+                  r.isNew
+                    ? html`<span class="muted">yeni ajans${r.newUntil ? ` · ${dateTr(r.newUntil)} tarihine kadar sabit` : ''}</span>`
+                    : r.reached
+                      ? html`${r.reached.name} için ${num(Math.max(0, (r.minActive ?? minActive) - r.active))} aktif yayıncı daha`
+                      : r.next
+                        ? html`${r.next.name} (${pct(r.next.rate)}) için <strong>${dia(r.next.left)}</strong> elmas`
+                        : html`<span class="muted">en üst seviye</span>`,
+              },
+            ]
+          : [{ key: 'adjustment', label: 'Seviye farkı', align: 'right', render: (r) => (r.adjustment === null ? '—' : `${dia(r.adjustment)} elmas`) }]),
       ]}
-      rows=${x.rows}
-    />`}</${Loading}>`;
+      rows=${rows}
+    />`;
+  }}</${Loading}>`;
+}
+
+/** Ajanslar › Ajans seviyeleri: the same view as Ajans merkezi's tab, as a page of its own in the menu. */
+export function AppAgencyLevels() {
+  return html`<${Page} title="Ajans seviyeleri" subtitle="Her ajansın haftası (Pazartesi 00:00 – Pazar 23:59:59): kendi yayıncılarının elması, aktif yayıncısı, ulaştığı seviye ve komisyon oranı. Süren haftada her ajansın bir sonraki seviyeye ne kadar kaldığı. Seviye tablosu: Ajans merkezi › Defter ve kurallar › Haftalık ajans seviyeleri.">
+    <${Levels} />
+  </${Page}>`;
 }
 
 // ---- Rapor ----------------------------------------------------------------------------------------------

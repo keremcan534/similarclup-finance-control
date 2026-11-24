@@ -344,3 +344,7 @@ tr.drop-here > td { background: var(--info-bg); border-top: 2px dashed var(--bra
 .mk-vip-in { position: absolute; inset: 5px; }
 .mk-vip-badge { position: absolute; line-height: 1; }
 .mk-preview .frame-preview .frame-photo { background: none; }
+
+/* Ajans seviyeleri: the level card picked as a filter; a number under its line. */
+.kpi.on { border-color: var(--info); box-shadow: inset 0 0 0 1px var(--info); }
+.text-bad { color: var(--bad); font-weight: 600; }
