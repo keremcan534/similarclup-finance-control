@@ -84,13 +84,13 @@ function Editor({ data, editing, onSaved }) {
                 <option value="item">Mağaza eşyası</option>
               </select></label>
             ${p.kind === 'coins'
-              ? html`<label class="field"><span>Jeton</span>
+              ? html`<label class="field"><span>Jeton (kişi başına)</span>
                   <input type="number" min="1" max=${L.coinsMax} value=${p.amount} disabled=${!editing} onInput=${(e) => setPrize(i, k, (x) => ({ ...x, amount: toNumber(e.target.value) }))} /></label>`
               : html`<label class="field"><span>Eşya</span>
                     <select value=${p.sku} disabled=${!editing} onChange=${(e) => setPrize(i, k, (x) => ({ ...x, sku: e.target.value }))}>${itemOptions(p.sku)}</select></label>
                   <label class="field"><span>Gün (1–${L.daysMax})</span>
                     <input type="number" min="1" max=${L.daysMax} value=${p.days} disabled=${!editing} onInput=${(e) => setPrize(i, k, (x) => ({ ...x, days: toNumber(e.target.value) }))} /></label>`}
-            <label class="field"><span>Kaç kişiye (1–${L.winnersMax})</span>
+            <label class="field"><span>Kaç kişiye (1–${L.winnersMax}; her biri yukarıdakini alır)</span>
               <input type="number" min="1" max=${L.winnersMax} value=${p.winners} disabled=${!editing} onInput=${(e) => setPrize(i, k, (x) => ({ ...x, winners: toNumber(e.target.value) }))} /></label>
             ${editing &&
             html`<${Button} kind="ghost" onClick=${() => movePrize(i, k, -1)} aria-label="Yukarı">↑</${Button}>
