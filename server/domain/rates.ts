@@ -2,20 +2,20 @@
 // Every lookup takes the transaction date, so a later rate change never alters past results.
 
 import type { Db } from '../db.ts';
-import { currency } from '../context.ts';
+import { currency, trDay } from '../context.ts';
 import { HttpError } from '../lib/http.ts';
 import { ONE, dec, div, fromMinor, mul, toMinor, type Dec, type RoundingMode } from '../lib/money.ts';
 
 export class MissingRateError extends HttpError {
   constructor(from: string, to: string, at: string) {
-    super(422, `${from}→${to} kuru ${at.slice(0, 10)} tarihi için tanımlı değil`, 'missing_rate', { from, to, at });
+    super(422, `${from}→${to} kuru ${trDay(at)} tarihi için tanımlı değil`, 'missing_rate', { from, to, at });
   }
 }
 
 /** Rate to multiply `from` amounts by to get `to` amounts, valid at `at`. */
 export function fxRate(db: Db, from: string, to: string, at: string): { rate: Dec; id: number | null } {
   if (from === to) return { rate: ONE, id: null };
-  const day = at.slice(0, 10);
+  const day = trDay(at);
   const direct = db.get('SELECT id, rate FROM exchange_rates WHERE base = ? AND quote = ? AND valid_from <= ? ORDER BY valid_from DESC, id DESC LIMIT 1', from, to, day);
   if (direct) return { rate: dec(direct.rate), id: direct.id };
   const inverse = db.get('SELECT id, rate FROM exchange_rates WHERE base = ? AND quote = ? AND valid_from <= ? ORDER BY valid_from DESC, id DESC LIMIT 1', to, from, day);
@@ -46,7 +46,7 @@ export function unitValuation(db: Db, unit: string, purpose: 'revenue' | 'payout
     'SELECT id, currency, value_per_unit FROM unit_valuations WHERE unit = ? AND purpose = ? AND valid_from <= ? ORDER BY valid_from DESC, id DESC LIMIT 1',
     unit,
     purpose,
-    at.slice(0, 10),
+    trDay(at),
   );
   return r ? { id: r.id as number, currency: r.currency as string, value: dec(r.value_per_unit) } : null;
 }
@@ -56,8 +56,8 @@ export function channelFeeVersion(db: Db, channelId: number, at: string) {
     `SELECT * FROM channel_fee_versions WHERE channel_id = ? AND valid_from <= ? AND (valid_to IS NULL OR valid_to > ?)
       ORDER BY valid_from DESC, id DESC LIMIT 1`,
     channelId,
-    at.slice(0, 10),
-    at.slice(0, 10),
+    trDay(at),
+    trDay(at),
   );
 }
 
@@ -68,8 +68,8 @@ export function taxConfig(db: Db, appliesTo: string[], at: string) {
       `SELECT * FROM tax_configurations WHERE applies_to = ? AND valid_from <= ? AND (valid_to IS NULL OR valid_to > ?)
         ORDER BY valid_from DESC, id DESC LIMIT 1`,
       a,
-      at.slice(0, 10),
-      at.slice(0, 10),
+      trDay(at),
+      trDay(at),
     );
     if (r) return r;
   }
@@ -78,7 +78,8 @@ export function taxConfig(db: Db, appliesTo: string[], at: string) {
 
 /** Accounting date: the event date, or the first day of the next open period if its period is closed. */
 export function bookingDate(db: Db, occurredAt: string): string {
-  const day = occurredAt.slice(0, 10);
+  // Türkiye's day (context.ts trDay): what happens at 00:30 Türkiye time is that day's, not the day before's.
+  const day = trDay(occurredAt);
   const closed = db.get("SELECT ends_on FROM periods WHERE status = 'closed' AND starts_on <= ? AND ends_on >= ?", day, day);
   if (!closed) return day;
   const lastClosed = db.value<string>("SELECT MAX(ends_on) FROM periods WHERE status = 'closed'")!;

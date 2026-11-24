@@ -15,7 +15,7 @@ export function AppJetonLoad() {
   const [bankId, setBankId] = useState(() => localStorage.getItem('fc:jeton-load-bank') ?? '');
   const data = useApi(`/api/app/jeton/loads${bankId ? `?bank=${bankId}` : ''}`);
   const [ask, prompt] = usePrompt();
-  // The calculator: 1,000 coins = rate TL (starts at the app's wholesale price; the staff may change it).
+  // The calculator: 1,000 coins = rate TL (starts at the wholesale price set in Canlı ayarlar › Jeton Noktası; the staff may change it).
   const [rate, setRate] = useState('');
   const [coins, setCoins] = useState('');
   const [money, setMoney] = useState('');
@@ -56,7 +56,7 @@ export function AppJetonLoad() {
       text: `${personText(bank)} hesabına jeton üretilir (uygulamanın toptan satışı). Fiyat finansa bu hesabın stoğunun maliyeti olarak yazılır.`,
       fields: [
         { name: 'coins', label: 'Jeton', type: 'number', required: true },
-        { name: 'price', label: 'Bu jetonların toplam fiyatı (TL)', type: 'money', required: true, hint: d?.rateTl ? `Toptan formülle 1.000 jeton = ${tl(d.rateTl)}` : '' },
+        { name: 'price', label: 'Bu jetonların toplam fiyatı (TL)', type: 'money', required: true, hint: d?.rateTl ? `Toptan fiyat (Canlı ayarlar › Jeton Noktası): 1.000 jeton = ${tl(d.rateTl)}` : '' },
         { name: 'paymentRef', label: 'Belge / dekont no', type: 'text', required: true },
         { name: 'note', label: 'Not', type: 'text', wide: true },
       ],

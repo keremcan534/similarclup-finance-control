@@ -42,7 +42,7 @@ export function AppAgencies() {
     ['agencies', 'Ajanslar'],
     ['applications', 'Başvurular'],
     ['transfers', 'Transferler'],
-    ['performance', 'Performans'],
+    ['levels', 'Haftalık seviyeler'],
     ['report', 'Rapor'],
     ['simulate', 'Simülasyon'],
     ['audit', 'Denetim'],
@@ -51,14 +51,14 @@ export function AppAgencies() {
   const s = settings.data?.values ?? null;
   return html`<${Page}
     title="Ajans merkezi"
-    subtitle=${`Uygulamanın ajans ağı, merkezin gözünden: ağaç, başvurular, durum, oran ve kademe, transferler, performans, rapor ve simülasyon${can('app.agency_ledger') ? ', komisyon defteri ve ağ kuralları' : ''}. Her adımı uygulama denetler ve ajansa bildirir; geçmiş kazançlar hiçbir değişiklikle değişmez. Personel rolleri, BD atama, ihlal ve itirazlar uygulamada.`}
+    subtitle=${`Uygulamanın ajans ağı, merkezin gözünden: ağaç, başvurular, durum, haftalık seviyeler (komisyon her ajansın kendi yayıncılarının haftasından), transferler, rapor ve simülasyon${can('app.agency_ledger') ? ', komisyon defteri ve ağ kuralları' : ''}. Her adımı uygulama denetler ve ajansa bildirir; geçmiş kazançlar hiçbir değişiklikle değişmez. Personel rolleri, BD atama, ihlal ve itirazlar uygulamada.`}
   >
     <${Tabs} tabs=${tabs} value=${tab} onChange=${setTab} />
     ${tab === 'overview' && html`<${Overview} onTab=${setTab} />`}
     ${tab === 'agencies' && html`<${Agencies} s=${s} />`}
     ${tab === 'applications' && html`<${Applications} />`}
     ${tab === 'transfers' && html`<${Transfers} s=${s} />`}
-    ${tab === 'performance' && html`<${Performance} />`}
+    ${tab === 'levels' && html`<${Levels} s=${s} />`}
     ${tab === 'report' && html`<${Report} />`}
     ${tab === 'simulate' && html`<${Simulate} s=${s} />`}
     ${tab === 'audit' && html`<${Audit} />`}
@@ -149,7 +149,6 @@ function Agencies({ s }) {
           { key: 'streamers', label: 'Yayıncı', align: 'right', render: (a) => num(a.streamers) },
           { key: 'volume30', label: '30 gün hacim', align: 'right', render: (a) => html`${dia(a.volume30)}${!a.parentId && a.orgVolume30 !== a.volume30 ? html`<br /><small class="muted">ağ ${dia(a.orgVolume30)}</small>` : ''}` },
           { key: 'earned30', label: '30 gün kazanç', align: 'right', render: (a) => dia(a.earned30) },
-          { key: 'score', label: 'Puan', render: (a) => (a.score === null ? '—' : html`${num(a.score, 1)}${a.rank ? html` <small class="muted">#${a.rank}</small>` : ''}${a.flags?.length ? html`<br /><small class="muted">${a.flags.map((f) => FLAG_TEXT[f] ?? f).join(', ')}</small>` : ''}`) },
         ]}
         rows=${shown}
       />`}</${Loading}>
@@ -172,32 +171,11 @@ function AgencyDetail({ a, nodes, s, onClose, onChanged }) {
   const tops = nodes.filter((x) => !x.parentId && x.id !== a.id && x.status === 'approved');
   const done = (text) => (r) => r && (toast(text), onChanged());
   const reason = { name: 'reason', label: 'Gerekçe (ajansa bildirilir, 3–300)', type: 'textarea', required: true, wide: true };
-  const from = { name: 'from', label: 'Başlangıç günü (boş: hemen)', type: 'date', hint: 'İleri bir gün seçilebilir; geçmiş tarih kabul edilmez' };
-  const hold = { name: 'hold', label: 'Performans motoru bu güne kadar değiştirmesin', type: 'date' };
   const status = async (to) => {
     const title = { suspended: 'Ajansı askıya al', approved: 'Ajansı yeniden aç', closed: 'Ajansı kapat' }[to];
     const text = to === 'closed' ? 'Ajans kapanır, yayıncıları ajanstan ayrılır, bekleyen talepleri iptal olur. Alt ajansı varsa önce onlar kapatılmalı ya da taşınmalı. Para kayıtları olduğu gibi kalır.' : to === 'suspended' ? 'Askıdaki ajans yeni komisyon kazanmaz; kayıtları ve bakiyesi olduğu gibi kalır.' : 'Ajans yeniden aktif olur.';
     const v = await ask(title, { text, fields: [reason], ok: title });
     if (v) done('Ajansın durumu değişti')(await act(() => post('/api/app/agency/status', { id: a.id, status: to, reason: v.reason })));
-  };
-  const rate = async () => {
-    const v = await ask('Komisyon oranını düzelt', {
-      text: `Şu an ${pct(a.rate)}; havuz sınırı ${pct(s?.pool_cap)}.${a.parentId ? ' Alt ajansın oranı üst ajansın oranından asgari payı düşünce kalanı aşamaz.' : ''}`,
-      fields: [{ name: 'rate', label: 'Yeni oran (%)', type: 'decimal', required: true, def: String(Math.round((a.rate ?? 0) * 10000) / 100) }, from, hold, reason],
-      ok: 'Kaydet',
-    });
-    if (!v) return;
-    const r = rateOf(v.rate);
-    if (!Number.isFinite(r)) return showError(new Error('Oranı yüzde olarak yazın (ör. 25 ya da 25,5)'));
-    done('Oran kaydedildi')(await act(() => post('/api/app/agency/rate', { id: a.id, rate: r, reason: v.reason, ...(v.from ? { effectiveFrom: dayStart(v.from) } : {}), ...(v.hold ? { holdUntil: dayStart(v.hold) } : {}) })));
-  };
-  const tier = async () => {
-    const v = await ask('Kademeyi değiştir', {
-      text: `Şu an ${a.tierName ?? '—'}. Kademenin oranı uygulanır (üst ajansın oranı ve asgari pay sınırında).`,
-      fields: [{ name: 'tier', label: 'Kademe', type: 'select', required: true, def: a.tier ?? s?.tiers?.[0]?.key, options: (s?.tiers ?? []).map((t) => [t.key, `${t.name} · ${pct(t.sub_rate)}`]) }, from, hold, reason],
-      ok: 'Kaydet',
-    });
-    if (v) done('Kademe kaydedildi')(await act(() => post('/api/app/agency/tier', { id: a.id, tier: v.tier, reason: v.reason, ...(v.from ? { effectiveFrom: dayStart(v.from) } : {}), ...(v.hold ? { holdUntil: dayStart(v.hold) } : {}) })));
   };
   const parent = async () => {
     const v = await ask('Üst ajansı değiştir', {
@@ -238,13 +216,12 @@ function AgencyDetail({ a, nodes, s, onClose, onChanged }) {
     ${prompt}
     <div class="kpis">
       <${Kpi} label="Durum" value=${STATUS[a.status]?.[1] ?? a.status} sub=${`${a.parentId ? 'alt ajans' : 'üst ajans'} · kod ${a.code ?? '—'}`} />
-      <${Kpi} label="Oran" value=${pct(a.rate)} sub=${a.parentId ? `üst ajansa ${pct(a.parentShare)} · ${a.tierName ?? ''}` : `havuz sınırı ${pct(s?.pool_cap)}`} note=${a.upcoming ? `${dateTr(a.upcoming.effectiveFrom)} itibarıyla ${pct(a.upcoming.rate)}` : ''} />
+      <${Kpi} label="Bu haftanın oranı" value=${pct(a.rate)} sub=${a.tierName ? `geçen hafta ${a.tierName}` : 'haftalık seviyeden'} />
       <${Kpi} label="Yayıncı" value=${num(a.streamers)} sub=${a.owner ? `yönetici ${a.owner}` : ''} />
       <${Kpi} label="30 gün hacim" value=${`${dia(a.volume30)} elmas`} sub=${a.parentId ? '' : `ağın tamamı ${dia(a.orgVolume30)}`} />
       <${Kpi} label="30 gün kazanç" value=${`${dia(a.earned30)} elmas`} />
-      <${Kpi} label="Performans" value=${a.score === null ? '—' : num(a.score, 1)} sub=${a.rank ? `sıra #${a.rank}${a.overtakes ? ' · üst ajansı geçti' : ''}` : ''} note=${(a.flags ?? []).map((f) => FLAG_TEXT[f] ?? f).join(', ')} />
     </div>
-    ${split && html`<${Card} title="100.000 elmasın bugünkü bölüşümü">
+    ${split && html`<${Card} title="Haftada 100.000 elmas olsa (yeterli aktif yayıncıyla)">
       <${Table} dense columns=${[
         { key: 'agency', label: 'Ajans' },
         { key: 'kind', label: 'Pay', render: (x) => (x.kind === 'direct' ? 'Doğrudan' : 'Fark (üst ajans)') },
@@ -268,8 +245,6 @@ function AgencyDetail({ a, nodes, s, onClose, onChanged }) {
       ${a.status === 'approved' && html`<${Button} kind="danger" onClick=${() => status('suspended')}>Askıya al</${Button}>`}
       ${a.status === 'suspended' && html`<${Button} kind="primary" onClick=${() => status('approved')}>Yeniden aç</${Button}>`}
       ${live && html`<${Button} kind="danger" onClick=${() => status('closed')}>Kapat</${Button}>`}
-      ${live && html`<${Button} onClick=${rate}>Oranı düzelt</${Button}>`}
-      ${live && a.parentId && html`<${Button} onClick=${tier}>Kademe</${Button}>`}
       ${a.status === 'approved' && html`<${Button} onClick=${parent}>Üst ajansı değiştir</${Button}>`}
       ${live && html`<${Button} onClick=${() => assign(true)}>Yayıncı bağla</${Button}>`}
       <${Button} kind="ghost" onClick=${() => assign(false)}>Yayıncıyı ajanstan çıkar</${Button}>
@@ -384,42 +359,40 @@ function Transfers({ s }) {
 }
 
 // ---- Performans -----------------------------------------------------------------------------------------
-function Performance() {
+/**
+ * Ajans seviyeleri (the app's agency-levels.mjs): every agency's week. The week running shows what would be settled
+ * now; a closed week what was. The levels themselves: Defter ve kurallar › Haftalık ajans seviyeleri.
+ */
+function Levels({ s }) {
   const { can } = useApp();
-  const [runId, setRunId] = useState('');
-  const p = useApi(`/api/app/agency/performance${runId ? `?runId=${runId}` : ''}`);
-  const [ask, prompt] = usePrompt();
+  const [week, setWeek] = useState('');
+  const d = useApi(`/api/app/agency/levels${week ? `?week=${week}` : ''}`);
   const run = async () => {
-    const v = await ask('Performans değerlendirmesi', {
-      text: 'Bütün ajansların puanı ve kademesi hesaplanır. Deneme işaretliyse hiçbir kademe ve oran değişmez; yalnız sonuç görülür.',
-      fields: [
-        { name: 'dryRun', label: 'Deneme (kademe değiştirme)', type: 'checkbox', def: true },
-        { name: 'from', label: 'Kademe değişikliklerinin başlangıç günü (boş: kurala göre)', type: 'date' },
-        { name: 'note', label: 'Not', type: 'text', wide: true },
-      ],
-      ok: 'Değerlendir',
-    });
-    if (!v) return;
-    const r = await act(() => post('/api/app/agency/performance/run', { dryRun: !!v.dryRun, ...(v.note ? { note: v.note } : {}), ...(v.from ? { effectiveFrom: dayStart(v.from) } : {}) }));
-    if (r) (toast(`${num(r.rows?.length ?? 0)} ajans değerlendirildi${v.dryRun ? ' (deneme)' : ''}`), setRunId(String(r.runId)), p.reload());
+    if (!confirm('Geçen hafta kapanmadıysa şimdi kapatılır (uygulama bunu her Pazartesi 00:00’dan sonra kendisi yapar). Kapanmış hafta yeniden hesaplanmaz.')) return;
+    const r = await act(() => post('/api/app/agency/levels/run', {}));
+    if (r) (toast(`${num(r.agencies ?? 0)} ajansın haftası kapandı`), d.reload());
   };
-  return html`${prompt}<${Loading} state=${p}>${(d) => html`
+  const REASON = { new: 'Yeni ajans (sabit)', threshold: 'Elmas eşiği', active: 'Aktif yayıncı şartı tutmadı' };
+  const lv = s?.weekly_levels;
+  return html`<${Loading} state=${d}>${(x) => html`
     <div class="row gap wrap" style="margin:12px 0">
-      <select value=${String(d.runId ?? '')} onChange=${(e) => setRunId(e.target.value)}>
-        ${d.runs.map((r) => html`<option value=${String(r.id)}>#${r.id} · ${dateTimeTr(r.asOf)}${r.dryRun ? ' · deneme' : ''}${r.runBy ? ` · ${r.runBy}` : ''}${r.note ? ` · ${r.note}` : ''}</option>`)}
-      </select>
-      ${can('app.agencies') && html`<${Button} kind="primary" onClick=${run}>Değerlendir</${Button}>`}
+      <button class=${`chip ${x.preview ? 'on' : ''}`} onClick=${() => setWeek(x.current)}>Bu hafta (${x.currentLabel})</button>
+      ${x.weeks.map((w) => html`<button class=${`chip ${!x.preview && x.week === w.week ? 'on' : ''}`} onClick=${() => setWeek(w.week)}>${w.label}</button>`)}
+      ${can('app.agency_ledger') && html`<${Button} onClick=${run}>Geçen haftayı şimdi kapat</${Button}>`}
     </div>
+    ${lv && html`<p class="muted">Seviyeler: ${lv.levels.map((l) => `${l.name} ${pct(l.rate)}${l.from ? ` (${dia(l.from)}+)` : ''}`).join(' · ')}. Seviye 1 ve üstü için haftada ${num(lv.min_active)} aktif yayıncı (en az ${num(lv.active_usd)} USD kazanan) gerekir; yoksa ${lv.levels[0].name}. Yeni ajans ilk ${num(lv.new_weeks)} hafta ${lv.levels.find((l) => l.key === lv.new_level)?.name ?? ''}.</p>`}
+    <p class="muted">${x.preview ? `${x.label}: hafta sürüyor, şu ana kadarki rakamlarla; hiçbir şey yazılmadı.` : `${x.label}: kapandı. Seviye farkı ajansların defterine tek satır olarak yazıldı.`}</p>
     <${Table}
-      empty=${d.runs.length ? 'Bu değerlendirmede ajans yok' : 'Henüz değerlendirme yapılmadı'}
+      empty="Bu hafta geliri olan ajans yok"
       columns=${[
-        { key: 'rank', label: 'Sıra', align: 'right', render: (x) => num(x.rank) },
-        { key: 'name', label: 'Ajans', render: (x) => html`<strong>${x.name}</strong>${x.parent ? html`<br /><small class="muted">↳ ${x.parent.name}</small>` : ''}` },
-        { key: 'score', label: 'Puan', align: 'right', render: (x) => html`${num(x.score, 1)}${x.parentScore !== null ? html`<br /><small class="muted">üst ${num(x.parentScore, 1)}</small>` : ''}` },
-        { key: 'tier', label: 'Kademe', render: (x) => html`${x.assignedName ?? x.assigned ?? '—'}<br /><small class="muted">${CHANGE_TEXT[x.change] ?? x.change ?? ''}${x.streak ? ` · ${x.streak}. dönem` : ''}</small>` },
-        { key: 'flags', label: 'Uyarılar', render: (x) => (x.flags?.length ? x.flags.map((f) => FLAG_TEXT[f] ?? f).join(', ') : '—') },
+        { key: 'name', label: 'Ajans', render: (r) => html`<strong>${r.name}</strong><br /><small class="muted">${r.code}</small>` },
+        { key: 'base', label: 'Haftalık elmas', align: 'right', render: (r) => dia(r.base) },
+        { key: 'active', label: 'Aktif yayıncı', align: 'right', render: (r) => num(r.active) },
+        { key: 'level', label: 'Seviye', render: (r) => html`${r.levelName ?? r.levelKey} · ${pct(r.rate)}${r.shown ? '' : html`<br /><small class="muted">uygulamada adı görünmez</small>`}` },
+        { key: 'reason', label: 'Neden', render: (r) => REASON[r.reason] ?? r.reason },
+        { key: 'adjustment', label: 'Seviye farkı', align: 'right', render: (r) => (r.adjustment === null ? '—' : `${dia(r.adjustment)} elmas`) },
       ]}
-      rows=${d.scores}
+      rows=${x.rows}
     />`}</${Loading}>`;
 }
 
@@ -463,43 +436,28 @@ function Report() {
 
 // ---- Simülasyon -----------------------------------------------------------------------------------------
 function Simulate({ s }) {
-  const tree = useApi('/api/app/agency/tree');
   const [out, setOut] = useState(null);
-  const live = (tree.data?.nodes ?? []).filter((a) => a.status === 'approved' || a.status === 'suspended');
+  const lv = s?.weekly_levels;
   return html`<div style="margin-top:12px">
-    <p class="muted">Bir matrahın bugünkü kurallarla nasıl bölüşüleceği: seçilen ajansın zinciriyle ya da elle yazılan oranlarla. Hiçbir şey kaydedilmez.</p>
-    <${Loading} state=${tree}>${() => html`<${Form}
+    <p class="muted">Bir ajansın haftasında yayıncılarının kazandığı elmas ve aktif yayıncı sayısı hangi seviyeyi ve komisyonu verir. Hiçbir şey kaydedilmez.</p>
+    <${Form}
       submitLabel="Hesapla"
       fields=${[
-        { name: 'base', label: 'Matrah (elmas)', type: 'number', required: true, def: '100000' },
-        { name: 'agencyId', label: 'Ajans (boş: aşağıdaki oranlarla)', type: 'select', options: live.map((a) => [a.id, `${a.parentId ? '↳ ' : ''}${a.name}`]) },
-        { name: 'topRate', label: 'Üst ajans oranı (%)', type: 'decimal', def: s ? String(Math.round(s.top_rate * 10000) / 100) : '', show: (v) => !v.agencyId },
-        { name: 'subRate', label: 'Alt ajans oranı (%; boş: alt ajans yok)', type: 'decimal', show: (v) => !v.agencyId },
-        { name: 'tier', label: 'Alt ajans kademesi', type: 'select', options: (s?.tiers ?? []).map((t) => [t.key, t.name]), show: (v) => !v.agencyId && !!String(v.subRate ?? '').trim() },
+        { name: 'base', label: 'Haftalık elmas', type: 'number', required: true, def: '300000' },
+        { name: 'active', label: 'Aktif yayıncı', type: 'number', def: lv ? String(lv.min_active) : '20' },
+        { name: 'isNew', label: 'Yeni ajans (ilk haftaları)', type: 'checkbox' },
       ]}
       onSubmit=${async (v) => {
-        const body = { base: Number(v.base) };
-        if (v.agencyId) body.agencyId = v.agencyId;
-        else {
-          if (String(v.topRate ?? '').trim()) body.topRate = rateOf(v.topRate);
-          if (String(v.subRate ?? '').trim()) body.subRate = rateOf(v.subRate);
-          if (v.tier) body.tier = v.tier;
-        }
         try {
-          setOut(await post('/api/app/agency/simulate', body));
+          setOut(await post('/api/app/agency/simulate', { base: Number(v.base), active: Number(v.active || 0), isNew: !!v.isNew }));
         } catch (e) {
           showError(e);
         }
       }}
-    />`}</${Loading}>
-    ${out && html`<${Card} title=${`${dia(out.base)} elmas (${usd(out.usd.base)})`}>
-      <${Table} dense columns=${[
-        { key: 'agency', label: 'Ajans' },
-        { key: 'kind', label: 'Pay', render: (x) => (x.kind === 'direct' ? 'Doğrudan' : 'Fark (üst ajans)') },
-        { key: 'rate', label: 'Oran', align: 'right', render: (x) => pct(x.rate) },
-        { key: 'amount', label: 'Elmas', align: 'right', render: (x) => dia(x.amount) },
-      ]} rows=${out.shares} />
-      <p class="muted">Toplam ajans payı ${pct(out.totalRate)} (havuz sınırı ${pct(out.poolCap)}) · havuz ${dia(out.pool)} elmas (${usd(out.usd.pool)}) · platforma kalan ${dia(out.platformKeeps)} elmas</p>
+    />
+    ${out && html`<${Card} title=${`${dia(out.base)} elmas (${usd(out.usd.base)}) · ${num(out.active)} aktif yayıncı`}>
+      <p><strong>${out.level.name} · ${pct(out.level.rate)}</strong>${out.reason === 'active' ? ' (eşik tuttu ama aktif yayıncı yetmedi)' : out.reason === 'new' ? ' (yeni ajans)' : ''}</p>
+      <p class="muted">Ajansa ${dia(out.pool)} elmas (${usd(out.usd.pool)}) · yayıncılar elmasının tamamını alır; komisyon platformun payından ödenir.</p>
     </${Card}>`}
   </div>`;
 }
@@ -572,7 +530,10 @@ const SETTING_TEXT = {
   bd_policy: 'BD payı',
   suspension_policy: 'Askıya alma kuralı',
   assistant_policy: 'Ajans asistanı',
+  weekly_levels: 'Haftalık ajans seviyeleri',
 };
+/** Rules the weekly levels retired (24 Nov 2026): kept in the app for older records, no longer shown or changed here. */
+const RETIRED = new Set(['pool_cap', 'top_rate', 'tiers', 'performance', 'weights', 'parent_min_rate', 'parent_zero']);
 
 function Ledger({ settings }) {
   const tree = useApi('/api/app/agency/tree');
@@ -654,7 +615,7 @@ function Ledger({ settings }) {
           { key: 'k', label: 'Kural', render: ([k]) => html`<strong>${SETTING_TEXT[k] ?? k}</strong><br /><small class="muted num">${k}</small>` },
           { key: 'v', label: 'Şu an', render: ([, v]) => html`<small class="num">${json(v)}</small>` },
           { key: 'x', label: '', render: ([k, v]) => html`<${Button} onClick=${() => setEdit({ key: k, value: v })}>Değiştir</${Button}>` },
-        ]} rows=${Object.entries(d.values)} />
+        ]} rows=${Object.entries(d.values).filter(([k]) => !RETIRED.has(k))} />
         <h3 style="margin-top:14px">Son değişiklikler</h3>
         <${Table} dense empty="Varsayılanlar kullanılıyor" columns=${[
           { key: 'created_at', label: 'Zaman', render: (x) => dateTimeTr(x.created_at) },
@@ -669,6 +630,7 @@ function Ledger({ settings }) {
 }
 
 function SettingEditor({ k, value, onClose, onSaved }) {
+  if (k === 'weekly_levels') return html`<${LevelsEditor} value=${value} onClose=${onClose} onSaved=${onSaved} />`;
   const [text, setText] = useState(JSON.stringify(value, null, 2));
   const [reason, setReason] = useState('');
   // Ajans asistanı: how many assistants an agency may have at once, picked rather than written as JSON.
@@ -691,6 +653,50 @@ function SettingEditor({ k, value, onClose, onSaved }) {
           <label class="field"><span>Ajans başına asistan</span><select value=${max} onChange=${(e) => setMax(e.target.value)}>${(max === '0' ? [0] : []).concat(Array.from({ length: 10 }, (_, i) => i + 1)).map((n) => html`<option value=${String(n)}>${n === 0 ? 'Asistan eklenemez' : `${n} kişi`}</option>`)}</select></label>`
       : html`<p class="muted">Oranlar kesir olarak yazılır (0.25 = %25). Uygulama değeri denetler; uymayan değer nedeniyle reddedilir.</p>
           <label class="field"><span>Değer (JSON)</span><textarea rows="10" class="num" value=${text} onInput=${(e) => setText(e.target.value)}></textarea></label>`}
+    <label class="field" style="margin-top:10px"><span>Gerekçe (3–300) *</span><input value=${reason} maxlength="300" onInput=${(e) => setReason(e.target.value)} /></label>
+    <div class="row gap end"><${Button} onClick=${onClose}>Vazgeç</${Button}><${Button} kind="primary" onClick=${save}>Kaydet</${Button}></div>
+  </${Modal}>`;
+}
+
+/** Haftalık ajans seviyeleri: one row per level (name, commission %, weekly diamonds from, shown in the app), the rules. */
+function LevelsEditor({ value, onClose, onSaved }) {
+  const [rows, setRows] = useState(() => value.levels.map((l) => ({ ...l, rate: String(Math.round(l.rate * 10000) / 100), from: String(l.from) })));
+  const [rule, setRule] = useState({ min_active: String(value.min_active), active_usd: String(value.active_usd), new_weeks: String(value.new_weeks), new_level: value.new_level });
+  const [reason, setReason] = useState('');
+  const setRow = (i, k, v) => setRows((l) => l.map((r, j) => (j === i ? { ...r, [k]: v } : r)));
+  const whole = (x) => Number(String(x).replace(/[^\d]/g, '') || 0);
+  const save = async () => {
+    if (reason.trim().length < 3) return showError(new Error('Gerekçe yazın'));
+    const v = {
+      min_active: whole(rule.min_active),
+      active_usd: whole(rule.active_usd),
+      new_weeks: whole(rule.new_weeks),
+      new_level: rule.new_level,
+      levels: rows.map((r, i) => ({ key: r.key, name: r.name.trim(), rate: rateOf(r.rate), from: i === 0 ? 0 : whole(r.from), shown: !!r.shown })),
+    };
+    if (v.levels.some((l) => !Number.isFinite(l.rate))) return showError(new Error('Oranları yüzde olarak yazın (ör. 35)'));
+    if (!confirm('Seviyeler değişir; kapanmamış haftalar yeni tabloyla kapanır, kapanmış haftalar değişmez.')) return;
+    if (await act(() => post('/api/app/agency/settings', { key: 'weekly_levels', value: v, reason: reason.trim() }))) onSaved();
+  };
+  return html`<${Modal} title="Haftalık ajans seviyeleri" wide onClose=${onClose}>
+    <p class="muted">Ajansın komisyonu, yayıncılarının o hafta (Pazartesi 00:00 – Pazar 23:59:59) kazandığı elmasla ulaştığı seviyenin oranıdır; eşiği tamamlayamayan bir önceki seviyeyi alır. 1. seviye ve üstü için aşağıdaki kadar aktif yayıncı gerekir, yoksa ilk seviye. Üst ajans alt ajanstan pay almaz.</p>
+    <table class="table dense"><thead><tr><th>#</th><th>Ad</th><th>Komisyon %</th><th>Haftalık elmas (en az)</th><th>Uygulamada görünür</th></tr></thead><tbody>
+      ${rows.map(
+        (r, i) => html`<tr key=${r.key}>
+          <td>${i}</td>
+          <td><input style="width:140px" value=${r.name} onInput=${(e) => setRow(i, 'name', e.target.value)} /></td>
+          <td><input inputmode="decimal" style="width:80px" value=${r.rate} onInput=${(e) => setRow(i, 'rate', e.target.value)} /></td>
+          <td>${i === 0 ? html`<span class="muted">0</span>` : html`<input inputmode="numeric" style="width:130px" value=${r.from} onInput=${(e) => setRow(i, 'from', e.target.value)} />`}</td>
+          <td><input type="checkbox" checked=${!!r.shown} onChange=${(e) => setRow(i, 'shown', e.target.checked)} /></td>
+        </tr>`,
+      )}
+    </tbody></table>
+    <div class="grid2" style="margin-top:10px">
+      <label class="field"><span>Aktif yayıncı şartı (seviye 1 ve üstü)</span><input inputmode="numeric" value=${rule.min_active} onInput=${(e) => setRule({ ...rule, min_active: e.target.value })} /></label>
+      <label class="field"><span>Aktif yayıncı: haftada en az (USD)</span><input inputmode="numeric" value=${rule.active_usd} onInput=${(e) => setRule({ ...rule, active_usd: e.target.value })} /></label>
+      <label class="field"><span>Yeni ajans süresi (hafta)</span><input inputmode="numeric" value=${rule.new_weeks} onInput=${(e) => setRule({ ...rule, new_weeks: e.target.value })} /></label>
+      <label class="field"><span>Yeni ajansın seviyesi</span><select value=${rule.new_level} onChange=${(e) => setRule({ ...rule, new_level: e.target.value })}>${rows.map((r) => html`<option value=${r.key}>${r.name}</option>`)}</select></label>
+    </div>
     <label class="field" style="margin-top:10px"><span>Gerekçe (3–300) *</span><input value=${reason} maxlength="300" onInput=${(e) => setReason(e.target.value)} /></label>
     <div class="row gap end"><${Button} onClick=${onClose}>Vazgeç</${Button}><${Button} kind="primary" onClick=${save}>Kaydet</${Button}></div>
   </${Modal}>`;

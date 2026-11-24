@@ -161,7 +161,8 @@ export function Settings() {
   };
   return html`<${Page} title="Ayarlar ve referans verileri">
     <${Tabs} tabs=${[['general', 'Genel'], ['rates', 'Döviz kurları'], ['valuations', 'Jeton/elmas değeri'], ['taxes', 'Vergi'], ['periods', 'Finansal dönemler']]} value=${tab} onChange=${setTab} />
-    ${tab === 'general' && html`<div class="grid cols2">
+    ${tab === 'general' && html`<div class="note">Uygulamanın haftası <strong>Pazartesi 00:00 – Pazar 23:59:59 (Türkiye saati)</strong>: sıralamalar, bonuslar, haftalık sınırlar ve hakedişler bu düzende. Defterin günleri de Türkiye gece yarısında döner.</div>
+    <div class="grid cols2">
       <${Card} title="Genel">
         <${Form}
           fields=${[

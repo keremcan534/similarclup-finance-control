@@ -1,6 +1,6 @@
 // Maker-checker approvals for critical actions, rule activation, and accounting period close.
 
-import { actorId, audit, need, setting, type Ctx } from '../context.ts';
+import { actorId, audit, need, setting, today, type Ctx } from '../context.ts';
 import { bad, conflict, forbidden, notFound } from '../lib/http.ts';
 import { findConflicts, type RuleConfig } from './commission.ts';
 import { activateLuckyVersion } from './lucky.ts';
@@ -59,7 +59,7 @@ export function requestRuleActivation(ctx: Ctx, versionId: number, validFrom: st
   if (!v) throw notFound('Kural sürümü');
   if (v.status !== 'draft') throw conflict('Yalnız taslak sürüm yürürlüğe alınabilir');
   const from = validFrom ?? ctx.now().toISOString();
-  if (from.slice(0, 10) < ctx.now().toISOString().slice(0, 10)) throw bad('Kural geriye dönük yürürlüğe alınamaz; geçmiş için düzeltme kaydı kullanın');
+  if (from.slice(0, 10) < today(ctx)) throw bad('Kural geriye dönük yürürlüğe alınamaz; geçmiş için düzeltme kaydı kullanın');
   const conflicts = findConflicts(db, JSON.parse(v.config) as RuleConfig, v.rule_id);
   if (setting(db, 'dual_control') === '1') db.run("UPDATE commission_rule_versions SET status = 'pending_approval' WHERE id = ?", versionId);
   const r = requestAction(ctx, 'rule.activate', 'commission_rule_versions', versionId, { version_id: versionId, valid_from: from, conflicts }, `${v.code} v${v.version} yürürlüğe alınsın (${from.slice(0, 16).replace('T', ' ')})${conflicts.length ? ` · ${conflicts.length} çakışma uyarısı` : ''}`);

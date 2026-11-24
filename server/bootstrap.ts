@@ -41,6 +41,7 @@ export const SYSTEM_ROLES: { key: string; name: string; scope: 'platform' | 'age
       'app.levels',
       'app.withdrawals',
       'app.payouts',
+      'app.host_bonus',
       'app.refunds',
       'app.lucky',
       'app.rocket',

@@ -92,6 +92,10 @@ export const APP_ROUTES: [string, string, Permission | Permission[]][] = [
   // Para çekme
   ['GET', '/api/admin/withdrawals', 'app.withdrawals'],
   ['POST', '/api/admin/withdrawals/decide', 'app.withdrawals'],
+  // Yayıncı haftalık bonusu (the app's host-bonus.mjs): the weeks and their bonuses, a skipped week paid, a bonus taken back.
+  ['GET', '/api/admin/host-bonus', 'app.host_bonus'],
+  ['POST', '/api/admin/host-bonus/pay', 'app.host_bonus'],
+  ['POST', '/api/admin/host-bonus/reverse', 'app.host_bonus'],
   // Ajans ödemeleri and the payout policy
   ['GET', '/api/admin/agency/payouts', 'app.payouts'],
   ['POST', '/api/admin/agency/payouts/decide', 'app.payouts'],
@@ -185,6 +189,9 @@ export const APP_ROUTES: [string, string, Permission | Permission[]][] = [
   ['POST', '/api/admin/agency/transition', 'app.agencies'],
   ['GET', '/api/admin/agency/audit', 'app.agencies'],
   ['POST', '/api/admin/agency/simulate', 'app.agencies'],
+  // Ajans seviyeleri (the app's agency-levels.mjs): every agency's week; closing the last week now.
+  ['GET', '/api/admin/agency/levels', 'app.agencies'],
+  ['POST', '/api/admin/agency/levels/run', 'app.agency_ledger'],
   ['GET', '/api/admin/agency/report', 'app.agencies'],
   ['GET', '/api/admin/agency/bd-report', 'app.agencies'],
   // The agency commission ledger and the network's rules (critical): a recalculation, a manual income, a reversal,

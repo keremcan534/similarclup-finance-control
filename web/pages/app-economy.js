@@ -178,7 +178,7 @@ export function AppJeton() {
         <div class="row gap"><${Button} kind="primary" onClick=${() => bank(true)}>Aç</${Button}><${Button} onClick=${() => bank(false)}>Kapat</${Button}></div>
       </${Card}>
       ${can('app.jeton_load') && html`<${Card} title="Toptan satış">
-        <p class="muted">Jeton Noktası'nın ödediği tutarın dekontuyla stok satışı.</p>
+        <p class="muted">Jeton Noktası'nın ödediği tutarın dekontuyla stok satışı. Fiyat Canlı ayarlar › Jeton Noktası › "Toptan: 1.000 jeton = ? TL" ayarından hesaplanır.</p>
         <${Button} kind="primary" onClick=${wholesale}>Toptan sat</${Button}>
         ${last && html`<p class="muted">Son satış: ${num(last.coins ?? last.transfer?.coins)} jeton${last.transfer?.id ? ` · aktarım #${last.transfer.id}` : ''}${last.replay ? ' (daha önce yapılmıştı)' : ''}</p>`}
       </${Card}>`}

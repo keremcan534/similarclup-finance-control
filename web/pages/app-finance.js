@@ -5,6 +5,9 @@
 import { Badge, Button, Card, ID_HINT, Kpi, Loading, Modal, Page, Table, Tabs, act, dateTimeTr, html, num, personOf, post, showError, toast, useApi, useApp, usePrompt, useState } from '../lib.js';
 
 const usd = (n) => `$${num(n, 2)}`;
+const tlText = (n) => `${num(n, 2)} TL`;
+/** What to send in TL: a paid one's own (rate written on it), else now at the payout rate (Canlı ayarlar › Ödeme kuru). */
+const tlOf = (x, rate) => (x.payTl !== null && x.payTl !== undefined ? html`${tlText(x.payTl)}<br /><small class="muted">kur ${num(x.payUsdTry, 2)}</small>` : x.tlNow !== undefined ? html`${tlText(x.tlNow)}<br /><small class="muted">kur ${num(rate, 2)}</small>` : '—');
 /** A row of filter chips: [value, label] pairs, one on. */
 export const Chips = ({ value, options, onChange }) =>
   html`<div class="row gap wrap" style="margin-bottom:10px">${options.map(([k, l]) => html`<button class=${`chip ${value === k ? 'on' : ''}`} onClick=${() => onChange(k)}>${l}</button>`)}</div>`;
@@ -26,10 +29,14 @@ export function AppWithdrawals() {
   const [status, setStatus] = useState('pending');
   const list = useApi(`/api/app/withdrawals?status=${status}`);
   const [ask, prompt] = usePrompt();
+  // The TL to send at the payout rate the list was read with; the decision sends that rate back, and a rate changed
+  // meanwhile is refused (nothing marked) so the new amount is seen first.
   const paid = async (w) => {
     const to = w.method === 'iban' ? 'bu IBAN’a' : 'bu hesaba';
-    if (!confirm(`Bu düğme para göndermez. Önce ${usd(w.usd)} tutarını bankanızdan ${w.holder} adına ${to} gönderin:\n\n${w.account}\n\nGönderdiyseniz devam edin; ${w.user.name} ödemenin yapıldığını görür.`)) return;
-    done(list, 'Ödendi olarak işaretlendi')(await act(() => post('/api/app/withdrawals/decide', { id: w.id, approve: true, note: '' })));
+    const rate = list.data?.payUsdTry;
+    if (!confirm(`Bu düğme para göndermez. Önce ${tlText(w.tlNow)} (${usd(w.usd)} × ödeme kuru ${num(rate, 2)}) tutarını bankanızdan ${w.holder} adına ${to} gönderin:\n\n${w.account}\n\nGönderdiyseniz devam edin; ${w.user.name} ödemenin yapıldığını görür.`)) return;
+    done(list, 'Ödendi olarak işaretlendi')(await act(() => post('/api/app/withdrawals/decide', { id: w.id, approve: true, note: '', payUsdTry: rate })));
+    list.reload();
   };
   const reject = async (w) => {
     const v = await ask('Talebi reddet', { text: `${num(w.diamonds)} elmas ${w.user.name} hesabına geri döner. Yazdığınız neden kişiye gösterilir.`, label: 'Neden', ok: 'Reddet' });
@@ -47,6 +54,7 @@ export function AppWithdrawals() {
           { key: 'user', label: 'Kişi', render: (w) => html`${w.user.name}<br /><small class="muted">${w.user.phone ?? w.user.id}</small>` },
           { key: 'diamonds', label: 'Elmas', align: 'right', render: (w) => num(w.diamonds) },
           { key: 'usd', label: 'Tutar', align: 'right', render: (w) => usd(w.usd) },
+          { key: 'tl', label: 'Gönderilecek TL', align: 'right', render: (w) => (w.status === 'pending' || w.status === 'paid' ? tlOf(w, d.payUsdTry) : '—') },
           { key: 'account', label: 'Hesap', render: (w) => html`${w.holder}<br /><small class="num">${w.method === 'iban' ? 'IBAN ' : ''}${w.account}</small>` },
           { key: 'status', label: 'Durum', render: (w) => html`<${Badge} s=${STATUS_BADGE[w.status]} label=${w.statusLabel} />${w.play ? html` <${Badge} s="warning" label="Test parası" />` : ''}` },
           { key: 'note', label: 'Not', render: (w) => w.note || '—' },
@@ -84,13 +92,15 @@ export function AppPayouts() {
   const money = (p) => (p.currency === 'diamond' ? `${num(p.amount)} elmas` : `${num(p.amount, 2)} ${p.currency}`);
   const decide = (p, action, extra, text) => act(() => post('/api/app/agency/payouts/decide', { payoutId: p.id, action, ...extra })).then(done(list, text));
   const approve = (p) => confirm(`${p.agency.name} için ${money(p)} · ${usd(p.usd)} ödemeye hazır olarak işaretlenir. Para bu adımda gönderilmez.`) && decide(p, 'approve', {}, 'Onaylandı');
+  // The TL at the payout rate the list was read with; the decision sends that rate back (a changed rate is refused).
   const pay = async (p) => {
+    const rate = list.data?.payUsdTry;
     const v = await ask('Ödendi olarak işaretle', {
-      text: `Bu düğme para göndermez. Önce ${usd(p.usd)} tutarını ${p.agency.name} ajansına bankadan gönderin, sonra havale dekontundaki numarayı yazın. Ajans ödemenin yapıldığını görür.`,
+      text: `Bu düğme para göndermez. Önce ${tlText(p.tlNow)} (${usd(p.usd)} × ödeme kuru ${num(rate, 2)}) tutarını ${p.agency.name} ajansına bankadan gönderin, sonra havale dekontundaki numarayı yazın. Ajans ödemenin yapıldığını görür.`,
       fields: [{ name: 'paymentRef', label: 'Dekont numarası', required: true, wide: true }],
       ok: 'Gönderdim, işaretle',
     });
-    if (v) decide(p, 'pay', { paymentRef: v.paymentRef }, 'Ödendi olarak işaretlendi');
+    if (v) decide(p, 'pay', { paymentRef: v.paymentRef, payUsdTry: rate }, 'Ödendi olarak işaretlendi');
   };
   const stop = async (p, action) => {
     const v = await ask(action === 'reject' ? 'Ödemeyi reddet' : 'Ödemeyi iptal et', { text: 'Kazanç ajansın çekilebilir bakiyesine geri döner. Yazdığınız neden ajansa gösterilir.', label: 'Neden', ok: action === 'reject' ? 'Reddet' : 'İptal et' });
@@ -106,6 +116,7 @@ export function AppPayouts() {
         { key: 'requestedAt', label: 'Talep', render: (p) => html`${dateTimeTr(p.requestedAt)}<br /><small class="muted">${p.requestedBy}</small>` },
         { key: 'agency', label: 'Ajans', render: (p) => html`${p.agency.name}<br /><small class="muted">${p.agency.code}</small>` },
         { key: 'amount', label: 'Tutar', align: 'right', render: (p) => html`${money(p)}<br /><small class="muted">${usd(p.usd)}</small>` },
+        { key: 'tl', label: 'Gönderilecek TL', align: 'right', render: (p) => (['pending', 'ready', 'paid'].includes(p.status) ? tlOf(p, d.payUsdTry) : '—') },
         { key: 'status', label: 'Durum', render: (p) => html`<${Badge} s=${STATUS_BADGE[p.status]} label=${p.statusLabel} />${p.payable === false ? html` <${Badge} s="warning" label="Test parası" />` : ''}` },
         { key: 'approvedBy', label: 'Onaylayan', render: (p) => (p.approvedBy ? html`${p.approvedBy}<br /><small class="muted">${dateTimeTr(p.approvedAt)}</small>` : '—') },
         { key: 'paymentRef', label: 'Dekont', render: (p) => p.paymentRef ?? '—' },
@@ -223,7 +234,13 @@ function shown(s, v) {
   if (s.type === 'campaign') return `%${v.percent} · ${v.label} · ${dateTimeTr(v.startsAt)} → ${dateTimeTr(v.endsAt)}`;
   if (s.type === 'int' || s.type === 'number') return num(v, s.bounds.decimals ?? 0);
   if (s.type === 'packs') return packsText(s, v);
+  if (s.type === 'tiers') return tiersText(v);
   return String(v);
+}
+/** Yayıncı haftalık bonusu: on or off, and its tiers ("10.000 → 5.000 · 20.000 → 10.000 …"). */
+function tiersText(v) {
+  if (!v?.tiers?.length) return 'Barem yok';
+  return `${v.on ? 'Açık' : 'Kapalı'} · ${v.tiers.length} barem: ${v.tiers.map((t) => `${num(t.from)} → ${num(t.bonus)}`).join(' · ')}`;
 }
 /** Jeton paketleri in their order: each pack's coins, its extra coins and its first-purchase gift. */
 function packsText(s, v) {
@@ -243,6 +260,7 @@ function saved(v) {
   if (v === '') return 'boş';
   if (typeof v === 'number') return num(v, Number.isInteger(v) ? 0 : 2);
   if (Array.isArray(v)) return v.length ? v.join(', ') : 'hiçbiri';
+  if (typeof v === 'object' && Array.isArray(v.tiers)) return `${v.on ? 'açık' : 'kapalı'}, ${v.tiers.length} barem`;
   if (typeof v === 'object') return v.percent !== undefined ? `%${v.percent} · ${v.label}` : Object.values(v)[0]?.order !== undefined ? 'jeton paketleri ayarı' : JSON.stringify(v);
   return String(v);
 }
@@ -309,6 +327,11 @@ function SettingEditor({ s, onClose, onSave }) {
     return n;
   });
   const setPack = (i, k, x) => setPacks((l) => l.map((p, j) => (j === i ? { ...p, [k]: x } : p)));
+  // Yayıncı haftalık bonusu: on or off, and one row per tier (from this many diamonds earned, this bonus).
+  const [tiersOn, setTiersOn] = useState(() => (s.type === 'tiers' ? start?.on !== false : true));
+  const [tiers, setTiers] = useState(() => (s.type === 'tiers' ? (start?.tiers ?? []).map((t) => ({ from: num(t.from), bonus: num(t.bonus) })) : []));
+  const setTier = (i, k, x) => setTiers((l) => l.map((t, j) => (j === i ? { ...t, [k]: x } : t)));
+  const whole = (x) => Number(String(x).replace(/[^\d]/g, '') || 0);
   const [v, setV] = useState(s.type === 'campaign' ? (start ? { ...start, startsAt: local(start.startsAt), endsAt: local(start.endsAt) } : { percent: s.bounds.percent.min, startsAt: '', endsAt: '', label: '' }) : start ?? (s.type === 'set' ? [] : ''));
   const [reason, setReason] = useState('');
   const b = s.bounds ?? {};
@@ -320,8 +343,8 @@ function SettingEditor({ s, onClose, onSave }) {
     // Empty text is a value of its own (no notice; Yönetim back in the app); "Varsayılana dön" is the default.
     if (s.type === 'text') return String(v).trim();
     if (s.type === 'version') return String(v).trim() || null;
+    if (s.type === 'tiers') return { on: tiersOn, tiers: tiers.map((t) => ({ from: whole(t.from), bonus: whole(t.bonus) })) };
     if (s.type === 'packs') {
-      const whole = (x) => Number(String(x).replace(/[^\d]/g, '') || 0);
       return Object.fromEntries(packs.map((p, i) => [p.id, { extra: whole(p.extra), first: whole(p.first) === (s.bounds.packs.find((x) => x.id === p.id)?.firstBonus ?? 0) ? null : whole(p.first), order: i + 1 }]));
     }
     return v;
@@ -349,6 +372,21 @@ function SettingEditor({ s, onClose, onSave }) {
       )}
     </tbody></table>
     <p class="note">Paketin kendi jetonu ve fiyatı Google Play'deki ürüne bağlı, burada değişmez. Ek jeton ve ilk alım hediyesi en çok paketin kendi jetonu kadar olabilir. Gizlemek için "Gizli paketler" ayarını kullanın.</p>`;
+  else if (s.type === 'tiers')
+    input = html`<label class="field inline"><span>Bonus açık (kapalıyken biten hafta ödenmez; Yayıncı haftalık bonusu sayfasından sonradan ödenebilir)</span><input type="checkbox" checked=${tiersOn} onChange=${(e) => setTiersOn(e.target.checked)} /></label>
+    <table class="table dense"><thead><tr><th>#</th><th>Haftalık kazanç (elmas, en az)</th><th>Bonus (elmas)</th><th>Aralık</th><th></th></tr></thead><tbody>
+      ${tiers.map(
+        (t, i) => html`<tr key=${i}>
+          <td>${i + 1}</td>
+          <td><input inputmode="numeric" style="width:130px" value=${t.from} onInput=${(e) => setTier(i, 'from', e.target.value)} /></td>
+          <td><input inputmode="numeric" style="width:130px" value=${t.bonus} onInput=${(e) => setTier(i, 'bonus', e.target.value)} /></td>
+          <td class="muted nowrap">${num(whole(t.from))}${i + 1 < tiers.length ? ` – ${num(Math.max(0, whole(tiers[i + 1].from) - 1))}` : ' ve üstü'}</td>
+          <td><button type="button" class="btn link" disabled=${tiers.length <= 1} onClick=${() => setTiers((l) => l.filter((_, j) => j !== i))}>Sil</button></td>
+        </tr>`,
+      )}
+    </tbody></table>
+    <div class="row gap"><${Button} disabled=${tiers.length >= (b.maxTiers ?? 30)} onClick=${() => setTiers((l) => [...l, { from: '', bonus: '' }])}>Barem ekle</${Button}></div>
+    <p class="note">Ajansa bağlı yayıncı ve yönetim yayıncısı, haftada (Pazartesi 00:00 – Pazar 23:59:59) ulaştığı en yüksek baremin bonusunu alır; ilk baremin altında bonus yok. Baremler küçükten büyüğe, bonus bir öncekinden az olamaz. Değişiklik, kapanmamış haftaya (bu haftaya) uygulanır.</p>`;
   else if (s.type === 'text') input = html`<textarea rows="3" maxlength=${b.max} value=${v ?? ''} onInput=${(e) => setV(e.target.value)}></textarea>`;
   else input = html`<input value=${v ?? ''} inputmode=${s.type === 'version' ? 'text' : 'decimal'} onInput=${(e) => setV(e.target.value)} />`;
   const range = s.type === 'int' || s.type === 'number' ? `${num(b.min, b.decimals ?? 0)}–${num(b.max, b.decimals ?? 0)}${b.step ? `, ${num(b.step, b.decimals ?? 0)}'er` : ''}` : '';

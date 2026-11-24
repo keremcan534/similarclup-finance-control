@@ -27,6 +27,7 @@ import { AppEconomy, AppJeton } from './pages/app-economy.js';
 import { AppSanctions } from './pages/app-sanctions.js';
 import { AppBonds } from './pages/app-bond-looks.js';
 import { AppJetonLoad } from './pages/app-jeton-load.js';
+import { AppHostBonus } from './pages/app-host-bonus.js';
 
 // The menu by subject, the app's own work first. Each page: [route, label, permission, page, words it is found by].
 // Routes never change (links and bookmarks keep working); only where a page sits and what it is called do.
@@ -63,6 +64,7 @@ const NAV = [
     ['app-agencies', 'Ajans merkezi', 'app.agencies', AppAgencies, 'ajans başvuru oran kademe transfer yayıncı bağla üst ajans'],
     ['app-agency-staff', 'Ajans personeli', 'app.agency_staff', AppAgencyStaff, 'personel rol bd operasyon puan ihlal itiraz arka plan'],
     ['app-payouts', 'Ajans ödemeleri', 'app.payouts', AppPayouts, 'ajans ödeme komisyon dekont'],
+    ['app-host-bonus', 'Yayıncı haftalık bonusu', 'app.host_bonus', AppHostBonus, 'yayıncı haftalık bonus barem elmas pazartesi geri al öde'],
     ['statements', 'Hakedişler', 'statements.view', Statements, 'hakediş dönem ödeme'],
     ['rules', 'Komisyon kuralları (finans)', 'rules.view', Rules, 'komisyon kural oran'],
     ['agencies', 'Ajans hesapları (finans)', 'parties.view', (p) => html`<${Parties} type="agency" ...${p} />`, 'ajans finans taraf'],

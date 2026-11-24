@@ -262,7 +262,7 @@ test('para sayfaları: her biri kendi yetkisiyle; operasyon yöneticisi yalnız 
   const fin = await loginAs('fin@test.local');
   const ops = await loginAs('ops@test.local');
   const ro = await loginAs('ro@test.local');
-  const reads = ['/api/app/withdrawals?status=all', '/api/app/agency/payouts?status=ready', '/api/app/agency/settings', '/api/app/purchases?q=ab', '/api/app/wallet/audit?user=u1', '/api/app/lucky', '/api/app/live-settings', '/api/app/live-settings/history?limit=30'];
+  const reads = ['/api/app/withdrawals?status=all', '/api/app/agency/payouts?status=ready', '/api/app/agency/settings', '/api/app/purchases?q=ab', '/api/app/wallet/audit?user=u1', '/api/app/lucky', '/api/app/live-settings', '/api/app/live-settings/history?limit=30', '/api/app/host-bonus?week=2026-11-16'];
   const reports = ['/api/app/casino/report', '/api/app/alerts', '/api/app/finance-sync'];
   for (const p of [...reads, ...reports]) {
     const r = await call('GET', p, undefined, fin);
@@ -283,6 +283,8 @@ test('para sayfaları: her biri kendi yetkisiyle; operasyon yöneticisi yalnız 
     ['/api/app/purchases/voided-sync', {}],
     ['/api/app/lucky/config', { config: { gifts: [] }, version: 2 }],
     ['/api/app/live-settings/rollback', { batch: 'b1', reason: 'Yanlış kur', baseV: 9 }],
+    ['/api/app/host-bonus/pay', { week: '2026-11-16', reason: 'Bonus kapalı kalmıştı' }],
+    ['/api/app/host-bonus/reverse', { id: 7, reason: 'Hileli hediye' }],
   ] as const) {
     assert.equal((await call('POST', p, body, ops)).status, 403, `ops ${p}`);
     const r = await call('POST', p, body, fin);
@@ -1032,16 +1034,16 @@ test('Seviye ve görev ödülleri: Seviyeler ve VIP yetkisiyle; ekleme ve kaldı
 test('daha önce kurulmuş rollere yeni yetki bir kez eklenir', () => {
   const { db } = setup();
   const ADDED: Record<string, string[]> = {
-    finance_manager: ['app.gifts', 'app.emojis', 'app.shop', 'app.levels', 'app.withdrawals', 'app.payouts', 'app.refunds', 'app.lucky', 'app.rocket', 'app.settings', 'app.reports', 'app.agencies', 'app.agency_ledger'],
+    finance_manager: ['app.gifts', 'app.emojis', 'app.shop', 'app.levels', 'app.withdrawals', 'app.payouts', 'app.refunds', 'app.lucky', 'app.rocket', 'app.settings', 'app.reports', 'app.agencies', 'app.agency_ledger', 'app.host_bonus'],
     operations_manager: ['app.gifts', 'app.emojis', 'app.shop', 'app.reports', 'app.users', 'app.complaints', 'app.support', 'app.notices', 'app.events'],
   };
-  // A database made before 002–006, 008, 009 and 010: the roles without the app permissions.
+  // A database made before 002–006, 008, 009, 010 and 013: the roles without the app permissions.
   for (const [key, list] of Object.entries(ADDED)) {
     const perms: string[] = JSON.parse(db.value<string>('SELECT permissions FROM roles WHERE key = ?', key)!);
     db.run('UPDATE roles SET permissions = ? WHERE key = ?', JSON.stringify(perms.filter((p) => !list.includes(p))), key);
   }
   db.run(
-    "DELETE FROM schema_migrations WHERE name IN ('002_app_permissions.sql', '003_app_finance_permissions.sql', '004_app_operations_permissions.sql', '005_app_agency_permissions.sql', '006_app_emoji_permissions.sql', '008_app_levels_permissions.sql', '009_app_shop_permissions.sql', '010_app_rocket_permissions.sql')",
+    "DELETE FROM schema_migrations WHERE name IN ('002_app_permissions.sql', '003_app_finance_permissions.sql', '004_app_operations_permissions.sql', '005_app_agency_permissions.sql', '006_app_emoji_permissions.sql', '008_app_levels_permissions.sql', '009_app_shop_permissions.sql', '010_app_rocket_permissions.sql', '013_app_host_bonus_permission.sql')",
   );
   db.migrate();
   db.migrate();
