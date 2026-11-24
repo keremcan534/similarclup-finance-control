@@ -694,6 +694,40 @@ test('Profil izleri: Kullanıcılar yetkisiyle görülür ve kaldırılır; kald
   assert.equal(no.json.error, 'Geçersiz iz türü');
 });
 
+test('Ses tanıtımı: Kullanıcılar yetkisiyle dinlenir ve kaldırılır; kaldırma denetim kaydına yazılır; ret cümlesi aynen', async () => {
+  for (const [method, path] of [['GET', '/api/admin/voice'], ['POST', '/api/admin/voice/clear']]) {
+    assert.deepEqual(APP_ROUTES.find(([m, p]) => m === method && p === path)?.[2], 'app.users', `${method} ${path}`);
+  }
+  env.as('operations_manager', 'ops-ses@test.local');
+  env.as('finance_manager', 'fin-ses@test.local');
+  env.as('read_only', 'ro-ses@test.local');
+  const ops = await loginAs('ops-ses@test.local');
+  const fin = await loginAs('fin-ses@test.local');
+  const ro = await loginAs('ro-ses@test.local');
+  const user = '6f1c2a3b-4d5e-4f60-8a7b-9c0d1e2f3a4c';
+  const r = await call('GET', `/api/app/voice?user=${user}`, undefined, ops);
+  assert.equal(r.status, 200, JSON.stringify(r.json));
+  assert.equal(r.json.path, `/api/admin/voice?user=${user}`);
+  const body = { user, reason: 'Şikâyet: hakaret' };
+  const out = await call('POST', '/api/app/voice/clear', body, ops);
+  assert.equal(out.status, 200, JSON.stringify(out.json));
+  assert.equal(seen.at(-1)!.path, '/api/admin/voice/clear');
+  assert.deepEqual(JSON.parse(seen.at(-1)!.body), body);
+  assert.equal(seen.at(-1)!.user.email, 'ops-ses@test.local');
+  const log = env.db.get("SELECT actor, after FROM audit_logs WHERE action = 'app.voice.clear' ORDER BY id DESC LIMIT 1")!;
+  assert.match(log.actor, /ops-ses@test\.local/);
+  assert.deepEqual(JSON.parse(log.after).body, body);
+  for (const h of [fin, ro]) {
+    assert.equal((await call('GET', `/api/app/voice?user=${user}`, undefined, h)).status, 403);
+    assert.equal((await call('POST', '/api/app/voice/clear', { user }, h)).status, 403);
+  }
+  refuse = { status: 404, error: 'Kullanıcı bulunamadı' };
+  const no = await call('POST', '/api/app/voice/clear', { user }, ops);
+  refuse = null;
+  assert.equal(no.status, 404);
+  assert.equal(no.json.error, 'Kullanıcı bulunamadı');
+});
+
 test('İz türleri: Hediyeler yetkisiyle; dört uç uygulamaya aynen gider ve denetim kaydına yazılır; iz resmi (markart) aynı yetkiyle yüklenir; ret cümlesi aynen', async () => {
   for (const [method, path] of [['GET', '/api/admin/mark-kinds'], ['POST', '/api/admin/mark-kinds'], ['POST', '/api/admin/mark-kinds/update'], ['POST', '/api/admin/mark-kinds/delete']]) {
     assert.deepEqual(APP_ROUTES.find(([m, p]) => m === method && p === path)?.[2], 'app.gifts', `${method} ${path}`);
