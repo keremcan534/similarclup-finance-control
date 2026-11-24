@@ -8,7 +8,7 @@ import { SORTS, SortBar, sortedIds, useDragOrder } from '../order.js';
 
 const kb = (n) => `${Math.max(1, Math.round(n / 1024))} KB`;
 const ending = (name) => (/\.([A-Za-z0-9]{1,8})$/.exec(name ?? '')?.[1] ?? '').toLowerCase();
-const PACK_TR = { name: 'ad', price: 'fiyat', minVip: 'VIP', enabled: 'rafta / kapalı' };
+const PACK_TR = { name: 'ad', price: 'fiyat', minVip: 'VIP', enabled: 'rafta / kapalı', soon: 'Yakında' };
 const STICKER_TR = { pack: 'paket', name: 'ad', emoji: 'emoji', enabled: 'rafta / kapalı', art: 'resim' };
 const listOf = (fields, tr) => (fields ?? []).map((f) => tr[f] ?? f).join(', ');
 /** Stickers shown in a closed pack's card. */
@@ -122,6 +122,7 @@ export function AppEmojis() {
           class=${dragPack.class ?? ''}
           title=${html`<span>${p.name}</span> ${p.builtin ? html`<${Badge} s="info" label="Uygulamanın" />` : html`<${Badge} s="active" label="Eklenen" />`}
             ${!p.enabled && html` <${Badge} s="passive" label="Kapalı" />`}
+            ${p.enabled && p.soon && html` <${Badge} s="pending" label="Yakında" />`}
             ${p.changed?.length > 0 && html` <${Badge} s="warning" label=${`Değiştirildi: ${listOf(p.changed, PACK_TR)}`} />`}
             ${p.emojiTab && html` <${Badge} label="Emoji sekmesinde" />`}`}
           actions=${html`
@@ -169,7 +170,9 @@ export function AppEmojis() {
 function PackEditor({ pack, limits: L, onClose, onSaved }) {
   const app = !!pack?.builtin;
   const o = pack?.original;
-  const [v, setV] = useState({ name: pack?.name ?? '', price: String(pack?.price ?? 0), minVip: String(pack?.minVip ?? 0), enabled: pack ? pack.enabled : true });
+  const [v, setV] = useState({ name: pack?.name ?? '', price: String(pack?.price ?? 0), minVip: String(pack?.minVip ?? 0), enabled: pack ? pack.enabled : true, soon: !!pack?.soon });
+  // Yakında (owners, 25 Nov 2026): only for an app server that knows it (its packs say `soon`).
+  const soonKnown = !!pack && typeof pack.soon === 'boolean';
   const [busy, setBusy] = useState(false);
   const was = (show, text) => app && show && html`<small class="muted">Uygulamada: ${text}</small>`;
   const save = async () => {
@@ -178,7 +181,7 @@ function PackEditor({ pack, limits: L, onClose, onSaved }) {
     const minVip = Number(v.minVip);
     if (name.length < L.packNameMin || name.length > L.packNameMax) return showError(new Error(`Ad ${L.packNameMin}–${L.packNameMax} karakter olmalı`));
     if (!Number.isSafeInteger(price) || price < 0 || price > L.priceMax) return showError(new Error(`Fiyat 0–${num(L.priceMax)} jeton olmalı (0: ücretsiz)`));
-    const fields = { name, price, minVip, enabled: !!v.enabled };
+    const fields = { name, price, minVip, enabled: !!v.enabled, ...(soonKnown && v.soon !== pack.soon ? { soon: v.soon } : {}) };
     setBusy(true);
     try {
       if (pack) {
@@ -203,6 +206,7 @@ function PackEditor({ pack, limits: L, onClose, onSaved }) {
       <label class="field"><span>Fiyat (jeton)</span><input inputmode="numeric" value=${v.price} disabled=${pack?.roomOnly} onInput=${(e) => setV({ ...v, price: e.target.value.replace(/[^\d]/g, '') })} /><small class="muted">0: ücretsiz (ya da yalnız VIP ile açılır). Mağazada bu fiyatla satılır.</small>${was(Number(v.price) !== o?.price, `${num(o?.price)} jeton`)}</label>
       <label class="field"><span>En düşük VIP seviyesi</span><select value=${v.minVip} onChange=${(e) => setV({ ...v, minVip: e.target.value })}>${Array.from({ length: L.vipMax + 1 }, (_, i) => html`<option value=${String(i)}>${i ? `VIP ${i}` : 'Herkes'}</option>`)}</select>${was(Number(v.minVip) !== o?.minVip, o?.minVip ? `VIP ${o.minVip}` : 'herkes')}</label>
       <label class="field inline"><span>Açık (panelde ve mağazada)</span><input type="checkbox" checked=${v.enabled} onChange=${(e) => setV({ ...v, enabled: e.target.checked })} />${was(!!v.enabled !== o?.enabled, o?.enabled ? 'açık' : 'kapalı')}</label>
+      ${soonKnown && html`<label class="field inline" title="Çarşı’da “Yakında” etiketiyle durur, satın alınamaz"><span>Yakında (rafta görünür, satılmaz)</span><input type="checkbox" checked=${v.soon} onChange=${(e) => setV({ ...v, soon: e.target.checked })} /></label>`}
     </div></div>
     ${pack?.owners > 0 && html`<p class="note">Bu paketi ${num(pack.owners)} kişi aldı. Fiyat değişikliği yeni alımlardan itibaren geçer; kapatılsa da aldıkları çıkartmalar mesajlarda görünür.</p>`}
     <div class="row end gap" style="margin-top:12px">
