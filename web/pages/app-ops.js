@@ -107,7 +107,7 @@ export function AppUsers() {
       <${Table}
         empty=${search ? 'Bu aramayla kimse bulunamadı' : 'Henüz kayıtlı hesap yok'}
         columns=${[
-          { key: 'name', label: 'Kişi', render: (u) => html`<strong>${u.name}</strong>${u.username ? html` <span class="muted">@${u.username}</span>` : ''}${u.test ? html` <${Badge} s="warning" label="Deneme" />` : ''}<br /><small class="muted num">${u.publicNo ? `ID ${u.publicNo}` : u.id}</small>` },
+          { key: 'name', label: 'Kişi', render: (u) => html`<strong>${u.name}</strong>${u.username ? html` <span class="muted">@${u.username}</span>` : ''}${u.test ? html` <${Badge} s="warning" label="Deneme" />` : ''}<br /><small class="muted num">${u.publicNo ? `ID ${u.publicNo}` : '—'}</small>` },
           { key: 'role', label: 'Rol', render: (u) => (STAFF(u.role) ? html`<${Badge} s="info" label=${ROLE[u.role]} />` : ROLE[u.role] ?? u.role) },
           { key: 'signIn', label: 'Giriş', render: (u) => u.signIn.map((p) => SIGN_IN[p] ?? p).join(', ') || 'Cihaz (deneme girişi)' },
           { key: 'room', label: 'Oda', render: (u) => (u.room ? html`<span class="num">${u.room.code}</span> · Lv.${u.roomLevel}` : `Lv.${u.roomLevel ?? 1}`) },
@@ -663,7 +663,7 @@ function EventList() {
       columns=${[
         { key: 'startsAt', label: 'Zaman', render: (e) => html`${dateTimeTr(e.startsAt)}<br /><small class="muted">→ ${dateTimeTr(e.endsAt)}</small>` },
         { key: 'title', label: 'Etkinlik', render: (e) => html`<div class="row gap" style="align-items:flex-start"><${Pic} src=${e.coverUrl} size=${48} /><div><strong>${e.title}</strong><br /><small class="muted">${e.category.name}</small>${e.description ? html`<br /><small>${cut(e.description, 160)}</small>` : ''}</div></div>` },
-        { key: 'room', label: 'Oda', render: (e) => html`${e.room.title}${e.room.closed ? html` <${Badge} s="closed" label="Kapalı" />` : ''}<br /><small class="muted">${e.host.name}</small>` },
+        { key: 'room', label: 'Oda', render: (e) => html`${e.room.title}${e.room.code ? html` <small class="muted num">ID ${e.room.code}</small>` : ''}${e.room.closed ? html` <${Badge} s="closed" label="Kapalı" />` : ''}<br /><small class="muted">${e.host.name}${e.host.publicNo ? ` · ID ${e.host.publicNo}` : ''}</small>` },
         { key: 'state', label: 'Durum', render: (e) => html`<${Badge} s=${E_BADGE[e.state] ?? 'pending'} label=${e.stateLabel} />${e.rejectReason ? html`<br /><small class="muted">${cut(e.rejectReason, 120)}</small>` : ''}` },
         { key: 'reserved', label: 'Yer', align: 'right', render: (e) => `${num(e.reserved)}${e.capacity ? ` / ${num(e.capacity)}` : ''}${e.came ? ` · geldi ${num(e.came)}` : ''}` },
         {
@@ -764,7 +764,7 @@ function EventReport() {
       </div>
       <${Card} title="Son başlayan ve biten"><${Table} dense empty="Kayıt yok" columns=${[
         { key: 'at', label: 'Zaman', render: (x) => dateTimeTr(x.at) },
-        { key: 'event', label: 'Etkinlik', render: (x) => html`${x.event.title}<br /><small class="muted">${x.room}</small>` },
+        { key: 'event', label: 'Etkinlik', render: (x) => html`${x.event.title}<br /><small class="muted">${x.room}${x.roomCode ? ` · oda ID ${x.roomCode}` : ''}</small>` },
         { key: 'action', label: 'Ne oldu', render: (x) => (x.action === 'start' ? 'Başladı' : x.action === 'not_started' ? 'Başlatılmadı' : `Bitti${x.reason && END_TEXT[x.reason] ? ` · ${END_TEXT[x.reason]}` : ''}`) },
         { key: 'by', label: 'Kim' },
       ]} rows=${r.records} /></${Card}>`}</${Loading}>`;

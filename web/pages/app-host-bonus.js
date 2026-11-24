@@ -57,7 +57,7 @@ export function AppHostBonus() {
         <${Table}
           empty=${d.preview ? 'Henüz bareme ulaşan yayıncı yok' : d.run && !d.run.on ? 'Bu hafta atlandı; bonus ödenmedi' : 'Bu hafta bonus alan yok'}
           columns=${[
-            { key: 'name', label: 'Yayıncı', render: (r) => html`${r.name}<br /><small class="muted">${r.userId}</small>` },
+            { key: 'name', label: 'Yayıncı', render: (r) => html`${r.name}<br /><small class="muted num">${r.publicNo ? `ID ${r.publicNo}` : '—'}</small>` },
             { key: 'agency', label: 'Ajans', render: (r) => (r.kind === 'management' ? html`<span class="muted">Yönetim yayıncısı</span>` : r.agency || '—') },
             { key: 'earned', label: 'Haftalık kazanç', align: 'right', render: (r) => `${num(r.earned)} 💎` },
             { key: 'tierFrom', label: 'Barem', align: 'right', render: (r) => num(r.tierFrom) },

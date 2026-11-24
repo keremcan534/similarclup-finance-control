@@ -41,7 +41,7 @@ function FindPerson({ onPick }) {
       empty="Bu aramayla kimse bulunamadı"
       columns=${[
         { key: 'name', label: 'Kişi', render: (u) => html`<strong>${u.name}</strong>${u.username ? html` <span class="muted">@${u.username}</span>` : ''}` },
-        { key: 'publicNo', label: 'ID', render: (u) => (u.publicNo ? html`<span class="num">${u.publicNo}</span>` : html`<span class="num muted">${u.id}</span>`) },
+        { key: 'publicNo', label: 'ID', render: (u) => (u.publicNo ? html`<span class="num">${u.publicNo}</span>` : html`<span class="muted">—</span>`) },
         { key: 'a', label: '', render: (u) => html`<${Button} onClick=${() => onPick(u)}>Aç</${Button}>` },
       ]}
       rows=${x.users}

@@ -217,7 +217,7 @@ function AgencyDetail({ a, nodes, s, onClose, onChanged }) {
     <div class="kpis">
       <${Kpi} label="Durum" value=${STATUS[a.status]?.[1] ?? a.status} sub=${`${a.parentId ? 'alt ajans' : 'üst ajans'} · kod ${a.code ?? '—'}`} />
       <${Kpi} label="Bu haftanın oranı" value=${pct(a.rate)} sub=${a.tierName ? `geçen hafta ${a.tierName}` : 'haftalık seviyeden'} />
-      <${Kpi} label="Yayıncı" value=${num(a.streamers)} sub=${a.owner ? `yönetici ${a.owner}` : ''} />
+      <${Kpi} label="Yayıncı" value=${num(a.streamers)} sub=${a.owner ? `yönetici ${a.owner}${a.ownerNo ? ` · ID ${a.ownerNo}` : ''}` : ''} />
       <${Kpi} label="30 gün hacim" value=${`${dia(a.volume30)} elmas`} sub=${a.parentId ? '' : `ağın tamamı ${dia(a.orgVolume30)}`} />
       <${Kpi} label="30 gün kazanç" value=${`${dia(a.earned30)} elmas`} />
     </div>
@@ -231,7 +231,7 @@ function AgencyDetail({ a, nodes, s, onClose, onChanged }) {
       <p class="muted">Toplam ${pct(split.totalRate)} · havuz ${dia(split.pool)} elmas · platforma kalan ${dia(split.platformKeeps)} elmas</p>
     </${Card}>`}
     ${a.bd && html`<${Card} title="BD" actions=${bd !== 'open' && html`<${Button} onClick=${() => setBd('open')}>BD raporunu göster</${Button}>`}>
-      <p class="muted num">${a.bd}</p>
+      <p>${a.bdName ?? 'BD'}${a.bdNo ? html` <span class="muted num">· ID ${a.bdNo}</span>` : ''}</p>
       ${bd === 'open' && html`<${Loading} state=${bdReport}>${(r) => html`
         <p class="muted">BD payı ${pct(r.policy?.rate)} · ${num(r.agencies.length)} ajans</p>
         <${Table} dense empty="Dönem kaydı yok" columns=${[

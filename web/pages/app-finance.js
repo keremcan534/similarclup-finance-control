@@ -51,7 +51,7 @@ export function AppWithdrawals() {
         empty=${status === 'pending' ? 'Bekleyen talep yok' : 'Bu listede talep yok'}
         columns=${[
           { key: 'createdAt', label: 'Tarih', render: (w) => dateTimeTr(w.createdAt) },
-          { key: 'user', label: 'Kişi', render: (w) => html`${w.user.name}<br /><small class="muted">${w.user.phone ?? w.user.id}</small>` },
+          { key: 'user', label: 'Kişi', render: (w) => html`${w.user.name}<br /><small class="muted num">${[w.user.publicNo && `ID ${w.user.publicNo}`, w.user.phone].filter(Boolean).join(' · ') || '—'}</small>` },
           { key: 'diamonds', label: 'Elmas', align: 'right', render: (w) => num(w.diamonds) },
           { key: 'usd', label: 'Tutar', align: 'right', render: (w) => usd(w.usd) },
           { key: 'tl', label: 'Gönderilecek TL', align: 'right', render: (w) => (w.status === 'pending' || w.status === 'paid' ? tlOf(w, d.payUsdTry) : '—') },
@@ -188,7 +188,7 @@ export function AppRefunds() {
           empty=${search ? 'Bu aramayla alım bulunamadı' : 'Henüz alım yok'}
           columns=${[
             { key: 'createdAt', label: 'Tarih', render: (p) => html`${dateTimeTr(p.createdAt)}<br /><small class="muted">#${p.id}</small>` },
-            { key: 'user', label: 'Hesap', render: (p) => html`${p.user.name}<br /><small class="muted">${p.user.id}</small>` },
+            { key: 'user', label: 'Hesap', render: (p) => html`${p.user.name}<br /><small class="muted num">${p.user.publicNo ? `ID ${p.user.publicNo}` : '—'}</small>` },
             { key: 'productId', label: 'Ürün', render: (p) => html`${p.productId}<br /><small class="muted">${p.platform}${p.sandbox ? ' · test' : ''} · ${p.transactionId}</small>` },
             { key: 'coins', label: 'Jeton', align: 'right', render: (p) => `${num(p.coins)}${p.bonus ? ` + ${num(p.bonus)}` : ''}` },
             { key: 'priceTl', label: 'Fiyat', align: 'right', render: (p) => (p.priceTl === null ? '—' : `${num(p.priceTl, 2)} TL`) },
@@ -204,7 +204,7 @@ export function AppRefunds() {
       </form>
       ${user && html`<${Loading} state=${audit}>${(a) => html`
         <div class="kpis">
-          <${Kpi} label="Hesap" value=${a.user.name} sub=${a.user.publicNo ? `ID ${a.user.publicNo}` : a.user.id} />
+          <${Kpi} label="Hesap" value=${a.user.name} sub=${a.user.publicNo ? `ID ${a.user.publicNo}` : '—'} />
           <${Kpi} label="Jeton" value=${num(a.user.coins)} sub=${`partilerde ${num(a.user.coinsInLots)}`} />
           <${Kpi} label="Elmas" value=${num(a.user.diamonds)} sub=${`çekilebilir ${num(a.user.withdrawable)} · kilitli ${num(a.user.locked)}`} />
         </div>
