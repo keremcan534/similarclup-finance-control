@@ -131,6 +131,14 @@ export const APP_ROUTES: [string, string, Permission | Permission[]][] = [
   // taking the ones showing off (all or one kind) with a reason. Kullanıcılar, and a reported person in Şikâyetler.
   ['GET', '/api/admin/marks', 'app.users'],
   ['POST', '/api/admin/marks/clear', 'app.users'],
+  // Ses tanıtımı (the app's voice-intro.mjs): a person's profile voice clip (to listen to), and taking an offensive one
+  // off with a reason. Kullanıcılar, and a reported person in Şikâyetler.
+  ['GET', '/api/admin/voice', 'app.users'],
+  ['POST', '/api/admin/voice/clear', 'app.users'],
+  // Özel albüm (the app's private-album.mjs): a streamer's paid photos (taken-down ones too, with who opened it and
+  // for how much), and taking an offensive one down with a reason. Kullanıcılar, and a reported person in Şikâyetler.
+  ['GET', '/api/admin/private-album', 'app.users'],
+  ['POST', '/api/admin/private-album/remove', 'app.users'],
   ['POST', '/api/admin/ban', 'app.users'],
   ['POST', '/api/admin/referrals/revoke', 'app.users'],
   // Şikâyetler and a reported room's pictures

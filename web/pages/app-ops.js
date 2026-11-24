@@ -1,7 +1,8 @@
 // Uygulama › operations pages: the Similar Club app's moderation and community work, through its admin API
 // (server/app-admin.ts passes each call on as the signed-in panel user; the app checks and records every one).
-// Kullanıcılar (with a person's profile marks: Kaka and the like, taken off with a reason), Şikâyetler (with a reported
-// room's own pictures, and a reported person's profile marks), Destek, Duyurular, Etkinlikler. The full sanction
+// Kullanıcılar (with a person's profile marks: Kaka and the like, taken off with a reason; and their profile voice clip,
+// listened to and taken off with a reason), Şikâyetler (with a reported room's own pictures, and a reported person's
+// profile marks and voice clip), Destek, Duyurular, Etkinlikler. The full sanction
 // system (evidence, approvals, appeals, staff permissions) is Uygulama › Yaptırımlar (app-sanctions.js).
 import { Badge, Button, Card, ID_HINT, Kpi, Loading, Modal, Page, Table, Tabs, accountOf, act, dateTimeTr, html, num, post, showError, toast, useApi, useApp, usePrompt, useState } from '../lib.js';
 import { Chips } from './app-finance.js';
@@ -84,13 +85,15 @@ export function AppUsers() {
     confirm(`${u.name}\n\nProfil, mesajlar, takipler ve oturumlar silinir; kişi çıkış yapar. Para kayıtları yasal olarak saklanır. Bu işlem geri alınamaz.`) &&
     after('Hesap silindi')(await act(() => post('/api/app/users/delete', { id: u.id })));
   const [marks, setMarks] = useState(null);
+  const [voice, setVoice] = useState(null);
+  const [privateAlbum, setPrivateAlbum] = useState(null);
   const removeTests = async (n) =>
     confirm(`Sunucu denemesinin açtığı ${n} hesap ("Test A", "Test B") silinir. Gerçek kişilere dokunulmaz. Bu işlem geri alınamaz.`) &&
     after((r) => `${num(r.deleted)} deneme hesabı silindi`)(await act(() => post('/api/app/users/delete', { tests: true })));
   const d = list.data;
   return html`<${Page}
     title="Kullanıcılar"
-    subtitle="Uygulamanın hesapları: ad, kullanıcı adı, e-posta ya da ID ile arama (kişinin profilindeki ID, odasının ID'si de aynı; özel ID ve eski 8 haneli oda ID'si de bulunur); askıya alma, oda seviyesi, davet ödülünü geri alma, hesap silme; profil izleri (Kaka gibi): kim bıraktı, ne zaman, kaldırma. Yetkili hesapları (yönetici, moderatör) buradan değiştirilemez."
+    subtitle="Uygulamanın hesapları: ad, kullanıcı adı, e-posta ya da ID ile arama (kişinin profilindeki ID, odasının ID'si de aynı; özel ID ve eski 8 haneli oda ID'si de bulunur); askıya alma, oda seviyesi, davet ödülünü geri alma, hesap silme; profil izleri (Kaka gibi): kim bıraktı, ne zaman, kaldırma; ses tanıtımı: dinleme, kaldırma; özel albüm: fotoğraflar, kaç kişi açtı, kaldırma. Yetkili hesapları (yönetici, moderatör) buradan değiştirilemez."
     actions=${can('app.users') && d?.tests > 0 && html`<${Button} kind="danger" onClick=${() => removeTests(d.tests)}>Deneme hesaplarını sil (${num(d.tests)})</${Button}>`}
   >
     ${prompt}
@@ -119,6 +122,8 @@ export function AppUsers() {
                 <${Button} onClick=${() => unban(u)}>Askıyı kaldır</${Button}>
                 <${Button} onClick=${() => level(u)}>Oda seviyesi</${Button}>`}
                 <${Button} onClick=${() => setMarks(u)}>Profil izleri</${Button}>
+                <${Button} onClick=${() => setVoice(u)}>Ses tanıtımı</${Button}>
+                <${Button} onClick=${() => setPrivateAlbum(u)}>Özel albüm</${Button}>
                 ${!STAFF(u.role) && html`<${Button} kind="ghost" onClick=${() => revoke(u)}>Davet ödülü</${Button}>
                 <${Button} kind="ghost" onClick=${() => remove(u)}>Sil</${Button}>`}
               </span>`,
@@ -131,7 +136,80 @@ export function AppUsers() {
         ${x.next !== null && html`<${Button} onClick=${() => setOffset(x.next)}>Sonraki</${Button}>`}
       </div>`}</${Loading}>
     ${marks && html`<${ProfileMarks} user=${marks} onClose=${() => setMarks(null)} />`}
+    ${voice && html`<${ProfileVoice} user=${voice} onClose=${() => setVoice(null)} />`}
+    ${privateAlbum && html`<${PrivateAlbum} user=${privateAlbum} onClose=${() => setPrivateAlbum(null)} />`}
   </${Page}>`;
+}
+
+// ---- Özel albüm -----------------------------------------------------------------------------------------
+/**
+ * A streamer's Özel albüm (the app's private-album.mjs: photos others open with coins, the price in Canlı ayarlar ›
+ * Özel albüm): every photo, taken-down ones too, how many opened it and the coins they paid. A photo comes down with a
+ * reason; it stops showing to everyone, even those who opened the album, and stays here as the record. The app's
+ * audit log records it.
+ */
+export function PrivateAlbum({ user, onClose }) {
+  const { can } = useApp();
+  const data = useApi(`/api/app/private-album?user=${encodeURIComponent(user.id)}`);
+  const [ask, prompt] = usePrompt();
+  const take = async (p) => {
+    const v = await ask('Fotoğrafı kaldır', {
+      text: `${user.name ?? 'Kişi'}: bu fotoğraf özel albümden hemen kalkar; albümü açmış olanlar da görmez. Kayıt için burada kalır. Kaldırma uygulamanın denetim kaydına yazılır.`,
+      fields: [{ name: 'reason', label: 'Neden (isteğe bağlı, en çok 200 karakter; ör. şikâyet: uygunsuz)', type: 'textarea', wide: true }],
+      ok: 'Fotoğrafı kaldır',
+    });
+    if (!v) return;
+    const r = await act(() => post('/api/app/private-album/remove', { user: user.id, id: p.id, ...(v.reason.trim() ? { reason: v.reason.trim().slice(0, 200) } : {}) }));
+    if (r) {
+      toast(r.removed ? 'Fotoğraf kaldırıldı' : 'Fotoğraf zaten kaldırılmıştı');
+      data.reload();
+    }
+  };
+  return html`<${Modal} title=${`Özel albüm: ${user.name ?? ''}`} wide onClose=${onClose}>
+    ${prompt}
+    <${Loading} state=${data}>${(d) => html`
+      <p class="muted">${d.can ? 'Ajanstaki onaylı yayıncı: özel albümü açık.' : 'Şu an ajansta onaylı yayıncı değil: albümü satılmıyor (önceden açanlar görmeye devam eder).'} Fiyat (herkese aynı): ${d.price > 0 ? `${num(d.price)} jeton` : 'kapalı (0)'} · Canlı ayarlar › Özel albüm. ${num(d.unlocks)} kişi açtı, toplam ${num(d.coins)} jeton.</p>
+      <${Table} dense empty="Bu kişinin özel albümünde fotoğraf yok" columns=${[
+        { key: 'url', label: 'Fotoğraf', render: (p) => html`<${Pic} src=${p.url} size=${72} />` },
+        { key: 'at', label: 'Eklendi', render: (p) => dateTimeTr(p.at) },
+        { key: 'state', label: 'Durum', render: (p) => (p.removed ? html`<${Badge} s="closed" label="Kaldırıldı" /><br /><small class="muted">${dateTimeTr(p.removed.at)}${p.removed.by ? ` · ${p.removed.by}` : ''}${p.removed.reason ? ` · ${p.removed.reason}` : ''}</small>` : html`<${Badge} s="pending" label="Görünüyor" />`) },
+        { key: 'a', label: '', render: (p) => can('app.users') && !p.removed && html`<${Button} kind="danger" onClick=${() => take(p)}>Kaldır</${Button}>` },
+      ]} rows=${d.photos} />`}</${Loading}>
+  </${Modal}>`;
+}
+
+// ---- Ses tanıtımı ---------------------------------------------------------------------------------------
+/**
+ * A person's profile voice clip (the app's voice-intro.mjs: up to 15 seconds, anyone who opens their profile plays
+ * it): listened to here, and taken off with a reason (its file is deleted; the app's audit log records it). The person
+ * can record a new one afterwards.
+ */
+export function ProfileVoice({ user, onClose }) {
+  const { can } = useApp();
+  const clip = useApi(`/api/app/voice?user=${encodeURIComponent(user.id)}`);
+  const [ask, prompt] = usePrompt();
+  const clear = async () => {
+    const v = await ask('Ses tanıtımı kaldırılsın', {
+      text: `${user.name ?? 'Kişi'}: profilindeki ses kaydı hemen kalkar ve dosyası silinir; kişi isterse yenisini kaydeder. Kaldırma uygulamanın denetim kaydına yazılır.`,
+      fields: [{ name: 'reason', label: 'Neden (isteğe bağlı, en çok 200 karakter; ör. şikâyet: hakaret)', type: 'textarea', wide: true }],
+      ok: 'Ses kaydını kaldır',
+    });
+    if (!v) return;
+    const r = await act(() => post('/api/app/voice/clear', { user: user.id, ...(v.reason.trim() ? { reason: v.reason.trim().slice(0, 200) } : {}) }));
+    if (r) {
+      toast(r.cleared ? 'Ses tanıtımı kaldırıldı' : 'Kaldırılacak ses kaydı yoktu');
+      clip.reload();
+    }
+  };
+  return html`<${Modal} title=${`Ses tanıtımı: ${user.name ?? ''}`} onClose=${onClose}>
+    ${prompt}
+    <${Loading} state=${clip}>${(d) =>
+      d.voice
+        ? html`<p class="muted">${num(Math.round(d.voice.ms / 1000))} saniye · ${dateTimeTr(d.voice.at)} kaydedildi. Profiline bakan herkes dinleyebilir.</p>
+            <audio controls preload="none" src=${d.voice.url} style="width:100%;margin:8px 0 12px"></audio>
+            ${can('app.users') && html`<div class="row gap end"><${Button} kind="danger" onClick=${clear}>Ses kaydını kaldır</${Button}></div>`}`
+        : html`<p class="muted">Bu kişinin profilinde ses tanıtımı yok.</p>`}</${Loading}>
+  </${Modal}>`;
 }
 
 // ---- Profil izleri --------------------------------------------------------------------------------------
@@ -208,6 +286,8 @@ export function AppComplaints() {
   const list = useApi(`/api/app/reports?status=${status}`);
   const [room, setRoom] = useState(null);
   const [marks, setMarks] = useState(null);
+  const [voice, setVoice] = useState(null);
+  const [privateAlbum, setPrivateAlbum] = useState(null);
   const [ask, prompt] = usePrompt();
   const handle = async (r, body, text) => (await act(() => post('/api/app/reports/handle', { id: r.id, ...body }))) && (toast(text), list.reload());
   const dismiss = (r) => confirm('Şikâyet işlem yapılmadan kapatılır.') && handle(r, { status: 'dismissed' }, 'Şikâyet kapatıldı');
@@ -228,7 +308,7 @@ export function AppComplaints() {
     confirm(`${targetName(r)} ${r.target.bannedForever ? 'için ömür boyu ban da kaldırılır ve ' : ''}hemen yeniden giriş yapabilir.`) &&
     (await act(() => post('/api/app/ban', { user: r.target.id, days: null }))) &&
     (toast('Askı kaldırıldı'), list.reload());
-  return html`<${Page} title="Şikâyetler" subtitle="Kullanıcıların kişi, oda, mesaj, an, yorum ve aile şikâyetleri: sorun yok, işlem yapıldı, askıya alma (kişide), içeriği kaldırma (an ve yorumda), şikâyet edilen odanın görselleri, şikâyet edilen kişinin profil izleri.">
+  return html`<${Page} title="Şikâyetler" subtitle="Kullanıcıların kişi, oda, mesaj, an, yorum ve aile şikâyetleri: sorun yok, işlem yapıldı, askıya alma (kişide), içeriği kaldırma (an ve yorumda), şikâyet edilen odanın görselleri, şikâyet edilen kişinin profil izleri, ses tanıtımı ve özel albümü.">
     ${prompt}
     <${Chips} value=${status} options=${R_STATUS} onChange=${setStatus} />
     <${Loading} state=${list}>${(d) => html`<${Table}
@@ -266,6 +346,8 @@ export function AppComplaints() {
               ${r.target.type === 'room' && html`<${Button} kind="ghost" onClick=${() => setRoom(r.target.id)}>Oda görselleri</${Button}>`}
               ${r.target.type === 'user' && (r.target.bannedUntil || r.target.bannedForever) && can('app.users') && html`<${Button} kind="ghost" onClick=${() => unban(r)}>Askıyı kaldır</${Button}>`}
               ${r.target.type === 'user' && r.target.id && can('app.users') && html`<${Button} kind="ghost" onClick=${() => setMarks({ id: r.target.id, name: targetName(r) })}>Profil izleri</${Button}>`}
+              ${r.target.type === 'user' && r.target.id && can('app.users') && html`<${Button} kind="ghost" onClick=${() => setVoice({ id: r.target.id, name: targetName(r) })}>Ses tanıtımı</${Button}>`}
+              ${r.target.type === 'user' && r.target.id && can('app.users') && html`<${Button} kind="ghost" onClick=${() => setPrivateAlbum({ id: r.target.id, name: targetName(r) })}>Özel albüm</${Button}>`}
             </span>`,
         },
       ]}
@@ -273,6 +355,8 @@ export function AppComplaints() {
     />`}</${Loading}>
     ${room && html`<${RoomPictures} room=${room} onClose=${() => setRoom(null)} />`}
     ${marks && html`<${ProfileMarks} user=${marks} onClose=${() => setMarks(null)} />`}
+    ${voice && html`<${ProfileVoice} user=${voice} onClose=${() => setVoice(null)} />`}
+    ${privateAlbum && html`<${PrivateAlbum} user=${privateAlbum} onClose=${() => setPrivateAlbum(null)} />`}
   </${Page}>`;
 }
 
