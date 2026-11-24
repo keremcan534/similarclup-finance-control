@@ -21,7 +21,7 @@ import { AppRocket } from './pages/app-rocket.js';
 import { AppPayouts, AppRefunds, AppReports, AppSettings, AppWithdrawals, SETTING_SECTIONS } from './pages/app-finance.js';
 import { AppLucky } from './pages/app-lucky.js';
 import { AppComplaints, AppEvents, AppNotices, AppSupport, AppUsers } from './pages/app-ops.js';
-import { AppAgencies } from './pages/app-agencies.js';
+import { AppAgencies, AppAgencyLevels } from './pages/app-agencies.js';
 import { AppAgencyStaff } from './pages/app-agency-staff.js';
 import { AppEconomy, AppJeton } from './pages/app-economy.js';
 import { AppSanctions } from './pages/app-sanctions.js';
@@ -62,6 +62,7 @@ const NAV = [
   ]],
   ['agencies', 'Ajanslar', '🏢', [
     ['app-agencies', 'Ajans merkezi', 'app.agencies', AppAgencies, 'ajans başvuru oran kademe transfer yayıncı bağla üst ajans'],
+    ['app-agency-levels', 'Ajans seviyeleri', 'app.agencies', AppAgencyLevels, 'ajans seviye barem gönül bağı başlangıç bronz gümüş altın platin elmas haftalık komisyon oran aktif yayıncı'],
     ['app-agency-staff', 'Ajans personeli', 'app.agency_staff', AppAgencyStaff, 'personel rol bd operasyon puan ihlal itiraz arka plan'],
     ['app-payouts', 'Ajans ödemeleri', 'app.payouts', AppPayouts, 'ajans ödeme komisyon dekont'],
     ['app-host-bonus', 'Yayıncı haftalık bonusu', 'app.host_bonus', AppHostBonus, 'yayıncı haftalık bonus barem elmas pazartesi geri al öde'],
