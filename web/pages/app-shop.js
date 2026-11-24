@@ -631,6 +631,14 @@ function Editor({ item, kind, limits, convert, svga, onClose, onSaved }) {
   const [dims, setDims] = useState(() => (item?.look?.slice ? { w: item.look.slice.w, h: item.look.slice.h } : null));
   const [slice, setSlice] = useState(() => (item?.look?.slice ? { t: item.look.slice.t, r: item.look.slice.r, b: item.look.slice.b, l: item.look.slice.l } : null));
   const setColor = (i, c) => setLook((x) => ({ ...x, colors: x.colors.map((y, j) => (j === i ? c : y)) }));
+  // Bölüm (owners, 24 Nov 2026): a saved frame can go to Ses halkası. A frame is a picture round the photo and a voice
+  // wave a ring the app draws, so the app makes a new voice wave with this frame's name, price, days and VIP level, in
+  // the look chosen here, and takes the frame off the shelf (whoever has it keeps wearing it). Only for a server that
+  // knows the move (it sends the wave styles).
+  const movable = !!item && kind === 'frame' && !!limits.waveStyles;
+  const [section, setSection] = useState('frame');
+  const [waveLook, setWaveLook] = useState(() => ({ style: 'ripple', colors: [item?.color?.[0] ?? '#13D9DF'] }));
+  const setWaveColor = (i, c) => setWaveLook((x) => ({ ...x, colors: x.colors.map((y, j) => (j === i ? c : y)) }));
   // Süre paketleri (Güncelleme 8): the item's other durations, each with its own price (at most 3; not for a seat
   // color, not for a permanent item). An app server before them answers no `plans`: the editor hides them.
   const [plans, setPlans] = useState(() => (item?.plans ?? []).map((p) => ({ days: String(p.days), price: String(p.price) })));
@@ -813,13 +821,16 @@ function Editor({ item, kind, limits, convert, svga, onClose, onSaved }) {
       // The icon: a new one goes with its address; one taken away as null; the one in use isn't sent.
       Object.assign(body, { plate, ...(video ? { video } : {}), ...(icon !== (item?.icon?.url ?? null) ? { icon } : {}) });
     }
+    if (movable && section === 'wave' && !confirm(`“${v.name}” Ses halkası bölümüne taşınsın mı? Aynı ad, fiyat, süre ve VIP seviyesiyle yeni bir ses halkası açılır; çerçeve satıştan kalkar (alanlar süresi bitene kadar takmaya devam eder). Geri alınmaz.`)) return;
     setBusy('Kaydediliyor…');
     const r = await act(
       () => (item ? post('/api/app/shop/update', { id: item.id, ...body }) : post('/api/app/shop', { kind, ...body })),
-      video?.kind === 'source' ? 'Kaydedildi; video çevriliyor, birkaç dakika sürebilir' : 'Kaydedildi',
+      video?.kind === 'source' ? 'Kaydedildi; video çevriliyor, birkaç dakika sürebilir' : movable && section === 'wave' ? 'Kaydedildi; taşınıyor…' : 'Kaydedildi',
     );
+    // Then the move, with what was just saved (its name, price, days and VIP level).
+    const moved = r && movable && section === 'wave' ? await act(() => post('/api/app/shop/move', { id: item.id, to: 'wave', look: waveLook }), 'Ses halkası bölümüne taşındı') : true;
     setBusy(null);
-    if (r) onSaved();
+    if (r && moved) onSaved();
   };
   const slider = (k, label, min, max, step) => html`<label class="field">
     <span>${label}: %${pct(v.plate[k])}</span>
@@ -958,6 +969,17 @@ function Editor({ item, kind, limits, convert, svga, onClose, onSaved }) {
     </div>`}
     ${own && kind === 'bubble' && look && html`<${BubbleEditor} look=${look} setLook=${setLook} setColor=${setColor} src=${artShown} dims=${dims} slice=${slice} setSlice=${setSlice} pickArt=${pickArt} removeArt=${removeArt} limits=${limits} />`}
     ${own && kind === 'wave' && look && html`<${WaveEditor} look=${look} setLook=${setLook} setColor=${setColor} src=${artShown} pickArt=${pickArt} removeArt=${removeArt} limits=${limits} />`}
+    ${movable &&
+    html`<div class="stack" style="margin-top:12px;gap:6px">
+      <label class="field"><span>Bölüm (Çarşı'da hangi sekmede durur)</span>
+        <select value=${section} onChange=${(e) => setSection(e.target.value)}>
+          <option value="frame">Çerçeveler</option>
+          <option value="wave">Ses halkası (buraya taşı)</option>
+        </select></label>
+      ${section === 'wave' &&
+      html`<p class="note">Ses halkası resim değil, uygulamanın konuşunca çizdiği halkadır: stilini ve rengini aşağıda seç. Kaydedince bu adla, fiyatla, süreyle ve VIP seviyesiyle Ses halkası bölümünde en başta açılır; bu çerçeve satıştan kalkar, alanlar süresi bitene kadar takmaya devam eder. Geri alınmaz.</p>
+        <${WaveEditor} look=${waveLook} setLook=${setWaveLook} setColor=${setWaveColor} src=${null} pickArt=${() => {}} removeArt=${() => {}} limits=${limits} />`}
+    </div>`}
     <div class="row gap end">
       ${busy && html`<small class="muted">${busy}</small>`}
       <${Button} onClick=${onClose}>Vazgeç</${Button}>
