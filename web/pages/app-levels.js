@@ -124,7 +124,8 @@ function SystemEditor({ view, perks, doc, setDoc, edit, onSaved }) {
     ${(s === 'wealth' || s === 'charm') && html`<${Groups} system=${s} doc=${doc} set=${set} edit=${edit} />`}
     ${s === 'sub' && html`<${SubPlans} doc=${doc} set=${set} edit=${edit} />`}
     <${Perks} system=${s} doc=${doc} set=${set} perks=${perks} edit=${edit} top=${top} bottom=${bottom} />
-    ${doc.decay && html`<${Decay} system=${s} doc=${doc} set=${set} edit=${edit} top=${top} />`}
+    ${doc.decay && s !== 'vip' && html`<${Decay} system=${s} doc=${doc} set=${set} edit=${edit} top=${top} />`}
+    ${s === 'vip' && html`<${Card} title="VIP seviye koruma (aylık)"><p class="muted">Her ayın 1'i 00:00'da (Türkiye) önceki ay değerlendirilir. Ay içinde yükselen yeni seviyesinde kalır; seviyesinin koruma puanını (seviyenin puanı eksi bir alttakinin) yükleyen korur; yüklemeyen ya da yetmeyen bir seviye düşer, ikinci ay da tutmazsa VIP sıfırlanır. VIP olunan ilk ay değerlendirilmez. Her ay seviyenin kendi puanından başlar. Koruma puanları yukarıdaki seviye puanlarından hesaplanır. Yükseltme koruma dönemi (ücretli erteleme): Canlı ayarlar › VIP.</p></${Card}>`}
     ${check && html`<${Impact} system=${s} view=${view} check=${check} onClose=${() => setCheck(null)} onSaved=${() => (setCheck(null), onSaved())} />`}
   `;
 }
