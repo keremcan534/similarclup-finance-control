@@ -10,6 +10,10 @@ import { KIND_TEXT, LinkHelp, Stage, VideoChoices, VideoRules, mb, size, specOf,
 import { LIMIT_MAX, MULTS, PACKAGES_MAX, PRICE, draftOf, nextId, oddsOf, packageOf, packageProblems, pctOf, rtpOf, savable, topOf, withPackage } from '../lucky-odds.js';
 
 const oddsLine = (tiers) => tiers.filter((t) => t.weight > 0).map((t) => `${t.mult ? `${t.mult}x` : 'ödül yok'} %${pctOf(t.weight)}`).join(' · ');
+/** Alıcı payı: the app's limits (lucky-rules.mjs SHARE_PCT_MAX) and its rule when a saved configuration has none. */
+const SHARE_MAX = 50;
+const SHARE_DEFAULT = 10;
+const shareOf = (config) => (Number.isSafeInteger(config?.sharePct) ? config.sharePct : SHARE_DEFAULT);
 /** The picture a package shows: its own icon, the app's (lk1–lk4), or none (its emoji). */
 const pictureOf = (art) => art?.icon ?? art?.original?.icon ?? null;
 const Picture = ({ art, emoji, big = false }) => {
@@ -59,8 +63,8 @@ export function AppLucky() {
 
   return html`<${Page}
     title="Şanslı hediyeler"
-    subtitle="Uygulamadaki Şanslı hediye paketleri: fiyat, olasılık tablosu (toplam %100), açık/kapalı, ikon ve video; günlük ödül limiti ve duyuru çarpanı. Kayıt anında herkes için geçer; ödülü uygulamanın sunucusu çeker. Alıcı her gönderimde fiyatın %20'sini elmas olarak alır."
-    actions=${editing && d && html`<${Button} onClick=${() => setGeneral(true)}>Limit ve duyuru</${Button}>
+    subtitle="Uygulamadaki Şanslı hediye paketleri: fiyat, olasılık tablosu (toplam %100), açık/kapalı, ikon ve video; günlük ödül limiti ve duyuru çarpanı. Kayıt anında herkes için geçer; ödülü uygulamanın sunucusu çeker. Alıcı her gönderimde fiyatın Alıcı payı kadarını (sahiplerin kuralı %10) elmas olarak alır."
+    actions=${editing && d && html`<${Button} onClick=${() => setGeneral(true)}>Limit, duyuru ve alıcı payı</${Button}>
       <${Button} kind="primary" disabled=${d.config.gifts.length >= PACKAGES_MAX} title=${d.config.gifts.length >= PACKAGES_MAX ? `En çok ${PACKAGES_MAX} paket olur` : ''} onClick=${() => setPkg({})}>Yeni paket</${Button}>`}
   >
     <p class="note bad">Şans özelliği: hukuk görüşü açık (sahip kararı 19.11.2026). Satın alınan jetonla oynanır, kazanç nakde dönebilir; yayından önce avukat görüşü alınmalı, gerekirse paketler buradan kapatılır.</p>
@@ -74,11 +78,12 @@ export function AppLucky() {
       </div>
       ${d.art && !d.storage && html`<div class="empty bad">Uygulamanın dosya deposu açık değil: ikon ve video yüklenemez.</div>`}
       <${Card} title=${`Paketler (${d.config.gifts.length}/${PACKAGES_MAX} · sürüm ${d.version}${d.updatedAt ? ` · ${dateTimeTr(d.updatedAt)}` : ''})`}>
-        <p class="muted">Günlük ödül limiti ${num(d.config.dailyPayoutLimit)} oyun jetonu · ${d.config.announceFrom}x ve üstü odada duyurulur.</p>
+        <p class="muted">Alıcı payı <strong>%${num(shareOf(d.config))}</strong>: alıcıya her hediyede fiyatın bu kadarı elmas (PK puanı ve ajans komisyonu da bundan) · Günlük ödül limiti ${num(d.config.dailyPayoutLimit)} oyun jetonu · ${d.config.announceFrom}x ve üstü odada duyurulur.</p>
         <${Table} dense columns=${[
           { key: 'icon', label: '', render: (g) => html`<${Picture} art=${artFor(g.id)} emoji=${g.emoji} />` },
           { key: 'name', label: 'Paket', render: (g) => html`<strong>${g.emoji} ${g.name}</strong><br /><small class="muted">${g.id}${artFor(g.id)?.iconLink || artFor(g.id)?.videoLink ? ' · 🔗 bağlantıdan' : ''}</small>` },
           { key: 'price', label: 'Fiyat', align: 'right', render: (g) => num(g.price) },
+          { key: 'share', label: 'Alıcıya', align: 'right', render: (g) => `${num(Math.floor((g.price * shareOf(d.config)) / 100))} elmas` },
           { key: 'enabled', label: 'Durum', render: (g) => html`<${Badge} s=${g.enabled ? 'active' : 'passive'} label=${g.enabled ? 'Açık' : 'Kapalı'} />` },
           { key: 'tiers', label: 'Olasılıklar', render: (g) => html`<div class="cell-wrap" style="min-width:220px;max-width:360px"><small>${oddsLine(g.tiers)}</small></div>` },
           { key: 'rtp', label: 'Ortalama geri ödeme', align: 'right', render: (g) => `%${num(rtpOf(g.tiers) * 100, 2)}` },
@@ -121,7 +126,7 @@ export function AppLucky() {
         if (!pkg.gift && d.art && d.storage) setArtOf(p.id);
       }}
     />`}
-    ${general && d && html`<${GeneralEditor} config=${d.config} onClose=${() => setGeneral(false)} onSave=${async (c) => (await save(c, 'Limit ve duyuru kaydedildi')) && setGeneral(false)} />`}
+    ${general && d && html`<${GeneralEditor} config=${d.config} onClose=${() => setGeneral(false)} onSave=${async (c) => (await save(c, 'Limit, duyuru ve alıcı payı kaydedildi')) && setGeneral(false)} />`}
     ${artOf && d?.config.gifts.some((g) => g.id === artOf) && html`<${ArtEditor}
       key=${artOf}
       gift=${d.config.gifts.find((g) => g.id === artOf)}
@@ -150,7 +155,7 @@ function PackageEditor({ gift, config, onClose, onSave }) {
   }));
   const [busy, setBusy] = useState(false);
   const odds = oddsOf(p.draft);
-  const problems = packageProblems(p, others);
+  const problems = packageProblems(p, others, shareOf(config));
   const set = (k) => (e) => setP({ ...p, [k]: e.target.type === 'checkbox' ? e.target.checked : e.target.value });
   const setPct = (m) => (e) => setP({ ...p, draft: { ...p.draft, [m]: e.target.value } });
   const changedOdds = gift && JSON.stringify(odds.tiers.filter((t) => t.weight > 0)) !== JSON.stringify([...gift.tiers].sort((a, b) => a.mult - b.mult).filter((t) => t.weight > 0));
@@ -186,19 +191,31 @@ function PackageEditor({ gift, config, onClose, onSave }) {
   </${Modal}>`;
 }
 
-/** The daily payout limit (all packages, the whole platform) and from which multiplier a win is told in the room. */
+/**
+ * The daily payout limit (all packages, the whole platform), from which multiplier a win is told in the room, and the
+ * recipient's share of the price (Alıcı payı, the app's lucky-rules.mjs sharePct: 1–50 %, 10 by the owners' rule).
+ */
 function GeneralEditor({ config, onClose, onSave }) {
   const [limit, setLimit] = useState(String(config.dailyPayoutLimit));
   const [announce, setAnnounce] = useState(config.announceFrom);
+  const [share, setShare] = useState(String(shareOf(config)));
   const n = Number(limit);
-  const ok = Number.isSafeInteger(n) && n >= 1 && n <= LIMIT_MAX;
-  return html`<${Modal} title="Limit ve duyuru" onClose=${onClose}>
+  const pctN = Number(share);
+  const shareOk = Number.isSafeInteger(pctN) && pctN >= 1 && pctN <= SHARE_MAX;
+  // Every package must give at least one whole diamond (the app refuses it otherwise).
+  const tooCheap = shareOk ? config.gifts.find((g) => Math.floor((g.price * pctN) / 100) < 1) : null;
+  const ok = Number.isSafeInteger(n) && n >= 1 && n <= LIMIT_MAX && shareOk && !tooCheap;
+  return html`<${Modal} title="Limit, duyuru ve alıcı payı" onClose=${onClose}>
     <div class="form"><div class="grid2">
       <label class="field"><span>Günlük ödül limiti (oyun jetonu, bütün platform)</span><input inputmode="numeric" value=${limit} onInput=${(e) => setLimit(e.target.value.replace(/[^\d]/g, ''))} /><small class="muted">Bugün ödenen ödüller artı bir paketin en yüksek ödülü bunu geçecekse o paket yarına kadar gönderilemez.</small></label>
       <label class="field"><span>Odada duyurulan en düşük çarpan</span><select value=${String(announce)} onChange=${(e) => setAnnounce(Number(e.target.value))}>${MULTS.map((m) => html`<option value=${String(m)}>${m}x</option>`)}</select></label>
+      <label class="field"><span>Alıcı payı (%)</span><input inputmode="numeric" value=${share} onInput=${(e) => setShare(e.target.value.replace(/[^\d]/g, ''))} /><small class="muted">Şanslı hediyeyi alan kişiye fiyatın bu yüzdesi elmas olarak yazılır (aşağı yuvarlanır); PK puanı ve ajans komisyonu da bu elmastan hesaplanır. Sahiplerin kuralı: %10. Kayıttan sonraki gönderimlere uygulanır.</small></label>
     </div></div>
-    ${!ok && html`<p class="note bad">Limit 1 ile ${num(LIMIT_MAX)} arası bir tam sayı olmalı.</p>`}
-    <div class="row end gap"><${Button} onClick=${onClose}>Vazgeç</${Button}><${Button} kind="primary" disabled=${!ok} onClick=${() => onSave({ ...config, dailyPayoutLimit: n, announceFrom: announce })}>Kaydet</${Button}></div>
+    ${!(Number.isSafeInteger(n) && n >= 1 && n <= LIMIT_MAX) && html`<p class="note bad">Limit 1 ile ${num(LIMIT_MAX)} arası bir tam sayı olmalı.</p>`}
+    ${!shareOk && html`<p class="note bad">Alıcı payı %1 ile %${SHARE_MAX} arası bir tam sayı olmalı.</p>`}
+    ${tooCheap && html`<p class="note bad">${tooCheap.name} (${num(tooCheap.price)} jeton) %${pctN} ile alıcıya 1 elmastan az bırakıyor: payı artır ya da paketin fiyatını en az ${num(Math.ceil(100 / pctN))} jeton yap.</p>`}
+    ${shareOk && pctN !== shareOf(config) && html`<p class="note">Alıcı payı %${num(shareOf(config))} → %${pctN}: örneğin ${num(1000)} jetonluk hediyede alıcı ${num(Math.floor(1000 * shareOf(config) / 100))} yerine ${num(Math.floor(1000 * pctN / 100))} elmas alır.</p>`}
+    <div class="row end gap"><${Button} onClick=${onClose}>Vazgeç</${Button}><${Button} kind="primary" disabled=${!ok} onClick=${() => onSave({ ...config, dailyPayoutLimit: n, announceFrom: announce, sharePct: pctN })}>Kaydet</${Button}></div>
   </${Modal}>`;
 }
 

@@ -1,7 +1,8 @@
 // Uygulama › Oda roketi: the Similar Club app's room rocket (the app's server/api/room-rocket.mjs; server/app-admin.ts
 // passes the calls on as the signed-in panel user). Gifts sent in a room fill its rocket for the day (from 00:00,
-// Turkey's time); five levels in a row, each with its goal; a full level launches and its prizes are drawn among the
-// people who filled it, each one's chance as their share, at most one prize each, the first prize first. Here: on or
+// Turkey's time); five levels in a row, each with its goal; a full level launches and its prizes go to the day's givers
+// in the room by how much each gave (owners, 25 Nov 2026; a draw before): the biggest coin prize to the most, items
+// after the coins, at most one prize each. Here: on or
 // off, each level's goal and prizes (coins, normal ones, or a shop item for some days, and how many people get each),
 // the five launch videos (an SVGA for each level) and the last launches. A save made on an older copy is refused; the
 // page is read again.
@@ -19,7 +20,7 @@ export function AppRocket() {
     return html`<${Page} title="Oda roketi"><div class="empty bad">Uygulama bağlantısı ayarlı değil: sunucuda FC_APP_API_URL ve FC_APP_API_KEY gerekli.</div></${Page}>`;
   return html`<${Page}
     title="Oda roketi"
-    subtitle="Odadaki hediyeler roketi doldurur; seviye dolunca roket kalkar ve ödüller o seviyeye hediye gönderenler arasında çekilir. Her gün 00:00'da Lv.1'den başlar. Değişiklik sunucuda hemen geçerli; roketi yeni APK gösterir."
+    subtitle="Odadaki hediyeler roketi doldurur; seviye dolunca roket kalkar ve ödüller o gün odada katkı verenlere katkı sırasıyla verilir: en çok gönderen en büyük jeton ödülünü alır, eşyalar jetonlardan sonra. Her gün 00:00'da Lv.1'den başlar. Değişiklik sunucuda hemen geçerli; roketi yeni APK gösterir."
   >
     <${Loading} state=${view}>${(d) => html`
       <${Editor} key=${d.version} data=${d} editing=${can('app.rocket')} onSaved=${() => view.reload()} />
@@ -47,7 +48,7 @@ function Editor({ data, editing, onSaved }) {
   // Each level launches when the day's coins reach the goals so far added up.
   const ends = cfg.levels.reduce((a, l) => [...a, (a.at(-1) ?? 0) + (Number(l.goal) || 0)], []);
   const save = async () => {
-    if (cfg.enabled && !data.config.enabled && !confirm('Oda roketi açılsın mı? Ödüller seviyeye hediye gönderenler arasında şansla dağıtılır (Şanslı hediye gibi).')) return;
+    if (cfg.enabled && !data.config.enabled && !confirm('Oda roketi açılsın mı? Ödüller o gün odada en çok gönderenlere sırayla verilir; jeton ödülü harcanabilir jetondur.')) return;
     if ((await act(() => post('/api/app/rocket/config', { config: cfg, version: data.version }), 'Oda roketi kaydedildi')) !== undefined) onSaved();
   };
   // A prize's item that is no longer on the shelf stays choosable as it is (the app refuses it on save).
@@ -62,17 +63,17 @@ function Editor({ data, editing, onSaved }) {
       <label class="field inline"><span>Oda roketi açık</span>
         <input type="checkbox" checked=${cfg.enabled} disabled=${!editing} onChange=${(e) => setCfg((c) => ({ ...c, enabled: e.target.checked }))} /></label>
       <p class="note">
-        Ödüller seviyeye katkı verenler arasında <b>şansla</b> dağıtılır: kim ne kadar hediye gönderdiyse şansı o kadar, herkes en çok bir ödül alır, ilk
-        ödül önce çekilir. Kazanılan jeton normal jetondur (cüzdanda "Şanslı ödülü"): hediye gönderilebilir, böylece elmasa ve nakde dönebilir;
-        harcanınca Cömertlik'e sayılmaz. Bu yüzden Şanslı hediye gibi hukuki açıdan değerlendirilmeli. Kapatınca hiçbir oda dolmaz; kazanılan ödüller
-        kişilerde kalır.
+        Ödüller o gün odada katkı verenlere <b>katkı sırasıyla</b> verilir (çekiliş yok): en çok gönderen en büyük jeton ödülünü alır, sonra ikincisi;
+        jeton ödülleri büyükten küçüğe önce, eşya ödülleri sonra; herkes en çok bir ödül alır. Kazanılan jeton normal jetondur (cüzdanda "Şanslı
+        ödülü"): hediye gönderilebilir, böylece elmasa ve nakde dönebilir; harcanınca Cömertlik'e sayılmaz. Kapatınca hiçbir oda dolmaz; kazanılan
+        ödüller kişilerde kalır.
       </p>
     </${Card}>
     ${cfg.levels.map(
       (l, i) => html`<${Card} key=${i} title=${`Lv.${i + 1}`} actions=${html`<small class="muted">Gün içinde toplam ${num(ends[i])} jetonda kalkar</small>`}>
         <label class="field" style="max-width:240px"><span>Hedef (jeton, ${num(L.goalMin)}–${num(L.goalMax)})</span>
           <input type="number" min=${L.goalMin} max=${L.goalMax} value=${l.goal} disabled=${!editing} onInput=${(e) => setLevel(i, (x) => ({ ...x, goal: toNumber(e.target.value) }))} /></label>
-        <h3>Ödüller <small class="muted">(çekiliş sırasıyla)</small></h3>
+        <h3>Ödüller <small class="muted">(en çok gönderene en büyük jeton ödülü; eşyalar jetonlardan sonra)</small></h3>
         ${!l.prizes.length && html`<div class="empty">Bu seviyenin ödülü yok: roket kalkar, kimse bir şey kazanmaz.</div>`}
         ${l.prizes.map(
           (p, k) => html`<div class="row gap wrap" style="align-items:flex-end;margin-bottom:6px">
@@ -83,13 +84,13 @@ function Editor({ data, editing, onSaved }) {
                 <option value="item">Mağaza eşyası</option>
               </select></label>
             ${p.kind === 'coins'
-              ? html`<label class="field"><span>Jeton</span>
+              ? html`<label class="field"><span>Jeton (kişi başına)</span>
                   <input type="number" min="1" max=${L.coinsMax} value=${p.amount} disabled=${!editing} onInput=${(e) => setPrize(i, k, (x) => ({ ...x, amount: toNumber(e.target.value) }))} /></label>`
               : html`<label class="field"><span>Eşya</span>
                     <select value=${p.sku} disabled=${!editing} onChange=${(e) => setPrize(i, k, (x) => ({ ...x, sku: e.target.value }))}>${itemOptions(p.sku)}</select></label>
                   <label class="field"><span>Gün (1–${L.daysMax})</span>
                     <input type="number" min="1" max=${L.daysMax} value=${p.days} disabled=${!editing} onInput=${(e) => setPrize(i, k, (x) => ({ ...x, days: toNumber(e.target.value) }))} /></label>`}
-            <label class="field"><span>Kaç kişiye (1–${L.winnersMax})</span>
+            <label class="field"><span>Kaç kişiye (1–${L.winnersMax}; her biri yukarıdakini alır)</span>
               <input type="number" min="1" max=${L.winnersMax} value=${p.winners} disabled=${!editing} onInput=${(e) => setPrize(i, k, (x) => ({ ...x, winners: toNumber(e.target.value) }))} /></label>
             ${editing &&
             html`<${Button} kind="ghost" onClick=${() => movePrize(i, k, -1)} aria-label="Yukarı">↑</${Button}>

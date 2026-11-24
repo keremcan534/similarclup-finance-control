@@ -68,7 +68,7 @@ export function nextId(gifts) {
  * What is wrong with package `p` ({ id, name, emoji, price, draft }) beside the `others` saved with it, in Turkish;
  * [] when it can be saved. The same rules as the app's server, so Kaydet stays off rather than coming back refused.
  */
-export function packageProblems(p, others = []) {
+export function packageProblems(p, others = [], sharePct = 10) {
   const out = [];
   const id = String(p.id ?? '').trim();
   if (!LUCKY_ID.test(id)) out.push('Kimlik "lk" ile başlamalı, ardından en çok 20 küçük harf ya da rakam gelmeli (ör. lk5)');
@@ -80,6 +80,8 @@ export function packageProblems(p, others = []) {
   if (emoji.length < 1 || emoji.length > EMOJI_MAX) out.push(`Simge 1–${EMOJI_MAX} karakter olmalı (ör. 🍀)`);
   const price = Number(p.price);
   if (!Number.isSafeInteger(price) || price < PRICE.min || price > PRICE.max) out.push(`Fiyat ${fmt(PRICE.min)} ile ${fmt(PRICE.max)} jeton arası bir tam sayı olmalı`);
+  // The recipient's share (Alıcı payı, `sharePct` %) must be at least one whole diamond, as the app checks.
+  else if (Math.floor((price * sharePct) / 100) < 1) out.push(`%${sharePct} alıcı payıyla alıcıya en az 1 elmas düşmesi için fiyat en az ${fmt(Math.ceil(100 / sharePct))} jeton olmalı`);
   const odds = oddsOf(p.draft);
   for (const m of odds.bad) out.push(`${m}x: yüzde en çok 3 ondalıklı bir sayı olmalı (ör. 0,125)`);
   if (!odds.bad.length && odds.none < 0) out.push(`Olasılıkların toplamı %${pctOf(odds.total)}; %100 olmalı`);
