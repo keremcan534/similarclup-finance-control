@@ -41,6 +41,7 @@ export const PERMISSIONS = {
   'app.levels': 'Uygulama: VIP, Rütbe, Cömertlik, Yankı ve Abonelik ayarları (eşikler, adlar, Rütbe fiyatı, haklar, seviye düşmesi; kritik)',
   'app.withdrawals': 'Uygulama: para çekme taleplerini ödendi işaretle / reddet (kritik)',
   'app.payouts': 'Uygulama: ajans ödemelerini onayla, ödendi işaretle, reddet (kritik)',
+  'app.host_bonus': 'Uygulama: yayıncı haftalık bonusu (haftalar, ödenenler, atlanan haftayı öde, bonusu geri al; kritik)',
   'app.refunds': 'Uygulama: mağaza iadesi ve cüzdan denetimi',
   'app.lucky': 'Uygulama: Şanslı hediye paketleri, olasılıklar ve limit',
   'app.rocket': 'Uygulama: Oda roketi (açık/kapalı, seviye hedefleri, şansla dağıtılan ödüller)',

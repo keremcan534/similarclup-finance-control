@@ -234,7 +234,13 @@ function shown(s, v) {
   if (s.type === 'campaign') return `%${v.percent} · ${v.label} · ${dateTimeTr(v.startsAt)} → ${dateTimeTr(v.endsAt)}`;
   if (s.type === 'int' || s.type === 'number') return num(v, s.bounds.decimals ?? 0);
   if (s.type === 'packs') return packsText(s, v);
+  if (s.type === 'tiers') return tiersText(v);
   return String(v);
+}
+/** Yayıncı haftalık bonusu: on or off, and its tiers ("10.000 → 5.000 · 20.000 → 10.000 …"). */
+function tiersText(v) {
+  if (!v?.tiers?.length) return 'Barem yok';
+  return `${v.on ? 'Açık' : 'Kapalı'} · ${v.tiers.length} barem: ${v.tiers.map((t) => `${num(t.from)} → ${num(t.bonus)}`).join(' · ')}`;
 }
 /** Jeton paketleri in their order: each pack's coins, its extra coins and its first-purchase gift. */
 function packsText(s, v) {
@@ -254,6 +260,7 @@ function saved(v) {
   if (v === '') return 'boş';
   if (typeof v === 'number') return num(v, Number.isInteger(v) ? 0 : 2);
   if (Array.isArray(v)) return v.length ? v.join(', ') : 'hiçbiri';
+  if (typeof v === 'object' && Array.isArray(v.tiers)) return `${v.on ? 'açık' : 'kapalı'}, ${v.tiers.length} barem`;
   if (typeof v === 'object') return v.percent !== undefined ? `%${v.percent} · ${v.label}` : Object.values(v)[0]?.order !== undefined ? 'jeton paketleri ayarı' : JSON.stringify(v);
   return String(v);
 }
@@ -320,6 +327,11 @@ function SettingEditor({ s, onClose, onSave }) {
     return n;
   });
   const setPack = (i, k, x) => setPacks((l) => l.map((p, j) => (j === i ? { ...p, [k]: x } : p)));
+  // Yayıncı haftalık bonusu: on or off, and one row per tier (from this many diamonds earned, this bonus).
+  const [tiersOn, setTiersOn] = useState(() => (s.type === 'tiers' ? start?.on !== false : true));
+  const [tiers, setTiers] = useState(() => (s.type === 'tiers' ? (start?.tiers ?? []).map((t) => ({ from: num(t.from), bonus: num(t.bonus) })) : []));
+  const setTier = (i, k, x) => setTiers((l) => l.map((t, j) => (j === i ? { ...t, [k]: x } : t)));
+  const whole = (x) => Number(String(x).replace(/[^\d]/g, '') || 0);
   const [v, setV] = useState(s.type === 'campaign' ? (start ? { ...start, startsAt: local(start.startsAt), endsAt: local(start.endsAt) } : { percent: s.bounds.percent.min, startsAt: '', endsAt: '', label: '' }) : start ?? (s.type === 'set' ? [] : ''));
   const [reason, setReason] = useState('');
   const b = s.bounds ?? {};
@@ -331,8 +343,8 @@ function SettingEditor({ s, onClose, onSave }) {
     // Empty text is a value of its own (no notice; Yönetim back in the app); "Varsayılana dön" is the default.
     if (s.type === 'text') return String(v).trim();
     if (s.type === 'version') return String(v).trim() || null;
+    if (s.type === 'tiers') return { on: tiersOn, tiers: tiers.map((t) => ({ from: whole(t.from), bonus: whole(t.bonus) })) };
     if (s.type === 'packs') {
-      const whole = (x) => Number(String(x).replace(/[^\d]/g, '') || 0);
       return Object.fromEntries(packs.map((p, i) => [p.id, { extra: whole(p.extra), first: whole(p.first) === (s.bounds.packs.find((x) => x.id === p.id)?.firstBonus ?? 0) ? null : whole(p.first), order: i + 1 }]));
     }
     return v;
@@ -360,6 +372,21 @@ function SettingEditor({ s, onClose, onSave }) {
       )}
     </tbody></table>
     <p class="note">Paketin kendi jetonu ve fiyatı Google Play'deki ürüne bağlı, burada değişmez. Ek jeton ve ilk alım hediyesi en çok paketin kendi jetonu kadar olabilir. Gizlemek için "Gizli paketler" ayarını kullanın.</p>`;
+  else if (s.type === 'tiers')
+    input = html`<label class="field inline"><span>Bonus açık (kapalıyken biten hafta ödenmez; Yayıncı haftalık bonusu sayfasından sonradan ödenebilir)</span><input type="checkbox" checked=${tiersOn} onChange=${(e) => setTiersOn(e.target.checked)} /></label>
+    <table class="table dense"><thead><tr><th>#</th><th>Haftalık kazanç (elmas, en az)</th><th>Bonus (elmas)</th><th>Aralık</th><th></th></tr></thead><tbody>
+      ${tiers.map(
+        (t, i) => html`<tr key=${i}>
+          <td>${i + 1}</td>
+          <td><input inputmode="numeric" style="width:130px" value=${t.from} onInput=${(e) => setTier(i, 'from', e.target.value)} /></td>
+          <td><input inputmode="numeric" style="width:130px" value=${t.bonus} onInput=${(e) => setTier(i, 'bonus', e.target.value)} /></td>
+          <td class="muted nowrap">${num(whole(t.from))}${i + 1 < tiers.length ? ` – ${num(Math.max(0, whole(tiers[i + 1].from) - 1))}` : ' ve üstü'}</td>
+          <td><button type="button" class="btn link" disabled=${tiers.length <= 1} onClick=${() => setTiers((l) => l.filter((_, j) => j !== i))}>Sil</button></td>
+        </tr>`,
+      )}
+    </tbody></table>
+    <div class="row gap"><${Button} disabled=${tiers.length >= (b.maxTiers ?? 30)} onClick=${() => setTiers((l) => [...l, { from: '', bonus: '' }])}>Barem ekle</${Button}></div>
+    <p class="note">Yayıncı, haftada (Pazartesi 00:00 – Pazar 23:59:59) ulaştığı en yüksek baremin bonusunu alır; ilk baremin altında bonus yok. Baremler küçükten büyüğe, bonus bir öncekinden az olamaz. Değişiklik, kapanmamış haftaya (bu haftaya) uygulanır.</p>`;
   else if (s.type === 'text') input = html`<textarea rows="3" maxlength=${b.max} value=${v ?? ''} onInput=${(e) => setV(e.target.value)}></textarea>`;
   else input = html`<input value=${v ?? ''} inputmode=${s.type === 'version' ? 'text' : 'decimal'} onInput=${(e) => setV(e.target.value)} />`;
   const range = s.type === 'int' || s.type === 'number' ? `${num(b.min, b.decimals ?? 0)}–${num(b.max, b.decimals ?? 0)}${b.step ? `, ${num(b.step, b.decimals ?? 0)}'er` : ''}` : '';
