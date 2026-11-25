@@ -162,6 +162,13 @@ export const APP_ROUTES: [string, string, Permission | Permission[]][] = [
   ['GET', '/api/admin/team', 'app.notices'],
   ['POST', '/api/admin/team', 'app.notices'],
   ['POST', '/api/admin/team/remove', 'app.notices'],
+  // Banner Yönetimi (the app's banners.mjs): the same staff as the notices.
+  ['GET', '/api/admin/banners', 'app.notices'],
+  ['POST', '/api/admin/banners', 'app.notices'],
+  ['POST', '/api/admin/banners/toggle', 'app.notices'],
+  ['POST', '/api/admin/banners/order', 'app.notices'],
+  ['POST', '/api/admin/banners/remove', 'app.notices'],
+  ['GET', '/api/admin/banners/stats', 'app.notices'],
   // Etkinlikler
   ['GET', '/api/admin/events', 'app.events'],
   ['POST', '/api/admin/events/review', 'app.events'],
