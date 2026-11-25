@@ -162,6 +162,10 @@ export const APP_ROUTES: [string, string, Permission | Permission[]][] = [
   ['GET', '/api/admin/team', 'app.notices'],
   ['POST', '/api/admin/team', 'app.notices'],
   ['POST', '/api/admin/team/remove', 'app.notices'],
+  // Aileler (the app's families.mjs) and an agency's own room (agency-admin.mjs, 25 Nov 2026).
+  ['GET', '/api/admin/families', 'app.users'],
+  ['POST', '/api/admin/families/create', 'app.users'],
+  ['POST', '/api/admin/agency/room', 'app.agencies'],
   // Banner Yönetimi (the app's banners.mjs): the same staff as the notices.
   ['GET', '/api/admin/banners', 'app.notices'],
   ['POST', '/api/admin/banners', 'app.notices'],

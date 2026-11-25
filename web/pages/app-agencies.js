@@ -211,6 +211,19 @@ function AgencyDetail({ a, nodes, s, onClose, onChanged }) {
     if (!Number.isFinite(r)) return showError(new Error('Oranı yüzde olarak yazın'));
     done('Geçiş komisyonu kaydedildi')(await act(() => post('/api/app/agency/transition', { agencyId: a.id, oldParentId: v.old, rate: r, ...(v.start ? { startsAt: dayStart(v.start) } : {}), endsAt: dayStart(v.end), scope: v.scope, reason: v.reason })));
   };
+  // Its own room (owners, 25 Nov 2026): linked by the room's ID; Odalar shows it under this agency's name.
+  const room = async (off) => {
+    if (off) {
+      if (!confirm(`“${a.room?.title ?? 'Oda'}” bu ajanstan ayrılır; Odalar'da oda sahibinin kendi ajansıyla (varsa) görünür.`)) return;
+      return done('Oda ajanstan ayrıldı')(await act(() => post('/api/app/agency/room', { agencyId: a.id, roomNo: null })));
+    }
+    const v = await ask(a.room ? 'Ajansın odasını değiştir' : 'Ajansa oda bağla', {
+      text: 'Odanın ID’sini yazın (oda sahibinin ID’si). Oda, sahibi kim olursa olsun Odalar’da bu ajansın adıyla görünür; odanın sahibi değişmez. Bir oda yalnız bir ajansa bağlanır.',
+      fields: [{ name: 'roomNo', label: 'Oda ID’si', type: 'text', required: true, wide: true, def: a.room?.no ?? '' }],
+      ok: 'Bağla',
+    });
+    if (v) done('Oda ajansa bağlandı')(await act(() => post('/api/app/agency/room', { agencyId: a.id, roomNo: v.roomNo.trim() })));
+  };
   const bdReport = useApi(bd === 'open' && a.bd ? `/api/app/agency/bd-report?bd=${encodeURIComponent(a.bd)}` : null);
   return html`<${Modal} title=${a.name} wide onClose=${onClose}>
     ${prompt}
@@ -230,6 +243,9 @@ function AgencyDetail({ a, nodes, s, onClose, onChanged }) {
       ]} rows=${split.shares} />
       <p class="muted">Toplam ${pct(split.totalRate)} · havuz ${dia(split.pool)} elmas · platforma kalan ${dia(split.platformKeeps)} elmas</p>
     </${Card}>`}
+    <${Card} title="Ajansın odası" actions=${can('app.agencies') && (a.status === 'approved' || a.status === 'suspended') && html`<div class="row gap">${a.room && html`<${Button} kind="ghost" onClick=${() => room(true)}>Ayır</${Button}>`}<${Button} onClick=${() => room(false)}>${a.room ? 'Değiştir' : 'Oda bağla'}</${Button}></div>`}>
+      <p>${a.room ? html`<strong>${a.room.title}</strong> <span class="muted num">· Oda ID ${a.room.no ?? '—'}</span>` : html`<span class="muted">Bağlı oda yok. Odalar’da ajansın adı, sahibinin ya da yayıncılarının odalarında görünür.</span>`}</p>
+    </${Card}>
     ${a.bd && html`<${Card} title="BD" actions=${bd !== 'open' && html`<${Button} onClick=${() => setBd('open')}>BD raporunu göster</${Button}>`}>
       <p>${a.bdName ?? 'BD'}${a.bdNo ? html` <span class="muted num">· ID ${a.bdNo}</span>` : ''}</p>
       ${bd === 'open' && html`<${Loading} state=${bdReport}>${(r) => html`
@@ -256,7 +272,7 @@ function AgencyDetail({ a, nodes, s, onClose, onChanged }) {
 function CreateAgency({ nodes, onClose, onSaved }) {
   const tops = nodes.filter((x) => !x.parentId && x.status === 'approved');
   return html`<${Modal} title="Yeni ajans" onClose=${onClose}>
-    <p class="muted">Merkezin kurduğu ajans hemen onaylanır. Yönetici hesabı verilirse ajansın sahibi o olur.</p>
+    <p class="muted">Merkezin kurduğu ajans hemen onaylanır. Yönetici hesabı verilirse ajansın sahibi o olur. Oda ID’si yazılırsa o oda ajansın odası olur (sonradan da ajansın penceresinden bağlanır).</p>
     <${Form}
       submitLabel="Kur ve onayla"
       onCancel=${onClose}
@@ -264,6 +280,7 @@ function CreateAgency({ nodes, onClose, onSaved }) {
         { name: 'name', label: 'Ajans adı (2–60)', required: true },
         { name: 'parentId', label: 'Üst ajans (boş: üst ajans olarak)', type: 'select', options: tops.map((t) => [t.id, `${t.name} (${t.code})`]) },
         { name: 'owner', label: 'Yöneticinin ID’si (isteğe bağlı)', hint: ID_HINT },
+        { name: 'roomNo', label: 'Ajansın odası: Oda ID’si (isteğe bağlı)', hint: 'Odanın ID’si (oda sahibinin ID’si). Oda, sahibi kim olursa olsun Odalar’da bu ajansın adıyla görünür.' },
         { name: 'country', label: 'Ülke' },
         { name: 'region', label: 'Bölge' },
         { name: 'contactName', label: 'Yetkili adı' },

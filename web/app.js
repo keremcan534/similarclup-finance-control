@@ -29,6 +29,7 @@ import { AppBonds } from './pages/app-bond-looks.js';
 import { AppJetonLoad } from './pages/app-jeton-load.js';
 import { AppHostBonus } from './pages/app-host-bonus.js';
 import { AppBanners } from './pages/app-banners.js';
+import { AppFamilies } from './pages/app-families.js';
 
 // The menu by subject, the app's own work first. Each page: [route, label, permission, page, words it is found by].
 // Routes never change (links and bookmarks keep working); only where a page sits and what it is called do.
@@ -43,6 +44,7 @@ const NAV = [
     ['app-sanctions', 'Yaptırımlar', 'app.sanctions', AppSanctions, 'ban yasak engel susturma mute cihaz banı itiraz ceza kademe yetki kanıt'],
     ['app-complaints', 'Şikâyetler', 'app.complaints', AppComplaints, 'şikayet rapor bildirim an yorum oda kapak aile'],
     ['app-support', 'Destek', 'app.support', AppSupport, 'destek talep yardım yanıt'],
+    ['app-families', 'Aileler', 'app.users', AppFamilies, 'aile oluştur kur kurucu lider üye klan'],
   ]],
   ['gifts', 'Hediye ve mağaza', '🎁', [
     ['app-gifts', 'Hediyeler', 'app.gifts', AppGifts, 'hediye video svga ikon animasyon raf fiyat global duyuru profil izi iz türü muzip kaka su kırık cam terlik'],
