@@ -588,7 +588,7 @@ const SETTING_TEXT = {
   parent_zero: 'Üst ajans payını sıfırlama',
   parent_sees_sub_earnings: 'Üst ajans alt ajansın kazancını görür',
   parent_sees_subs: 'Üst ajans referans ajanslarının yayıncılarını ve rakamlarını görür',
-  bd_policy: 'BD payı',
+  bd_policy: 'BD komisyonu',
   suspension_policy: 'Askıya alma kuralı',
   assistant_policy: 'Ajans asistanı',
   weekly_levels: 'Haftalık ajans seviyeleri',
@@ -675,7 +675,7 @@ function Ledger({ settings }) {
       <${Loading} state=${settings}>${(d) => html`
         <${Table} dense columns=${[
           { key: 'k', label: 'Kural', render: ([k]) => html`<strong>${SETTING_TEXT[k] ?? k}</strong><br /><small class="muted num">${k}</small>` },
-          { key: 'v', label: 'Şu an', render: ([k, v]) => (k === 'referral_policy' ? html`<small>${referralText(v)}</small>` : html`<small class="num">${json(v)}</small>`) },
+          { key: 'v', label: 'Şu an', render: ([k, v]) => (k === 'referral_policy' ? html`<small>${referralText(v)}</small>` : k === 'bd_policy' ? html`<small>${bdText(v)}</small>` : html`<small class="num">${json(v)}</small>`) },
           { key: 'x', label: '', render: ([k, v]) => html`<${Button} onClick=${() => setEdit({ key: k, value: v })}>Değiştir</${Button}>` },
         ]} rows=${Object.entries(d.values).filter(([k]) => !RETIRED.has(k))} />
         <h3 style="margin-top:14px">Son değişiklikler</h3>
@@ -691,6 +691,10 @@ function Ledger({ settings }) {
   </div>`;
 }
 
+/** BD komisyonu in words (the app's agency-lib.mjs calcEvent; owners, 25 Nov 2026: the agencies' commission only). */
+const BD_BASIS = { pool: 'getirdiği ajansların toplam komisyonu', base: 'ajanslarının yayıncılarının elması', base_plus_pool: 'yayıncı elması + ajans komisyonu' };
+const bdText = (v) => (!v || !(v.rate > 0) ? 'BD komisyon almaz' : `${BD_BASIS[v.basis] ?? v.basis} üzerinden %${Math.round(v.rate * 10000) / 100} (platform öder; ajanstan kesilmez)`);
+
 /** Referans ajans komisyonu in words (the app's agency-levels.mjs payReferral). */
 const referralText = (v) =>
   !v || !(v.pct > 0) || !(v.weeks > 0)
@@ -700,6 +704,7 @@ const referralText = (v) =>
 function SettingEditor({ k, value, onClose, onSaved }) {
   if (k === 'weekly_levels') return html`<${LevelsEditor} value=${value} onClose=${onClose} onSaved=${onSaved} />`;
   if (k === 'referral_policy') return html`<${ReferralEditor} value=${value} onClose=${onClose} onSaved=${onSaved} />`;
+  if (k === 'bd_policy') return html`<${BdEditor} value=${value} onClose=${onClose} onSaved=${onSaved} />`;
   const [text, setText] = useState(JSON.stringify(value, null, 2));
   const [reason, setReason] = useState('');
   // Ajans asistanı: how many assistants an agency may have at once, picked rather than written as JSON.
@@ -722,6 +727,27 @@ function SettingEditor({ k, value, onClose, onSaved }) {
           <label class="field"><span>Ajans başına asistan</span><select value=${max} onChange=${(e) => setMax(e.target.value)}>${(max === '0' ? [0] : []).concat(Array.from({ length: 10 }, (_, i) => i + 1)).map((n) => html`<option value=${String(n)}>${n === 0 ? 'Asistan eklenemez' : `${n} kişi`}</option>`)}</select></label>`
       : html`<p class="muted">Oranlar kesir olarak yazılır (0.25 = %25). Uygulama değeri denetler; uymayan değer nedeniyle reddedilir.</p>
           <label class="field"><span>Değer (JSON)</span><textarea rows="10" class="num" value=${text} onInput=${(e) => setText(e.target.value)}></textarea></label>`}
+    <label class="field" style="margin-top:10px"><span>Gerekçe (3–300) *</span><input value=${reason} maxlength="300" onInput=${(e) => setReason(e.target.value)} /></label>
+    <div class="row gap end"><${Button} onClick=${onClose}>Vazgeç</${Button}><${Button} kind="primary" onClick=${save}>Kaydet</${Button}></div>
+  </${Modal}>`;
+}
+
+/** BD komisyonu: the rate of the agencies' total commission a BD gets (owners, 25 Nov 2026: never the streamers'). */
+function BdEditor({ value, onClose, onSaved }) {
+  const [rate, setRate] = useState(String(Math.round((value?.rate ?? 0.05) * 10000) / 100));
+  const [reason, setReason] = useState('');
+  const save = async () => {
+    if (reason.trim().length < 3) return showError(new Error('Gerekçe yazın'));
+    const r = rateOf(rate);
+    if (!Number.isFinite(r) || r < 0 || r > 1) return showError(new Error('Oranı yüzde olarak yazın (ör. 5)'));
+    const v = { rate: r, basis: 'pool' };
+    if (!confirm(`${bdText(v)}. Yeni kazançlar yeni oranla hesaplanır; geçmiş kayıtlar değişmez.`)) return;
+    if (await act(() => post('/api/app/agency/settings', { key: 'bd_policy', value: v, reason: reason.trim() }))) onSaved();
+  };
+  return html`<${Modal} title="BD komisyonu" onClose=${onClose}>
+    <p class="muted">BD'nin işi uygulamaya ajans getirmek ve bu ajanslara destek olmak. BD, sorumlu olduğu ajansların (alt ajanslarıyla) toplam komisyonundan bu yüzdeyi alır; yayıncıların elmasından almaz. Platform öder, ajansın komisyonundan kesilmez. Ajansa BD bağlamak: Ajans personeli sayfası.</p>
+    <label class="field"><span>Komisyon (%)</span><input inputmode="decimal" value=${rate} onInput=${(e) => setRate(e.target.value)} /></label>
+    <p class="muted">Şimdi: ${bdText(value)}.</p>
     <label class="field" style="margin-top:10px"><span>Gerekçe (3–300) *</span><input value=${reason} maxlength="300" onInput=${(e) => setReason(e.target.value)} /></label>
     <div class="row gap end"><${Button} onClick=${onClose}>Vazgeç</${Button}><${Button} kind="primary" onClick=${save}>Kaydet</${Button}></div>
   </${Modal}>`;
