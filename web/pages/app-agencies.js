@@ -575,6 +575,7 @@ const SETTING_TEXT = {
   suspension_policy: 'Askıya alma kuralı',
   assistant_policy: 'Ajans asistanı',
   weekly_levels: 'Haftalık ajans seviyeleri',
+  referral_policy: 'Referans ajans komisyonu',
 };
 /** Rules the weekly levels retired (24 Nov 2026): kept in the app for older records, no longer shown or changed here. */
 const RETIRED = new Set(['pool_cap', 'top_rate', 'tiers', 'performance', 'weights', 'parent_min_rate', 'parent_zero']);
@@ -657,7 +658,7 @@ function Ledger({ settings }) {
       <${Loading} state=${settings}>${(d) => html`
         <${Table} dense columns=${[
           { key: 'k', label: 'Kural', render: ([k]) => html`<strong>${SETTING_TEXT[k] ?? k}</strong><br /><small class="muted num">${k}</small>` },
-          { key: 'v', label: 'Şu an', render: ([, v]) => html`<small class="num">${json(v)}</small>` },
+          { key: 'v', label: 'Şu an', render: ([k, v]) => (k === 'referral_policy' ? html`<small>${referralText(v)}</small>` : html`<small class="num">${json(v)}</small>`) },
           { key: 'x', label: '', render: ([k, v]) => html`<${Button} onClick=${() => setEdit({ key: k, value: v })}>Değiştir</${Button}>` },
         ]} rows=${Object.entries(d.values).filter(([k]) => !RETIRED.has(k))} />
         <h3 style="margin-top:14px">Son değişiklikler</h3>
@@ -673,8 +674,15 @@ function Ledger({ settings }) {
   </div>`;
 }
 
+/** Referans ajans komisyonu in words (the app's agency-levels.mjs payReferral). */
+const referralText = (v) =>
+  !v || !(v.pct > 0) || !(v.weeks > 0)
+    ? 'Üst ajans referans ajanstan komisyon almaz'
+    : `İlk ${v.free_weeks} hafta komisyonsuz, sonraki ${v.weeks} hafta referans ajansın haftalık komisyonunun %${Math.round(v.pct * 10000) / 100}'i (referans ajanstan kesilmez); sonra yok`;
+
 function SettingEditor({ k, value, onClose, onSaved }) {
   if (k === 'weekly_levels') return html`<${LevelsEditor} value=${value} onClose=${onClose} onSaved=${onSaved} />`;
+  if (k === 'referral_policy') return html`<${ReferralEditor} value=${value} onClose=${onClose} onSaved=${onSaved} />`;
   const [text, setText] = useState(JSON.stringify(value, null, 2));
   const [reason, setReason] = useState('');
   // Ajans asistanı: how many assistants an agency may have at once, picked rather than written as JSON.
@@ -702,6 +710,31 @@ function SettingEditor({ k, value, onClose, onSaved }) {
   </${Modal}>`;
 }
 
+/** Referans ajans komisyonu: the share, the weeks without it, the weeks with it. */
+function ReferralEditor({ value, onClose, onSaved }) {
+  const [f, setF] = useState({ pct: String(Math.round((value?.pct ?? 0) * 10000) / 100), free_weeks: String(value?.free_weeks ?? 1), weeks: String(value?.weeks ?? 4) });
+  const [reason, setReason] = useState('');
+  const whole = (x) => Number(String(x).replace(/[^\d]/g, '') || 0);
+  const save = async () => {
+    if (reason.trim().length < 3) return showError(new Error('Gerekçe yazın'));
+    const v = { pct: rateOf(f.pct), free_weeks: whole(f.free_weeks), weeks: whole(f.weeks) };
+    if (!Number.isFinite(v.pct)) return showError(new Error('Oranı yüzde olarak yazın (ör. 5)'));
+    if (!confirm(`${referralText(v)}. Kapanmamış haftalar yeni kuralla ödenir, ödenmiş haftalar değişmez.`)) return;
+    if (await act(() => post('/api/app/agency/settings', { key: 'referral_policy', value: v, reason: reason.trim() }))) onSaved();
+  };
+  return html`<${Modal} title="Referans ajans komisyonu" onClose=${onClose}>
+    <p class="muted">Bir ajans referansıyla yeni bir ajans getirdiğinde: getirdiği hafta (Pazartesi 00:00 – Pazar 23:59:59) komisyon almaz; sonraki haftalarda referans ajansın o haftaki toplam komisyonunun bu yüzdesi her Pazartesi 00:00'da bakiyesine eklenir. Referans ajansın kendi komisyonundan bir şey kesilmez. Süre bitince üst ajans referans ajanstan komisyon almaz.</p>
+    <div class="grid2">
+      <label class="field"><span>Komisyon (%)</span><input inputmode="decimal" value=${f.pct} onInput=${(e) => setF({ ...f, pct: e.target.value })} /></label>
+      <label class="field"><span>Komisyonsuz ilk hafta sayısı</span><input inputmode="numeric" value=${f.free_weeks} onInput=${(e) => setF({ ...f, free_weeks: e.target.value })} /></label>
+      <label class="field"><span>Komisyonlu hafta sayısı</span><input inputmode="numeric" value=${f.weeks} onInput=${(e) => setF({ ...f, weeks: e.target.value })} /></label>
+    </div>
+    <p class="muted">Şimdi: ${referralText(value)}.</p>
+    <label class="field" style="margin-top:10px"><span>Gerekçe (3–300) *</span><input value=${reason} maxlength="300" onInput=${(e) => setReason(e.target.value)} /></label>
+    <div class="row gap end"><${Button} onClick=${onClose}>Vazgeç</${Button}><${Button} kind="primary" onClick=${save}>Kaydet</${Button}></div>
+  </${Modal}>`;
+}
+
 /** Haftalık ajans seviyeleri: one row per level (name, commission %, weekly diamonds from, shown in the app), the rules. */
 function LevelsEditor({ value, onClose, onSaved }) {
   const [rows, setRows] = useState(() => value.levels.map((l) => ({ ...l, rate: String(Math.round(l.rate * 10000) / 100), from: String(l.from) })));
@@ -723,7 +756,7 @@ function LevelsEditor({ value, onClose, onSaved }) {
     if (await act(() => post('/api/app/agency/settings', { key: 'weekly_levels', value: v, reason: reason.trim() }))) onSaved();
   };
   return html`<${Modal} title="Haftalık ajans seviyeleri" wide onClose=${onClose}>
-    <p class="muted">Ajansın komisyonu, yayıncılarının o hafta (Pazartesi 00:00 – Pazar 23:59:59) kazandığı elmasla ulaştığı seviyenin oranıdır; eşiği tamamlayamayan bir önceki seviyeyi alır. 1. seviye ve üstü için aşağıdaki kadar aktif yayıncı gerekir, yoksa ilk seviye. Üst ajans alt ajanstan pay almaz.</p>
+    <p class="muted">Ajansın komisyonu, yayıncılarının o hafta (Pazartesi 00:00 – Pazar 23:59:59) kazandığı elmasla ulaştığı seviyenin oranıdır; eşiği tamamlayamayan bir önceki seviyeyi alır. 1. seviye ve üstü için aşağıdaki kadar aktif yayıncı gerekir, yoksa ilk seviye. Üst ajans alt ajanstan seviye farkı almaz; referans ajans komisyonu ayrı kuraldır.</p>
     <table class="table dense"><thead><tr><th>#</th><th>Ad</th><th>Komisyon %</th><th>Haftalık elmas (en az)</th><th>Uygulamada görünür</th></tr></thead><tbody>
       ${rows.map(
         (r, i) => html`<tr key=${r.key}>
