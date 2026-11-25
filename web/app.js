@@ -28,6 +28,7 @@ import { AppSanctions } from './pages/app-sanctions.js';
 import { AppBonds } from './pages/app-bond-looks.js';
 import { AppJetonLoad } from './pages/app-jeton-load.js';
 import { AppHostBonus } from './pages/app-host-bonus.js';
+import { AppBanners } from './pages/app-banners.js';
 
 // The menu by subject, the app's own work first. Each page: [route, label, permission, page, words it is found by].
 // Routes never change (links and bookmarks keep working); only where a page sits and what it is called do.
@@ -57,6 +58,7 @@ const NAV = [
     ['app-level-rewards', 'Seviye ve görev ödülleri', 'app.levels', AppLevelRewards, 'seviye vip cömertlik yankı görev arama ödül çanta çantam çerçeve giriş efekti binek sohbet balonu ses dalgası hediye kazan'],
   ]],
   ['news', 'Duyuru ve etkinlik', '📣', [
+    ['app-banners', 'Banner Yönetimi', 'app.notices', AppBanners, 'banner slider kaydırma odalar tanıtım reklam görsel yayın planı performans tıklama'],
     ['app-notices', 'Duyurular', 'app.notices', AppNotices, 'duyuru banner bildirim ekip mesaj'],
     ['app-events', 'Etkinlikler', 'app.events', AppEvents, 'etkinlik başvuru onay ret'],
   ]],
