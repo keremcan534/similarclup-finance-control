@@ -30,6 +30,7 @@ import { AppJetonLoad } from './pages/app-jeton-load.js';
 import { AppHostBonus } from './pages/app-host-bonus.js';
 import { AppBanners } from './pages/app-banners.js';
 import { AppFamilies } from './pages/app-families.js';
+import { AppAssistantDisputes } from './pages/app-assistant-disputes.js';
 
 // The menu by subject, the app's own work first. Each page: [route, label, permission, page, words it is found by].
 // Routes never change (links and bookmarks keep working); only where a page sits and what it is called do.
@@ -67,6 +68,7 @@ const NAV = [
   ['agencies', 'Ajanslar', '🏢', [
     ['app-agencies', 'Ajans merkezi', 'app.agencies', AppAgencies, 'ajans başvuru oran kademe transfer yayıncı bağla üst ajans'],
     ['app-agency-levels', 'Ajans seviyeleri', 'app.agencies', AppAgencyLevels, 'ajans seviye barem gönül bağı başlangıç bronz gümüş altın platin elmas haftalık komisyon oran aktif yayıncı'],
+    ['app-assistant-disputes', 'Asistan itirazları', 'app.agencies', AppAssistantDisputes, 'asistan çıkar itiraz onay ret karar ajans sahibi'],
     ['app-agency-staff', 'Ajans personeli', 'app.agency_staff', AppAgencyStaff, 'personel rol bd operasyon puan ihlal itiraz arka plan'],
     ['app-payouts', 'Ajans ödemeleri', 'app.payouts', AppPayouts, 'ajans ödeme komisyon dekont'],
     ['app-host-bonus', 'Yayıncı haftalık bonusu', 'app.host_bonus', AppHostBonus, 'yayıncı haftalık bonus barem elmas pazartesi geri al öde'],

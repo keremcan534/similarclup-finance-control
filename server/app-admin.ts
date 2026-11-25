@@ -166,6 +166,9 @@ export const APP_ROUTES: [string, string, Permission | Permission[]][] = [
   ['GET', '/api/admin/families', 'app.users'],
   ['POST', '/api/admin/families/create', 'app.users'],
   ['POST', '/api/admin/agency/room', 'app.agencies'],
+  // Asistan itirazları (the app's agency-assistants.mjs, 25 Nov 2026): disputes over removing an assistant.
+  ['GET', '/api/admin/agency/assistant-removals', 'app.agencies'],
+  ['POST', '/api/admin/agency/assistant-removals/resolve', 'app.agencies'],
   // Banner Yönetimi (the app's banners.mjs): the same staff as the notices.
   ['GET', '/api/admin/banners', 'app.notices'],
   ['POST', '/api/admin/banners', 'app.notices'],
