@@ -55,7 +55,12 @@ export function AppWithdrawals() {
           { key: 'diamonds', label: 'Elmas', align: 'right', render: (w) => num(w.diamonds) },
           { key: 'usd', label: 'Tutar', align: 'right', render: (w) => usd(w.usd) },
           { key: 'tl', label: 'Gönderilecek TL', align: 'right', render: (w) => (w.status === 'pending' || w.status === 'paid' ? tlOf(w, d.payUsdTry) : '—') },
-          { key: 'account', label: 'Hesap', render: (w) => html`${w.holder}<br /><small class="num">${w.method === 'iban' ? 'IBAN ' : ''}${w.account}</small>` },
+          {
+            key: 'account',
+            label: 'Hesap',
+            // Warnings (the app's withdraw.mjs, 26 Nov 2026): other accounts with this IBAN, and from the same internet address.
+            render: (w) => html`${w.holder}<br /><small class="num">${w.method === 'iban' ? 'IBAN ' : ''}${w.account}</small>${w.sameIban?.length ? html`<br /><small class="bad" style="color:#c0392b;font-weight:700">⚠ Aynı IBAN: ID ${w.sameIban.join(', ')}</small>` : ''}${w.sameNetwork?.length ? html`<br /><small style="color:#b7791f;font-weight:700">⚠ Aynı ağdan: ID ${w.sameNetwork.slice(0, 5).join(', ')}${w.sameNetwork.length > 5 ? ` +${w.sameNetwork.length - 5}` : ''}</small>` : ''}`,
+          },
           { key: 'status', label: 'Durum', render: (w) => html`<${Badge} s=${STATUS_BADGE[w.status]} label=${w.statusLabel} />${w.play ? html` <${Badge} s="warning" label="Test parası" />` : ''}` },
           { key: 'note', label: 'Not', render: (w) => w.note || '—' },
           {
