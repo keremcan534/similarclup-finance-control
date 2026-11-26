@@ -9,6 +9,12 @@ export const READY_ART = [
   ['ornek-hediye-alanlar', 'En Çok Hediye Alanlar', '/img/banners/ornek-hediye-alanlar.webp'],
   ['ornek-hediye-gonderenler', 'En Çok Hediye Gönderenler', '/img/banners/ornek-hediye-gonderenler.webp'],
   ['ornek-zirvedeki-ajanslar', 'Zirvedeki Ajanslar', '/img/banners/ornek-zirvedeki-ajanslar.webp'],
+  ['ajans-basvurusu', 'Ajans Başvurusu', '/img/banners/ajans-basvurusu.webp'],
+];
+/** Who sees a banner (the app's banners.mjs AUDIENCES, 26 Nov 2026). */
+export const AUDIENCES = [
+  ['all', 'Herkes'],
+  ['no_agency', 'Ajansı olmayanlar'],
 ];
 const artUrl = (k) => READY_ART.find(([a]) => a === k)?.[2] ?? null;
 const picOf = (b) => b.imageUrl ?? artUrl(b.art);
@@ -178,6 +184,7 @@ function BannerList({ banners, editable, onEdit, reload }) {
           <div class="row gap wrap">
             <span class=${`bm-state ${STATE[b.state][1]}`}>${b.state === 'live' ? '● ' : ''}${STATE[b.state][0]}</span>
             <span class="bm-when">📅 ${rangeText(b)}</span>
+            ${b.audience === 'no_agency' && html`<span class="bm-when">👥 Ajansı olmayanlar</span>`}
           </div>
           <small class="muted">${b.link ? `→ ${b.link}` : 'Bağlantı yok'} · 7 gün: ${num(b.views7)} görüntülenme, ${num(b.clicks7)} tıklama</small>
         </div>
@@ -276,6 +283,7 @@ function BannerEditor({ banner, onClose, onSaved }) {
     startsAt: toLocal(banner?.startsAt),
     endsAt: toLocal(banner?.endsAt),
     enabled: banner?.enabled ?? false,
+    audience: banner?.audience ?? 'all',
   }));
   const [file, setFile] = useState(null);
   const [busy, setBusy] = useState(false);
@@ -309,6 +317,7 @@ function BannerEditor({ banner, onClose, onSaved }) {
         startsAt: fromLocal(b.startsAt),
         endsAt: fromLocal(b.endsAt),
         enabled: b.enabled,
+        audience: b.audience,
       });
       onSaved(banner ? 'Banner güncellendi' : b.enabled ? 'Banner yayında' : 'Banner taslak olarak kaydedildi');
     } catch (e) {
@@ -342,6 +351,7 @@ function BannerEditor({ banner, onClose, onSaved }) {
         <div class="field"><span>Yazıları göster</span><label class="bm-switch"><input type="checkbox" checked=${b.showText} onChange=${(e) => set({ showText: e.target.checked })} /><span></span></label></div>
         <label class="field"><span>Başlangıç (boş: hemen)</span><input type="datetime-local" value=${b.startsAt} onInput=${(e) => set({ startsAt: e.target.value })} /></label>
         <label class="field"><span>Bitiş (boş: süresiz)</span><input type="datetime-local" value=${b.endsAt} onInput=${(e) => set({ endsAt: e.target.value })} /></label>
+        <div class="field"><span>Kimlere</span><select value=${b.audience} onChange=${(e) => set({ audience: e.target.value })}>${AUDIENCES.map(([k, l]) => html`<option value=${k}>${l}</option>`)}</select></div>
         <div class="field"><span>Yayında</span><label class="bm-switch"><input type="checkbox" checked=${b.enabled} onChange=${(e) => set({ enabled: e.target.checked })} /><span></span></label></div>
       </div></div>
     </div>
